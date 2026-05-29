@@ -1,0 +1,10 @@
+# Copy to config.yaml and fill in. Used by generate-schema / generate-llms.
+brand: "Suphan Casting"
+domain: "https://suphancasting.com"
+description: "โรงงานหล่อทราย รับงานหล่อโลหะตามสั่ง อะลูมิเนียม ทองเหลือง บรอนซ์ เหล็ก"
+phone: "+66-44-000000"
+city: "Nakhon Ratchasima"
+region: "Nakhon Ratchasima"
+country: "TH"
+social_profiles:
+  - "https://www.facebook.com/yourpage"
