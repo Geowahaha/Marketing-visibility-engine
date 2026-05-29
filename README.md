@@ -1,5 +1,7 @@
 # visibility-engine
 
+![tests](https://github.com/Geowahaha/Marketing-visibility-engine/actions/workflows/tests.yml/badge.svg)
+
 A runnable audit-and-improve toolkit for **website + AI-search + social visibility**, built around the **2026** ranking landscape. Point it at a URL and it scores four layers, tells you exactly what to fix, and generates the files you drop straight onto the server.
 
 Built for [suphancasting.com](https://suphancasting.com) but works on any site.
@@ -43,6 +45,14 @@ visibility-engine --help
 ```powershell
 python -m visibility_engine audit https://suphancasting.com --pages 5 --out report.md
 ```
+
+To audit your **whole site in one shot**, seed the crawl from your sitemap (it reads the `Sitemap:` line in robots.txt, falls back to `/sitemap.xml`, follows sitemap-index files, and handles `.gz`):
+
+```powershell
+python -m visibility_engine audit https://suphancasting.com --sitemap --pages 25 --out report.md
+```
+
+With more than one page, the report adds a **per-page rollup** table (SEO / GEO-AEO / Social / Overall per URL) so you can see which pages drag the site down.
 
 You get a colored console scorecard, per-category grades, and a `report.md` containing a severity-ordered action plan plus the Facebook playbook.
 

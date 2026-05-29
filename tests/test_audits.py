@@ -78,3 +78,36 @@ def test_fixers_produce_output():
     assert "# Suphan" in llms_txt.generate("Suphan", "desc", [("Home", "/", "d")])
     assert "FAQPage" in schema.faq_page([("q", "a")])
     assert "LocalBusiness" in schema.local_business("n", "u", "d")
+
+
+def test_sitemap_parser_extracts_and_dedupes(monkeypatch):
+    """sitemap_urls should parse <loc> entries, follow a sitemap index one level,
+    keep only same-host URLs, and dedupe — all without real network calls."""
+    from visibility_engine.crawler import Crawler
+
+    INDEX = (
+        '<?xml version="1.0"?>'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        '<sitemap><loc>https://example.com/sm1.xml</loc></sitemap>'
+        '</sitemapindex>'
+    )
+    SM1 = (
+        '<?xml version="1.0"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        '<url><loc>https://example.com/a</loc></url>'
+        '<url><loc>https://example.com/a</loc></url>'           # duplicate
+        '<url><loc>https://other.com/x</loc></url>'             # off-host
+        '<url><loc>https://example.com/b</loc></url>'
+        '</urlset>'
+    )
+
+    routes = {
+        "https://example.com/robots.txt": (200, "Sitemap: https://example.com/sitemap.xml\n"),
+        "https://example.com/sitemap.xml": (200, INDEX),
+        "https://example.com/sm1.xml": (200, SM1),
+    }
+
+    c = Crawler(delay=0)
+    monkeypatch.setattr(c, "fetch_text", lambda url: routes.get(url, (404, "")))
+    urls = c.sitemap_urls("https://example.com")
+    assert urls == ["https://example.com/a", "https://example.com/b"]

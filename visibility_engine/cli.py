@@ -17,24 +17,40 @@ import sys
 from .audits import ai_crawlers, geo_aeo, social, technical_seo
 from .crawler import Crawler
 from .fixers import llms_txt, robots_txt, schema
-from .report import console, to_console, to_markdown
+from .report import console, to_console, to_markdown, page_rollup_console
 
 
 def cmd_audit(args: argparse.Namespace) -> None:
     crawler = Crawler()
-    console.print(f"[cyan]Crawling[/cyan] {args.url} (up to {args.pages} page(s))...")
-    pages = crawler.crawl(args.url, max_pages=args.pages)
+    src = "sitemap" if args.sitemap else "internal links"
+    console.print(f"[cyan]Crawling[/cyan] {args.url} (up to {args.pages} page(s), "
+                  f"discovery via {src})...")
+    pages = crawler.crawl(args.url, max_pages=args.pages, use_sitemap=args.sitemap)
     home = pages[0]
 
+    # Full detailed audit on the homepage + site-level AI-crawler check
     results = [
         technical_seo.audit(home),
         geo_aeo.audit(home),
         ai_crawlers.audit(args.url, crawler),
         social.audit(home),
     ]
+
+    # Per-page rollup: score the three page-level categories on every page
+    page_rows = []
+    for pg in pages:
+        if not pg.ok:
+            continue
+        seo_s = technical_seo.audit(pg).score()
+        geo_s = geo_aeo.audit(pg).score()
+        soc_s = social.audit(pg).score()
+        ov = round((seo_s + geo_s + soc_s) / 3)
+        page_rows.append((pg.url, seo_s, geo_s, soc_s, ov))
+
     to_console(args.url, results)
+    page_rollup_console(page_rows)
     if args.out:
-        to_markdown(args.url, results, args.out)
+        to_markdown(args.url, results, args.out, page_rows=page_rows)
 
 
 def cmd_generate_robots(args: argparse.Namespace) -> None:
@@ -69,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     a = sub.add_parser("audit", help="Crawl a site and score SEO / GEO-AEO / AI-crawler / social.")
     a.add_argument("url")
     a.add_argument("--pages", type=int, default=1, help="Max pages to crawl (default 1).")
+    a.add_argument("--sitemap", action="store_true",
+                   help="Seed the crawl from sitemap.xml (robots.txt or /sitemap.xml) "
+                        "instead of homepage links. Use with --pages to cap.")
     a.add_argument("--out", help="Write a Markdown report to this path.")
     a.set_defaults(func=cmd_audit)
 

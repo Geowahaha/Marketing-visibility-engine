@@ -29,6 +29,33 @@ def overall(results: list[AuditResult]) -> int:
     return round(sum(r.score() for r in results) / len(results)) if results else 0
 
 
+def page_rollup_console(rows: list[tuple]) -> None:
+    """rows: (url, technical, geo, social, overall) — one per crawled page."""
+    if len(rows) <= 1:
+        return
+    t = Table(title=f"\nPer-page rollup ({len(rows)} pages)", show_lines=False, expand=True)
+    t.add_column("Page"); t.add_column("SEO", justify="right")
+    t.add_column("GEO/AEO", justify="right"); t.add_column("Social", justify="right")
+    t.add_column("Overall", justify="right"); t.add_column("Grade")
+    for url, seo, geo, soc, ov in sorted(rows, key=lambda r: r[4]):
+        path = url.split("://", 1)[-1]
+        path = path[path.find("/"):] if "/" in path else "/"
+        t.add_row(path or "/", str(seo), str(geo), str(soc), str(ov), grade(ov))
+    console.print(t)
+
+
+def page_rollup_markdown(rows: list[tuple]) -> list[str]:
+    if len(rows) <= 1:
+        return []
+    out = [f"## Per-page rollup ({len(rows)} pages)\n",
+           "| Page | SEO | GEO/AEO | Social | Overall | Grade |",
+           "|---|---|---|---|---|---|"]
+    for url, seo, geo, soc, ov in sorted(rows, key=lambda r: r[4]):
+        out.append(f"| {url} | {seo} | {geo} | {soc} | {ov}/100 | {grade(ov)} |")
+    out.append("")
+    return out
+
+
 def to_console(url: str, results: list[AuditResult]) -> None:
     total = overall(results)
     console.rule(f"[bold]Visibility Audit — {url}")
@@ -52,7 +79,8 @@ def to_console(url: str, results: list[AuditResult]) -> None:
         console.print(t)
 
 
-def to_markdown(url: str, results: list[AuditResult], path: str) -> None:
+def to_markdown(url: str, results: list[AuditResult], path: str,
+                page_rows: list[tuple] | None = None) -> None:
     total = overall(results)
     now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [
@@ -68,6 +96,8 @@ def to_markdown(url: str, results: list[AuditResult], path: str) -> None:
         s = r.score()
         lines.append(f"| {r.category} | {s}/100 | {grade(s)} |")
     lines.append("")
+    if page_rows:
+        lines += page_rollup_markdown(page_rows)
 
     for r in results:
         lines.append(f"## {r.category} — {r.score()}/100\n")
