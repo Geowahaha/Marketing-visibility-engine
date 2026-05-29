@@ -29,6 +29,13 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Optionally install it as a real command (so you can run `visibility-engine` from anywhere instead of `python -m visibility_engine`):
+
+```powershell
+pip install -e .
+visibility-engine --help
+```
+
 ## Usage
 
 **Audit a site** (crawl the homepage, or `--pages N` to walk internal links), and save a Markdown report:

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "marketing-visibility-engine"
+version = "0.2.0"
+description = "Audit & improve website + AI-search + social visibility (2026 SEO/GEO/AEO + AI-crawler + Open Graph)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Geowahaha" }]
+keywords = ["seo", "geo", "aeo", "ai-search", "llms-txt", "open-graph", "audit"]
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "rich>=13.0",
+]
+
+[project.urls]
+Repository = "https://github.com/Geowahaha/Marketing-visibility-engine"
+
+[project.scripts]
+visibility-engine = "visibility_engine.cli:main"
+
+[tool.setuptools]
+packages = ["visibility_engine", "visibility_engine.audits", "visibility_engine.fixers"]
