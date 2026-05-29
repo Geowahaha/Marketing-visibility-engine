@@ -79,6 +79,7 @@ visibility_engine/
 └── cli.py                # command-line interface
 tests/test_audits.py      # offline test suite
 samples/sample_page.html  # fixture
+checklists/facebook_2026.md  # full Facebook/social organic-reach playbook (Andromeda era)
 ```
 
 ## Scoring

@@ -1,9 +1,6 @@
 __pycache__/
-*.py[cod]
+*.pyc
 .venv/
-venv/
-*.egg-info/
-.pytest_cache/
-reports/
-*.local.yaml
+fixes/
+report.json
 .DS_Store

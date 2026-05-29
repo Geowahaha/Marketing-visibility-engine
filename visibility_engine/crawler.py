@@ -47,7 +47,14 @@ class Crawler:
             start = time.perf_counter()
             resp = self.session.get(url, timeout=self.timeout, allow_redirects=True)
             elapsed = int((time.perf_counter() - start) * 1000)
-            soup = BeautifulSoup(resp.text, "lxml")
+            # Fix mojibake (esp. Thai): when the server omits a charset, requests
+            # defaults to ISO-8859-1. Prefer the encoding sniffed from content.
+            if not resp.encoding or resp.encoding.lower() in ("iso-8859-1", "latin-1"):
+                resp.encoding = resp.apparent_encoding or "utf-8"
+            try:
+                soup = BeautifulSoup(resp.text, "lxml")
+            except Exception:
+                soup = BeautifulSoup(resp.text, "html.parser")
             return FetchResult(
                 url=resp.url,
                 status=resp.status_code,
