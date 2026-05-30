@@ -152,8 +152,7 @@
   .plan__body p{margin:4px 0 0;color:var(--muted);font-size:14px}
 
   .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
-  .modegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0 4px}.modecard{border:1px solid var(--line);border-radius:12px;padding:12px;background:#0f1216;cursor:pointer}.modecard.on{border-color:var(--molten2);box-shadow:0 0 0 1px rgba(255,184,77,.25)}.modecard b{display:block;font-family:var(--disp);text-transform:uppercase}.modecard span{color:var(--muted);font-size:12px}
-  .socialgrid{display:none;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:14px}.socialgrid.on{display:grid}.miniinput{background:#0b0d10;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:10px;font-family:var(--mono);width:100%;box-sizing:border-box}.minilabel{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:5px;display:block}
+  .singlepaste .pre{display:none}.singlepaste input{padding-left:20px}
   .btn2{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:13px;
     border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:11px 16px;cursor:pointer}
   .btn2:hover{border-color:var(--molten)}
@@ -213,38 +212,13 @@
   </header>
 
   <section class="console reveal">
-    <label class="field-label" data-i="modeLabel">What should AI Mark scan?</label>
-    <div class="modegrid">
-      <div class="modecard on" id="mode-website" onclick="setMode('website')"><b data-i="modeWebsite">Website</b><span data-i="modeWebsiteSub">Google + AI search readiness</span></div>
-      <div class="modecard" id="mode-both" onclick="setMode('both')"><b data-i="modeBoth">Website + Social</b><span data-i="modeBothSub">Full visibility graph</span></div>
-      <div class="modecard" id="mode-social" onclick="setMode('social')"><b data-i="modeSocial">Social accounts</b><span data-i="modeSocialSub">Profile/channel visibility</span></div>
-    </div>
-    <label class="field-label" for="brand" style="margin-top:14px" data-i="brandLabel">Brand / business name (optional)</label>
-    <input id="brand" class="miniinput" type="text" placeholder="AI Mark / SuccessCasting / your brand" autocomplete="organization">
-
-    <label class="field-label" for="url" style="margin-top:16px" data-i="urlLabel">Website to scan</label>
-    <div class="urlrow">
-      <span class="pre">https://</span>
-      <input id="url" type="text" placeholder="successcasting.com" autocomplete="off" spellcheck="false">
+    <label class="field-label" for="url" data-i="urlLabel">Paste anything</label>
+    <div class="urlrow singlepaste">
+      <input id="url" type="text" data-i-ph="urlPh" placeholder="website, Facebook, YouTube, TikTok, Instagram, LINE OA, Google Business…" autocomplete="off" spellcheck="false">
     </div>
 
-    <div class="socialgrid" id="socialGrid">
-      <div><span class="minilabel">Facebook Profile</span><input id="facebook_profile" class="miniinput" placeholder="facebook.com/your.profile"></div>
-      <div><span class="minilabel">Facebook Page</span><input id="facebook_page" class="miniinput" placeholder="facebook.com/your.page"></div>
-      <div><span class="minilabel">YouTube / Shorts</span><input id="youtube" class="miniinput" placeholder="youtube.com/@channel"></div>
-      <div><span class="minilabel">Instagram / Reels</span><input id="instagram" class="miniinput" placeholder="instagram.com/brand"></div>
-      <div><span class="minilabel">TikTok</span><input id="tiktok" class="miniinput" placeholder="tiktok.com/@brand"></div>
-      <div><span class="minilabel">LINE OA</span><input id="line_oa" class="miniinput" placeholder="lin.ee/..."></div>
-      <div><span class="minilabel">Google Business</span><input id="google_business" class="miniinput" placeholder="maps.app.goo.gl/..."></div>
-      <div><span class="minilabel">LinkedIn</span><input id="linkedin" class="miniinput" placeholder="linkedin.com/company/..."></div>
-    </div>
-
-    <label class="field-label" for="prompt" style="margin-top:16px" data-i="promptLabel">What should the AI focus on? (optional)</label>
-    <textarea id="prompt" data-i-ph="promptPh"></textarea>
-    <div class="chips" id="chips"></div>
-
-    <button class="go" id="go" onclick="runScan()" data-i="go">⚡ Run free scan</button>
-    <div class="hint" data-i="hint">No login. The scan runs server-side and is powered by Claude.</div>
+    <button class="go" id="go" onclick="runScan()" data-i="go">⚡ Analyze visibility</button>
+    <div class="hint" data-i="hint">Paste one link. AI Mark detects whether it is a website, profile, channel, reel, short, page, or LINE OA — then chooses the right analysis.</div>
   </section>
 
   <div class="loading" id="loading">
@@ -265,14 +239,12 @@
 /* ---------------- i18n ---------------- */
 const I18N = {
   en:{kicker:"2026 SEO · GEO/AEO · AI-CRAWLER · SOCIAL",
-      h1:'Is your brand <span class="glow">visible to AI?</span>',
-      lede:"Scan your website and social accounts. AI Mark builds a visibility graph across Google, Edge/Copilot, AI search, Facebook, YouTube Shorts, Reels, TikTok, LINE OA and more — then recommends the next action.",
-      modeLabel:"What should AI Mark scan?", modeWebsite:"Website", modeWebsiteSub:"Google + AI search readiness", modeBoth:"Website + Social", modeBothSub:"Full visibility graph", modeSocial:"Social accounts", modeSocialSub:"Profile/channel visibility", brandLabel:"Brand / business name (optional)",
-      urlLabel:"Website to scan", promptLabel:"What should the AI focus on? (optional)",
-      promptPh:"e.g. Focus on local SEO for a factory in Thailand, check if AI crawlers are blocked, and whether products are readable as text not images.",
-      go:"⚡ Run free scan", hint:"No login. The scan runs server-side and is powered by Claude.",
+      h1:'Paste any link. <span class="glow">AI Mark handles the rest.</span>',
+      lede:"One box only: website, Facebook profile/page/reel, YouTube/Shorts, Instagram, TikTok, LINE OA, Google Business, LinkedIn, or anything public. AI Mark detects the channel, separates the signals, and gives the next action.",
+      urlLabel:"Paste website, profile, page, channel, reel, short, or LINE OA", urlPh:"https://successcasting.com or facebook.com/... or youtube.com/@...",
+      go:"⚡ Analyze visibility", hint:"One link is enough. We detect the type and choose the right analysis automatically.",
       foot:"Built with visibility-engine · deploy on Cloudflare Pages",
-      chips:["Focus on AI search (GEO/AEO)","Check AI-crawler blocking","Local SEO for Thailand","Open Graph / social shares","Why am I not on Google?"],
+      chips:[],
       loading:["Heating the crucible…","Fetching the live page…","Reading robots.txt & sitemap…","Asking Claude to analyse…","Casting the report…"],
       newscan:"↻ New scan", print:"⬇ Download PDF", overall:"Overall visibility",
       improve:"Recommended next step", packageText:"Search and AI recommendations change fast. Keep it simple: start one guided action. AI Mark prepares the plan, starts monitoring, and can send the job to an AI agent when connected.",
@@ -281,14 +253,12 @@ const I18N = {
       flow:["Watch daily","Prioritize changes","Fix with agent","Verify result"],
       blurb:"Weighted across four pillars on the 2026 model — being the cited source in AI answers is the new position #1."},
   th:{kicker:"2026 SEO · GEO/AEO · AI-CRAWLER · SOCIAL",
-      h1:'แบรนด์คุณ <span class="glow">AI มองเห็นไหม?</span>',
-      lede:"สแกนทั้งเว็บไซต์และบัญชีโซเชียล AI Mark จะสร้าง Visibility Graph ครอบคลุม Google, Edge/Copilot, AI Search, Facebook, YouTube Shorts, Reels, TikTok, LINE OA และช่องทางอื่น ๆ แล้วแนะนำ action ถัดไป",
-      modeLabel:"ต้องการให้ AI Mark สแกนอะไร?", modeWebsite:"เว็บไซต์", modeWebsiteSub:"Google + AI Search", modeBoth:"เว็บไซต์ + โซเชียล", modeBothSub:"Visibility Graph เต็ม", modeSocial:"บัญชีโซเชียล", modeSocialSub:"Profile/channel visibility", brandLabel:"ชื่อแบรนด์ / ธุรกิจ (ไม่บังคับ)",
-      urlLabel:"เว็บไซต์ที่จะสแกน", promptLabel:"อยากให้ AI เน้นเรื่องอะไร? (ไม่บังคับ)",
-      promptPh:"เช่น เน้น local SEO โรงงานในไทย เช็คว่า AI crawler ถูกบล็อกไหม และสินค้าเป็นข้อความที่อ่านได้หรือเป็นแค่รูป",
-      go:"⚡ สแกนฟรี", hint:"ไม่ต้องล็อกอิน ระบบทำงานฝั่งเซิร์ฟเวอร์ ขับเคลื่อนด้วย Claude",
+      h1:'วางลิงก์อะไรก็ได้ <span class="glow">AI Mark จัดการต่อเอง</span>',
+      lede:"มีช่องเดียวเท่านั้น: เว็บ, Facebook profile/page/reel, YouTube/Shorts, Instagram, TikTok, LINE OA, Google Business, LinkedIn หรือ public link อื่น ๆ AI Mark จะแยกประเภท วิเคราะห์ และแนะนำ action ถัดไปให้เอง",
+      urlLabel:"วางเว็บไซต์ โปรไฟล์ เพจ ช่อง คลิป Reel/Short หรือ LINE OA", urlPh:"https://successcasting.com หรือ facebook.com/... หรือ youtube.com/@...",
+      go:"⚡ วิเคราะห์การมองเห็น", hint:"ใส่ลิงก์เดียวก็พอ ระบบแยกประเภทและเลือกการวิเคราะห์ที่เหมาะสมให้อัตโนมัติ",
       foot:"สร้างด้วย visibility-engine · deploy บน Cloudflare Pages",
-      chips:["เน้น AI search (GEO/AEO)","เช็คการบล็อก AI crawler","Local SEO สำหรับไทย","Open Graph / การแชร์โซเชียล","ทำไมไม่ติด Google?"],
+      chips:[],
       loading:["กำลังจุดเตาหลอม…","กำลังดึงหน้าเว็บจริง…","กำลังอ่าน robots.txt & sitemap…","กำลังให้ Claude วิเคราะห์…","กำลังหล่อรายงาน…"],
       newscan:"↻ สแกนใหม่", print:"⬇ ดาวน์โหลด PDF", overall:"คะแนนการมองเห็นรวม",
       improve:"ขั้นตอนถัดไปที่แนะนำ", packageText:"Google และ AI Search เปลี่ยนเร็วมาก จึงทำให้ง่ายเป็นขั้นตอนเดียว: AI Mark เตรียมแผน เริ่มเฝ้าติดตาม และส่งงานให้ AI Agent แก้เมื่อเชื่อมต่อแล้ว",
@@ -298,12 +268,6 @@ const I18N = {
       blurb:"ถ่วงน้ำหนัก 4 เสาหลักตามโมเดลปี 2026 — การเป็นแหล่งที่ AI อ้างอิงคืออันดับ 1 ยุคใหม่"}
 };
 let LANG="en";
-let MODE="website";
-function setMode(m){
-  MODE=m;
-  ["website","both","social"].forEach(x=>document.getElementById("mode-"+x)?.classList.toggle("on",x===m));
-  document.getElementById("socialGrid")?.classList.toggle("on",m!=="website");
-}
 function setLang(l){
   LANG=l;
   document.getElementById("en").classList.toggle("on",l==="en");
@@ -315,10 +279,10 @@ function setLang(l){
   renderChips();
 }
 function renderChips(){
-  const box=document.getElementById("chips"); box.innerHTML="";
-  I18N[LANG].chips.forEach(c=>{
+  const box=document.getElementById("chips"); if(!box)return; box.innerHTML="";
+  (I18N[LANG].chips||[]).forEach(c=>{
     const b=document.createElement("span"); b.className="chip"; b.textContent=c;
-    b.onclick=()=>{document.getElementById("prompt").value=c;};
+    b.onclick=()=>{document.getElementById("url").value=c;};
     box.appendChild(b);
   });
 }
@@ -470,36 +434,58 @@ function startLoading(){
   loadTimer=setInterval(()=>{i=(i+1)%steps.length;document.getElementById("loadstep").textContent=steps[i];},1600);
 }
 function stopLoading(){clearInterval(loadTimer);document.getElementById("loading").classList.remove("on");}
-async function runSocialScan(){
+function cleanInputUrl(raw){
+  const s=String(raw||"").trim();
+  if(!s)return"";
+  const m=s.match(/https?:\/\/[^\s]+/i) || s.match(/(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}[^\s]*/i);
+  const u=m?m[0]:s;
+  return /^https?:\/\//i.test(u)?u:"https://"+u.replace(/^https?:\/\//i,"");
+}
+function hostOf(u){try{return new URL(cleanInputUrl(u)).hostname.replace(/^www\./,"").toLowerCase();}catch{return"";}}
+function platformForUrl(u){
+  const h=hostOf(u), p=cleanInputUrl(u).toLowerCase();
+  if(h.includes("facebook.com")) return p.includes("/profile")||p.includes("/people")||p.includes("/reels")||p.includes("/reel/") ? "facebook_profile" : "facebook_page";
+  if(h.includes("youtube.com")||h.includes("youtu.be")) return "youtube";
+  if(h.includes("instagram.com")) return "instagram";
+  if(h.includes("tiktok.com")) return "tiktok";
+  if(h.includes("lin.ee")||h.includes("line.me")) return "line_oa";
+  if(h.includes("google.")||h.includes("maps.app")||h.includes("goo.gl")) return "google_business";
+  if(h.includes("linkedin.com")) return "linkedin";
+  return "website";
+}
+function brandFromUrl(u){
+  const h=hostOf(u); if(!h)return"";
+  return h.split(".")[0].replace(/[-_]/g," ");
+}
+async function runSocialScan(inputUrl){
+  const url=cleanInputUrl(inputUrl);
+  const platform=platformForUrl(url);
   const channels={};
-  ["facebook_profile","facebook_page","youtube","instagram","tiktok","line_oa","google_business","linkedin"].forEach(id=>{const v=document.getElementById(id)?.value.trim(); if(v) channels[id]=v;});
-  const brand_name=document.getElementById("brand")?.value.trim()||"";
-  const website_url=document.getElementById("url")?.value.trim()||"";
-  const res=await fetch("/api/social-visibility",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({brand_name,website_url,channels})});
+  if(platform!=="website") channels[platform]=url;
+  const res=await fetch("/api/social-visibility",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({brand_name:brandFromUrl(url),website_url:platform==="website"?url:"",channels})});
   const data=await res.json();
   if(!res.ok||data.error)throw new Error(data.error||"Social visibility scan failed");
   return data;
 }
 async function runScan(){
   const raw=document.getElementById("url").value.trim();
-  const prompt=document.getElementById("prompt").value.trim();
+  const inputUrl=cleanInputUrl(raw);
   const err=document.getElementById("err"); err.style.display="none";
-  if(MODE!=="social"&&!raw){err.textContent=LANG==="th"?"กรุณาใส่ URL เว็บไซต์":"Please enter a website URL.";err.style.display="block";return;}
-  if(MODE==="social"&&!document.querySelector("#socialGrid input[value]")&&!["facebook_profile","facebook_page","youtube","instagram","tiktok","line_oa","google_business","linkedin"].some(id=>document.getElementById(id)?.value.trim())){err.textContent=LANG==="th"?"กรุณาใส่ social URL อย่างน้อยหนึ่งช่อง":"Please enter at least one social URL.";err.style.display="block";return;}
+  if(!raw||!inputUrl){err.textContent=LANG==="th"?"กรุณาวางลิงก์ก่อน":"Please paste a link first.";err.style.display="block";return;}
   const go=document.getElementById("go"); go.disabled=true;
   document.getElementById("results").style.display="none";
   startLoading();
   try{
     let data;
-    if(MODE==="social"){
-      const social=await runSocialScan();
-      data={url:social.website_url||social.brand_name||"Social Visibility Graph",scanned_at:new Date().toISOString(),overall:social.scores.visibility_graph,grade:social.scores.visibility_graph>=80?"A":social.scores.visibility_graph>=65?"B":social.scores.visibility_graph>=50?"C":social.scores.visibility_graph>=35?"D":"F",summary:social.next_best_action,categories:[],_social:social};
-    }else{
+    const platform=platformForUrl(inputUrl);
+    if(platform==="website"){
       const res=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
-        body:JSON.stringify({url:raw,prompt})});
+        body:JSON.stringify({url:inputUrl,prompt:"Auto-detect visibility opportunities across search, AI search, social links, entity trust, and conversion path."})});
       data=await res.json();
       if(!res.ok||data.error){stopLoading(); go.disabled=false; err.textContent=(data.error||"Scan failed")+(data.detail?" — "+data.detail:"");err.style.display="block";return;}
-      if(MODE==="both") data._social=await runSocialScan();
+    }else{
+      const social=await runSocialScan(inputUrl);
+      data={url:inputUrl,scanned_at:new Date().toISOString(),overall:social.scores.visibility_graph,grade:social.scores.visibility_graph>=80?"A":social.scores.visibility_graph>=65?"B":social.scores.visibility_graph>=50?"C":social.scores.visibility_graph>=35?"D":"F",summary:social.next_best_action,categories:[],_social:social};
     }
     stopLoading(); go.disabled=false;
     render(data);
@@ -567,7 +553,6 @@ function initAuthState(){
 
 document.getElementById("url").addEventListener("keydown",e=>{if(e.key==="Enter")runScan();});
 renderChips();
-setMode("website");
 initAuthState();
 </script>
 </body>
