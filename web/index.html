@@ -152,6 +152,8 @@
   .plan__body p{margin:4px 0 0;color:var(--muted);font-size:14px}
 
   .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .modegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0 4px}.modecard{border:1px solid var(--line);border-radius:12px;padding:12px;background:#0f1216;cursor:pointer}.modecard.on{border-color:var(--molten2);box-shadow:0 0 0 1px rgba(255,184,77,.25)}.modecard b{display:block;font-family:var(--disp);text-transform:uppercase}.modecard span{color:var(--muted);font-size:12px}
+  .socialgrid{display:none;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:14px}.socialgrid.on{display:grid}.miniinput{background:#0b0d10;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:10px;font-family:var(--mono);width:100%;box-sizing:border-box}.minilabel{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:5px;display:block}
   .btn2{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:13px;
     border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:11px 16px;cursor:pointer}
   .btn2:hover{border-color:var(--molten)}
@@ -211,10 +213,30 @@
   </header>
 
   <section class="console reveal">
-    <label class="field-label" for="url" data-i="urlLabel">Website to scan</label>
+    <label class="field-label" data-i="modeLabel">What should AI Mark scan?</label>
+    <div class="modegrid">
+      <div class="modecard on" id="mode-website" onclick="setMode('website')"><b data-i="modeWebsite">Website</b><span data-i="modeWebsiteSub">Google + AI search readiness</span></div>
+      <div class="modecard" id="mode-both" onclick="setMode('both')"><b data-i="modeBoth">Website + Social</b><span data-i="modeBothSub">Full visibility graph</span></div>
+      <div class="modecard" id="mode-social" onclick="setMode('social')"><b data-i="modeSocial">Social accounts</b><span data-i="modeSocialSub">Profile/channel visibility</span></div>
+    </div>
+    <label class="field-label" for="brand" style="margin-top:14px" data-i="brandLabel">Brand / business name (optional)</label>
+    <input id="brand" class="miniinput" type="text" placeholder="AI Mark / SuccessCasting / your brand" autocomplete="organization">
+
+    <label class="field-label" for="url" style="margin-top:16px" data-i="urlLabel">Website to scan</label>
     <div class="urlrow">
       <span class="pre">https://</span>
       <input id="url" type="text" placeholder="successcasting.com" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="socialgrid" id="socialGrid">
+      <div><span class="minilabel">Facebook Profile</span><input id="facebook_profile" class="miniinput" placeholder="facebook.com/your.profile"></div>
+      <div><span class="minilabel">Facebook Page</span><input id="facebook_page" class="miniinput" placeholder="facebook.com/your.page"></div>
+      <div><span class="minilabel">YouTube / Shorts</span><input id="youtube" class="miniinput" placeholder="youtube.com/@channel"></div>
+      <div><span class="minilabel">Instagram / Reels</span><input id="instagram" class="miniinput" placeholder="instagram.com/brand"></div>
+      <div><span class="minilabel">TikTok</span><input id="tiktok" class="miniinput" placeholder="tiktok.com/@brand"></div>
+      <div><span class="minilabel">LINE OA</span><input id="line_oa" class="miniinput" placeholder="lin.ee/..."></div>
+      <div><span class="minilabel">Google Business</span><input id="google_business" class="miniinput" placeholder="maps.app.goo.gl/..."></div>
+      <div><span class="minilabel">LinkedIn</span><input id="linkedin" class="miniinput" placeholder="linkedin.com/company/..."></div>
     </div>
 
     <label class="field-label" for="prompt" style="margin-top:16px" data-i="promptLabel">What should the AI focus on? (optional)</label>
@@ -243,8 +265,9 @@
 /* ---------------- i18n ---------------- */
 const I18N = {
   en:{kicker:"2026 SEO · GEO/AEO · AI-CRAWLER · SOCIAL",
-      h1:'Is your site <span class="glow">visible to AI?</span>',
-      lede:"Paste any website and tell the AI what to focus on. It fetches the real page, robots.txt and sitemap, then scores how findable you are on Google and in AI answers — with a fix-it action plan.",
+      h1:'Is your brand <span class="glow">visible to AI?</span>',
+      lede:"Scan your website and social accounts. AI Mark builds a visibility graph across Google, Edge/Copilot, AI search, Facebook, YouTube Shorts, Reels, TikTok, LINE OA and more — then recommends the next action.",
+      modeLabel:"What should AI Mark scan?", modeWebsite:"Website", modeWebsiteSub:"Google + AI search readiness", modeBoth:"Website + Social", modeBothSub:"Full visibility graph", modeSocial:"Social accounts", modeSocialSub:"Profile/channel visibility", brandLabel:"Brand / business name (optional)",
       urlLabel:"Website to scan", promptLabel:"What should the AI focus on? (optional)",
       promptPh:"e.g. Focus on local SEO for a factory in Thailand, check if AI crawlers are blocked, and whether products are readable as text not images.",
       go:"⚡ Run free scan", hint:"No login. The scan runs server-side and is powered by Claude.",
@@ -258,8 +281,9 @@ const I18N = {
       flow:["Watch daily","Prioritize changes","Fix with agent","Verify result"],
       blurb:"Weighted across four pillars on the 2026 model — being the cited source in AI answers is the new position #1."},
   th:{kicker:"2026 SEO · GEO/AEO · AI-CRAWLER · SOCIAL",
-      h1:'เว็บคุณ <span class="glow">AI มองเห็นไหม?</span>',
-      lede:"วางลิงก์เว็บไหนก็ได้ แล้วบอก AI ว่าให้เน้นอะไร ระบบจะดึงหน้าเว็บจริง robots.txt และ sitemap มาวิเคราะห์ว่าคุณถูกค้นเจอบน Google และในคำตอบของ AI มากแค่ไหน พร้อมแผนแก้ไข",
+      h1:'แบรนด์คุณ <span class="glow">AI มองเห็นไหม?</span>',
+      lede:"สแกนทั้งเว็บไซต์และบัญชีโซเชียล AI Mark จะสร้าง Visibility Graph ครอบคลุม Google, Edge/Copilot, AI Search, Facebook, YouTube Shorts, Reels, TikTok, LINE OA และช่องทางอื่น ๆ แล้วแนะนำ action ถัดไป",
+      modeLabel:"ต้องการให้ AI Mark สแกนอะไร?", modeWebsite:"เว็บไซต์", modeWebsiteSub:"Google + AI Search", modeBoth:"เว็บไซต์ + โซเชียล", modeBothSub:"Visibility Graph เต็ม", modeSocial:"บัญชีโซเชียล", modeSocialSub:"Profile/channel visibility", brandLabel:"ชื่อแบรนด์ / ธุรกิจ (ไม่บังคับ)",
       urlLabel:"เว็บไซต์ที่จะสแกน", promptLabel:"อยากให้ AI เน้นเรื่องอะไร? (ไม่บังคับ)",
       promptPh:"เช่น เน้น local SEO โรงงานในไทย เช็คว่า AI crawler ถูกบล็อกไหม และสินค้าเป็นข้อความที่อ่านได้หรือเป็นแค่รูป",
       go:"⚡ สแกนฟรี", hint:"ไม่ต้องล็อกอิน ระบบทำงานฝั่งเซิร์ฟเวอร์ ขับเคลื่อนด้วย Claude",
@@ -274,6 +298,12 @@ const I18N = {
       blurb:"ถ่วงน้ำหนัก 4 เสาหลักตามโมเดลปี 2026 — การเป็นแหล่งที่ AI อ้างอิงคืออันดับ 1 ยุคใหม่"}
 };
 let LANG="en";
+let MODE="website";
+function setMode(m){
+  MODE=m;
+  ["website","both","social"].forEach(x=>document.getElementById("mode-"+x)?.classList.toggle("on",x===m));
+  document.getElementById("socialGrid")?.classList.toggle("on",m!=="website");
+}
 function setLang(l){
   LANG=l;
   document.getElementById("en").classList.toggle("on",l==="en");
@@ -363,6 +393,25 @@ function plan(cats){
   return `<section class="card reveal"><header class="card__hd"><div class="card__bar t-bad"></div>
     <h3>Prioritized action plan</h3></header><ol class="plan">${items}</ol></section>`;
 }
+function renderSocialGraph(social){
+  if(!social)return"";
+  const scores=social.scores||{};
+  const chans=social.connected_channels||[];
+  const missing=(social.missing_channels||[]).slice(0,5);
+  const acts=social.today_content_actions||[];
+  return `<section class="card reveal"><header class="card__hd"><div class="card__bar t-warn"></div><h3>Visibility Graph · Social + Entity</h3><div class="card__score t-${tone(scores.visibility_graph||0)}">${scores.visibility_graph||0}<small>/100</small></div></header>
+    <p class="summary">${esc(social.next_best_action||"")}</p>
+    <div class="fp__grid">
+      <div class="fp__item"><div class="fp__label">Social recommendation</div><div class="fp__value">${scores.social_recommendation||0}</div></div>
+      <div class="fp__item"><div class="fp__label">Entity trust</div><div class="fp__value">${scores.entity_trust||0}</div></div>
+      <div class="fp__item"><div class="fp__label">Conversion path</div><div class="fp__value">${scores.conversion_path||0}</div></div>
+    </div>
+    ${social.profile_first_strategy?.applies?`<p class="fix">Profile-first strategy: ${esc(social.profile_first_strategy.recommended_model)}</p>`:""}
+    ${chans.length?`<table class="findings"><tbody>${chans.map(c=>`<tr><td><span class="pill p-medium">${c.score}/100</span></td><td class="check">${esc(c.label)}</td><td class="note">${esc(c.role)} → <span class="fix">${esc(c.recommendation)}</span></td></tr>`).join("")}</tbody></table>`:""}
+    ${acts.length?`<h3 style="font-family:var(--disp);margin-top:18px">Content Radar</h3><ol class="plan">${acts.map((a,i)=>`<li class="plan__item"><span class="plan__n">${String(i+1).padStart(2,"0")}</span><span class="pill p-low">${esc(a.platform)}</span><div class="plan__body"><b>${esc(a.hook)}</b><span class="plan__cat">${esc(a.format)}</span><p>${esc(a.goal)} · ${esc(a.cta)}</p></div></li>`).join("")}</ol>`:""}
+    ${missing.length?`<p class="note">Missing channels to consider: ${missing.map(m=>esc(m.label)).join(", ")}</p>`:""}
+  </section>`;
+}
 let currentScan=null;
 function render(scan){
   currentScan=scan;
@@ -380,6 +429,7 @@ function render(scan){
       <div class="gradechip">GRADE <b class="t-${tone(ov)}">${esc(scan.grade||"")}</b></div></div></div>
     <div class="gaugerow reveal">${cats.map(c=>gauge(c.score|0,c.name)).join("")}</div>
     ${cwvStrip(scan._cwv)}
+    ${renderSocialGraph(scan._social)}
     ${cats.map(card).join("")}
     ${footprint(scan.footprint)}
     ${plan(cats)}
@@ -420,20 +470,38 @@ function startLoading(){
   loadTimer=setInterval(()=>{i=(i+1)%steps.length;document.getElementById("loadstep").textContent=steps[i];},1600);
 }
 function stopLoading(){clearInterval(loadTimer);document.getElementById("loading").classList.remove("on");}
+async function runSocialScan(){
+  const channels={};
+  ["facebook_profile","facebook_page","youtube","instagram","tiktok","line_oa","google_business","linkedin"].forEach(id=>{const v=document.getElementById(id)?.value.trim(); if(v) channels[id]=v;});
+  const brand_name=document.getElementById("brand")?.value.trim()||"";
+  const website_url=document.getElementById("url")?.value.trim()||"";
+  const res=await fetch("/api/social-visibility",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({brand_name,website_url,channels})});
+  const data=await res.json();
+  if(!res.ok||data.error)throw new Error(data.error||"Social visibility scan failed");
+  return data;
+}
 async function runScan(){
   const raw=document.getElementById("url").value.trim();
   const prompt=document.getElementById("prompt").value.trim();
   const err=document.getElementById("err"); err.style.display="none";
-  if(!raw){err.textContent=LANG==="th"?"กรุณาใส่ URL เว็บไซต์":"Please enter a website URL.";err.style.display="block";return;}
+  if(MODE!=="social"&&!raw){err.textContent=LANG==="th"?"กรุณาใส่ URL เว็บไซต์":"Please enter a website URL.";err.style.display="block";return;}
+  if(MODE==="social"&&!document.querySelector("#socialGrid input[value]")&&!["facebook_profile","facebook_page","youtube","instagram","tiktok","line_oa","google_business","linkedin"].some(id=>document.getElementById(id)?.value.trim())){err.textContent=LANG==="th"?"กรุณาใส่ social URL อย่างน้อยหนึ่งช่อง":"Please enter at least one social URL.";err.style.display="block";return;}
   const go=document.getElementById("go"); go.disabled=true;
   document.getElementById("results").style.display="none";
   startLoading();
   try{
-    const res=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({url:raw,prompt})});
-    const data=await res.json();
+    let data;
+    if(MODE==="social"){
+      const social=await runSocialScan();
+      data={url:social.website_url||social.brand_name||"Social Visibility Graph",scanned_at:new Date().toISOString(),overall:social.scores.visibility_graph,grade:social.scores.visibility_graph>=80?"A":social.scores.visibility_graph>=65?"B":social.scores.visibility_graph>=50?"C":social.scores.visibility_graph>=35?"D":"F",summary:social.next_best_action,categories:[],_social:social};
+    }else{
+      const res=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({url:raw,prompt})});
+      data=await res.json();
+      if(!res.ok||data.error){stopLoading(); go.disabled=false; err.textContent=(data.error||"Scan failed")+(data.detail?" — "+data.detail:"");err.style.display="block";return;}
+      if(MODE==="both") data._social=await runSocialScan();
+    }
     stopLoading(); go.disabled=false;
-    if(!res.ok||data.error){err.textContent=(data.error||"Scan failed")+(data.detail?" — "+data.detail:"");err.style.display="block";return;}
     render(data);
   }catch(e){stopLoading();go.disabled=false;err.textContent="Network error: "+e;err.style.display="block";}
 }
@@ -499,6 +567,7 @@ function initAuthState(){
 
 document.getElementById("url").addEventListener("keydown",e=>{if(e.key==="Enter")runScan();});
 renderChips();
+setMode("website");
 initAuthState();
 </script>
 </body>
