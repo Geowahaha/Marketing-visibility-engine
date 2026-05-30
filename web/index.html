@@ -158,6 +158,10 @@
   .package{border:1px solid rgba(255,122,24,.28);background:linear-gradient(180deg,rgba(255,122,24,.10),rgba(255,122,24,.04));border-radius:14px;padding:18px;margin:18px 0}
   .package h3{font-family:var(--disp);margin:0 0 7px;text-transform:uppercase;letter-spacing:.04em}
   .package p{color:var(--muted);margin:0 0 12px}
+  .flowgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:14px 0}
+  .flowstep{background:#0f1216;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .flowstep b{display:block;color:var(--molten2);font-family:var(--disp);margin-bottom:4px}.flowstep span{color:var(--muted);font-size:13px}
+  .primaryAction{background:linear-gradient(180deg,var(--molten2),var(--molten));color:#1a1205;border:0}.primaryAction:hover{filter:brightness(1.06)}
   .exportbox{display:none;white-space:pre-wrap;max-height:420px;overflow:auto;background:#0f1216;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px;font-family:var(--mono);font-size:12px;color:#dce3ee}
 
   footer{margin-top:48px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);
@@ -244,7 +248,8 @@ const I18N = {
       chips:["Focus on AI search (GEO/AEO)","Check AI-crawler blocking","Local SEO for Thailand","Open Graph / social shares","Why am I not on Google?"],
       loading:["Heating the crucible…","Fetching the live page…","Reading robots.txt & sitemap…","Asking Claude to analyse…","Casting the report…"],
       newscan:"↻ New scan", print:"⬇ Download PDF", overall:"Overall visibility",
-      improve:"Let AI Mark improve this website", packageText:"Unlock the full package: Action JSON, AI-agent prompt, PDF report, and prioritized implementation plan.", exportBundle:"Export Package", exportJson:"Export Action JSON", exportPrompt:"Export AI Agent Prompt",
+      improve:"Let AI Mark improve this website", packageText:"Turn this scan into an AI-agent action. AI Mark prepares the job, sends it through the MCP bridge, then the agent implements and verifies the fixes.", exportBundle:"View Package", exportJson:"Action JSON", exportPrompt:"Agent Prompt", sendAgent:"Start AI Agent Action",
+      flow:["Prepare action","Connect MCP bridge","Agent fixes website","Verify & report"],
       blurb:"Weighted across four pillars on the 2026 model — being the cited source in AI answers is the new position #1."},
   th:{kicker:"2026 SEO · GEO/AEO · AI-CRAWLER · SOCIAL",
       h1:'เว็บคุณ <span class="glow">AI มองเห็นไหม?</span>',
@@ -256,7 +261,9 @@ const I18N = {
       chips:["เน้น AI search (GEO/AEO)","เช็คการบล็อก AI crawler","Local SEO สำหรับไทย","Open Graph / การแชร์โซเชียล","ทำไมไม่ติด Google?"],
       loading:["กำลังจุดเตาหลอม…","กำลังดึงหน้าเว็บจริง…","กำลังอ่าน robots.txt & sitemap…","กำลังให้ Claude วิเคราะห์…","กำลังหล่อรายงาน…"],
       newscan:"↻ สแกนใหม่", print:"⬇ ดาวน์โหลด PDF", overall:"คะแนนการมองเห็นรวม",
-      improve:"ให้ AI Mark ปรับปรุงเว็บนี้", packageText:"ปลดล็อกแพ็กเกจเต็ม: Action JSON, Prompt สำหรับ AI Agent, PDF Report และแผนดำเนินการตามลำดับความสำคัญ", exportBundle:"Export Package", exportJson:"Export Action JSON", exportPrompt:"Export AI Agent Prompt",
+      improve:"ให้ AI Mark ปรับปรุงเว็บนี้", packageText:"เปลี่ยนผลสแกนนี้ให้เป็น Action สำหรับ AI Agent: AI Mark เตรียมงาน ส่งผ่าน MCP Bridge แล้วให้ Agent แก้เว็บและตรวจผลจริง",
+      exportBundle:"ดูแพ็กเกจ", exportJson:"Action JSON", exportPrompt:"Agent Prompt", sendAgent:"เริ่มให้ AI Agent ดำเนินการ",
+      flow:["เตรียม Action","เชื่อม MCP Bridge","Agent แก้เว็บ","ตรวจผลและรายงาน"],
       blurb:"ถ่วงน้ำหนัก 4 เสาหลักตามโมเดลปี 2026 — การเป็นแหล่งที่ AI อ้างอิงคืออันดับ 1 ยุคใหม่"}
 };
 let LANG="en";
@@ -372,7 +379,11 @@ function render(scan){
     <section class="package reveal">
       <h3>${esc(t.improve)}</h3>
       <p>${esc(t.packageText)}</p>
+      <div class="flowgrid">
+        ${t.flow.map((x,i)=>`<div class="flowstep"><b>${String(i+1).padStart(2,"0")} · ${esc(x)}</b><span>${i===0?'Package from this scan':i===1?'MCP/action bridge':i===2?'Code/content/SEO fixes':'Live proof + next steps'}</span></div>`).join("")}
+      </div>
       <div class="actions">
+        <button class="btn2 primaryAction" onclick="sendAgentAction()">${esc(t.sendAgent)}</button>
         <button class="btn2" onclick="exportPackage('bundle')">${esc(t.exportBundle)}</button>
         <button class="btn2" onclick="exportPackage('action_json')">${esc(t.exportJson)}</button>
         <button class="btn2" onclick="exportPackage('agent_prompt')">${esc(t.exportPrompt)}</button>
@@ -413,6 +424,24 @@ async function runScan(){
     render(data);
   }catch(e){stopLoading();go.disabled=false;err.textContent="Network error: "+e;err.style.display="block";}
 }
+async function sendAgentAction(){
+  const box=document.getElementById("exportBox");
+  if(!currentScan||!box)return;
+  box.style.display="block";
+  box.textContent=LANG==="th"?"กำลังเตรียม Action และเชื่อมต่อ AI Agent Bridge…":"Preparing action and connecting AI Agent Bridge…";
+  try{
+    const res=await fetch("/api/agent-bridge",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({scan:currentScan})});
+    const data=await res.json();
+    if(!res.ok){box.textContent=(data.error||"Action locked")+"\n\n"+(data.cta?(LANG==="th"?data.cta.th:data.cta.en):"Start AI Mark website improvement package");return;}
+    if(data.connected&&data.status==="sent_to_agent"){
+      box.textContent=(LANG==="th"?"ส่งงานให้ AI Agent แล้ว\n\n":"Sent to AI Agent.\n\n")+JSON.stringify(data.upstream||{},null,2);
+    }else{
+      box.textContent=(LANG==="th"?"Action พร้อมแล้ว แต่ยังไม่ได้ตั้งค่า MCP_BRIDGE_URL สำหรับส่งอัตโนมัติ\n\n":"Action is ready. Configure MCP_BRIDGE_URL to auto-send it.\n\n")+JSON.stringify(data.mcp_payload||data,null,2);
+    }
+  }catch(e){box.textContent="Agent bridge error: "+e;}
+}
+
 async function exportPackage(type){
   const box=document.getElementById("exportBox");
   if(!currentScan||!box)return;
