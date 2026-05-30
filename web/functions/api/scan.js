@@ -176,6 +176,79 @@ function botVerdict(robotsBody) {
   return out;
 }
 
+function getSitemapUrls(sitemapBody) {
+  return [...String(sitemapBody || "").matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)]
+    .map((m) => m[1].trim())
+    .filter(Boolean)
+    .slice(0, 200);
+}
+
+function hostOf(value) {
+  try { return new URL(value).hostname.replace(/^www\./i, "").toLowerCase(); }
+  catch { return ""; }
+}
+
+function exactHostOf(value) {
+  try { return new URL(value).hostname.toLowerCase(); }
+  catch { return ""; }
+}
+
+function oppositeWwwUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.startsWith("www.")) u.hostname = u.hostname.slice(4);
+    else u.hostname = "www." + u.hostname;
+    u.pathname = "/";
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch { return ""; }
+}
+
+function migrationSignals(requestedUrl, finalUrl, page, robotsBody, sitemapBody, alternateHome) {
+  const canonical = page?.canonical || "";
+  const ogUrl = page?.og?.url || "";
+  const sitemapUrls = getSitemapUrls(sitemapBody);
+  const finalExact = exactHostOf(finalUrl || requestedUrl);
+  const canonicalExact = exactHostOf(canonical);
+  const ogExact = exactHostOf(ogUrl);
+  const sitemapExactHosts = [...new Set(sitemapUrls.map(exactHostOf).filter(Boolean))];
+  const requestedBare = hostOf(requestedUrl);
+  const canonicalBare = hostOf(canonical);
+  const altFinalExact = exactHostOf(alternateHome?.finalUrl || "");
+  const altStatus = alternateHome?.status || 0;
+  const alternateServes200 = !!(alternateHome && alternateHome.ok && altFinalExact && altFinalExact !== finalExact);
+  const canonicalHostMismatch = !!(canonicalExact && finalExact && canonicalExact !== finalExact);
+  const ogHostMismatch = !!(ogExact && finalExact && ogExact !== finalExact);
+  const sitemapHostMismatch = sitemapExactHosts.length > 0 && (!sitemapExactHosts.includes(finalExact) || sitemapExactHosts.some((h) => h !== finalExact));
+  const bareDomainSame = !!(requestedBare && canonicalBare && requestedBare === canonicalBare);
+  return {
+    requestedUrl,
+    finalUrl,
+    finalHost: finalExact,
+    canonical,
+    canonicalHost: canonicalExact,
+    canonicalHostMismatch,
+    ogUrl,
+    ogHost: ogExact,
+    ogHostMismatch,
+    robotsSitemapLines: [...String(robotsBody || "").matchAll(/^\s*Sitemap:\s*(.+)$/gim)].map((m) => m[1].trim()),
+    sitemapUrlCount: sitemapUrls.length,
+    sitemapSampleUrls: sitemapUrls.slice(0, 12),
+    sitemapHosts: sitemapExactHosts,
+    sitemapHostMismatch,
+    alternateHostUrl: oppositeWwwUrl(requestedUrl),
+    alternateHostStatus: altStatus,
+    alternateHostFinalUrl: alternateHome?.finalUrl || "",
+    alternateHostServes200WithoutRedirectToFinalHost: alternateServes200,
+    duplicateHostRisk: alternateServes200 || canonicalHostMismatch || sitemapHostMismatch,
+    sameBareDomainButWwwSplit: bareDomainSame && (canonicalHostMismatch || alternateServes200 || sitemapHostMismatch),
+    indexCoverageWarning: sitemapUrls.length <= 3
+      ? "Sitemap has only a few URLs. Public search may only know the homepage and may keep older snippets until Google recrawls. Verify URL Inspection / Coverage in Google Search Console."
+      : "Sitemap has multiple URLs, but true Google index status still requires Google Search Console URL Inspection or an authorized indexing API/source.",
+  };
+}
+
 const SYSTEM_PROMPT = `You are a senior technical-SEO, GEO/AEO (AI-search) and social-visibility auditor working to 2026 standards. You receive raw signals extracted from a live website and must return a rigorous, honest audit.
 
 Scoring model (weights): AI Crawler Access 25%, AI Search/GEO-AEO 25%, Technical SEO 22%, Social/Open Graph 16%, Performance 12%. Being CITED by AI answer engines (ChatGPT, Claude, Perplexity, Gemini) is the new #1 position.
@@ -197,7 +270,13 @@ You MUST respond with ONLY a JSON object (no markdown, no prose, no code fences)
  "footprint": {"summary": string, "items": [{"label": string, "value": string, "state": "good"|"warn"|"bad"|"info"}], "notes": [string]}
 }
 Use these four category names exactly: "Technical SEO (Google 2026)", "AI Search / GEO-AEO", "AI Crawler Access", "Social Sharing & Open Graph".
-Grade bands: A>=90, B>=80, C>=70, D>=55, else F. Compute each category score by deducting from 100 per failed/warned finding weighted by severity (critical 30, high 18, medium 9, low 4; warn = half). Overall = weighted blend above. Be specific and actionable in every "fix". If a signal could not be fetched, say so honestly rather than inventing data. If "coreWebVitals" is present, add specific findings to the "Technical SEO (Google 2026)" category for LCP (good <2500ms), INP (good <200ms) and CLS (good <0.1), since Core Web Vitals are a confirmed Google ranking signal.`;
+Grade bands: A>=90, B>=80, C>=70, D>=55, else F. Compute each category score by deducting from 100 per failed/warned finding weighted by severity (critical 30, high 18, medium 9, low 4; warn = half). Overall = weighted blend above. Be specific and actionable in every "fix". If a signal could not be fetched, say so honestly rather than inventing data. If "coreWebVitals" is present, add specific findings to the "Technical SEO (Google 2026)" category for LCP (good <2500ms), INP (good <200ms) and CLS (good <0.1), since Core Web Vitals are a confirmed Google ranking signal.
+
+Migration/index rigor rules:
+- Treat "migration" signals as first-class Google visibility evidence, not minor metadata. If alternate www/non-www hosts both return 200 without redirecting to the selected final host, or canonical/OG/sitemap hosts disagree with the served final host, mark this as HIGH or CRITICAL because Google may split signals, keep older indexed snippets, or index only the wrong host.
+- If sitemapUrlCount is very low (<=3), warn that index coverage is thin and the scan cannot prove Google has indexed all key pages. Recommend Google Search Console URL Inspection + sitemap resubmission + internal links/backlinks.
+- Never claim "Google index is healthy" unless authorized Search Console/index evidence is present. Public signals can only say "indexability looks OK" or "public search evidence suggests only limited/old coverage".
+- If the user prompt mentions index, old site, migration, or Google, include an explicit finding named "Google index / migration coverage" in Technical SEO.`;
 
 function extractJson(text) {
   // strip code fences if any, then grab the outermost {...}
@@ -311,23 +390,28 @@ export async function onRequestPost(context) {
   if (!url) return json({ error: "Please provide a valid website URL." }, 400);
 
   const root = new URL(url).origin;
-  const [home, robots, sitemap, llms, psi] = await Promise.all([
+  const alternateHomeUrl = oppositeWwwUrl(url);
+  const [home, robots, sitemap, llms, psi, alternateHome] = await Promise.all([
     tryFetchText(url),
     tryFetchText(root + "/robots.txt"),
     tryFetchText(root + "/sitemap.xml"),
     tryFetchText(root + "/llms.txt"),
     fetchPSI(url, env),
+    alternateHomeUrl ? tryFetchText(alternateHomeUrl, 9000) : Promise.resolve(null),
   ]);
 
+  const pageFacts = home.ok ? extractFacts(home.body) : null;
   const facts = {
     requestedUrl: url,
     fetch: {
       home: { status: home.status, ok: home.ok, finalUrl: home.finalUrl, error: home.error || null },
+      alternateHome: alternateHome ? { status: alternateHome.status, ok: alternateHome.ok, finalUrl: alternateHome.finalUrl, error: alternateHome.error || null } : null,
       robots: { status: robots.status, present: robots.ok && /(allow|disallow|user-agent)/i.test(robots.body) },
       sitemap: { status: sitemap.status, present: sitemap.ok && /<urlset|<sitemapindex/i.test(sitemap.body) },
       llms: { status: llms.status, present: llms.ok && llms.body.trim().length > 0 },
     },
-    page: home.ok ? extractFacts(home.body) : null,
+    page: pageFacts,
+    migration: migrationSignals(url, home.finalUrl, pageFacts, robots.body, sitemap.body, alternateHome),
     coreWebVitals: psi,
     robotsTxt: robots.ok ? robots.body.slice(0, 3000) : "",
     botPolicy: robots.ok ? botVerdict(robots.body) : null,
@@ -370,6 +454,7 @@ export async function onRequestPost(context) {
   scan.url = scan.url || url;
   scan.scanned_at = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   scan._fetch = facts.fetch; // expose raw fetch status to the UI
+  scan._migration = facts.migration; // raw canonical/index migration evidence for QA/export
   scan._cwv = psi;           // raw Core Web Vitals for the metrics strip
   scan._rateRemaining = rl.remaining;
   return json(scan);
