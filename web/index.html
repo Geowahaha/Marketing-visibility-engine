@@ -158,11 +158,15 @@
   .package{border:1px solid rgba(255,122,24,.28);background:linear-gradient(180deg,rgba(255,122,24,.10),rgba(255,122,24,.04));border-radius:14px;padding:18px;margin:18px 0}
   .package h3{font-family:var(--disp);margin:0 0 7px;text-transform:uppercase;letter-spacing:.04em}
   .package p{color:var(--muted);margin:0 0 12px}
-  .flowgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:14px 0}
+  .nextbest{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;background:#0f1216;border:1px solid rgba(255,122,24,.34);border-radius:14px;padding:16px;margin:14px 0}
+  .nextbest__label{font-family:var(--mono);font-size:11px;color:var(--molten2);text-transform:uppercase;letter-spacing:.12em}.nextbest__title{font-family:var(--disp);font-size:22px;font-weight:900;margin:3px 0}.nextbest__text{color:var(--muted);font-size:14px}
+  .flowgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}
   .flowstep{background:#0f1216;border:1px solid var(--line);border-radius:12px;padding:12px}
   .flowstep b{display:block;color:var(--molten2);font-family:var(--disp);margin-bottom:4px}.flowstep span{color:var(--muted);font-size:13px}
   .primaryAction{background:linear-gradient(180deg,var(--molten2),var(--molten));color:#1a1205;border:0}.primaryAction:hover{filter:brightness(1.06)}
+  details.advanced{margin-top:12px}details.advanced summary{cursor:pointer;color:var(--muted);font-family:var(--mono);font-size:12px}details.advanced[open] summary{color:var(--molten2)}
   .exportbox{display:none;white-space:pre-wrap;max-height:420px;overflow:auto;background:#0f1216;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px;font-family:var(--mono);font-size:12px;color:#dce3ee}
+  @media(max-width:760px){.nextbest{grid-template-columns:1fr}.nextbest .actions{margin-top:0}}
 
   footer{margin-top:48px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);
     font-family:var(--mono);font-size:12px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
@@ -248,8 +252,10 @@ const I18N = {
       chips:["Focus on AI search (GEO/AEO)","Check AI-crawler blocking","Local SEO for Thailand","Open Graph / social shares","Why am I not on Google?"],
       loading:["Heating the crucible…","Fetching the live page…","Reading robots.txt & sitemap…","Asking Claude to analyse…","Casting the report…"],
       newscan:"↻ New scan", print:"⬇ Download PDF", overall:"Overall visibility",
-      improve:"Let AI Mark improve this website", packageText:"Turn this scan into an AI-agent action. AI Mark prepares the job, sends it through the MCP bridge, then the agent implements and verifies the fixes.", exportBundle:"View Package", exportJson:"Action JSON", exportPrompt:"Agent Prompt", sendAgent:"Start AI Agent Action",
-      flow:["Prepare action","Connect MCP bridge","Agent fixes website","Verify & report"],
+      improve:"Recommended next step", packageText:"Search and AI recommendations change fast. Keep it simple: start one guided action. AI Mark prepares the plan, starts monitoring, and can send the job to an AI agent when connected.",
+      nextLabel:"Best next action", nextTitle:"Start AI Mark Watchtower", nextText:"Monitor Google, Edge/Copilot, AI crawlers, schema, llms.txt and content drift — then trigger fixes when something changes.",
+      startWatch:"Start Watchtower", exportBundle:"View Package", exportJson:"Action JSON", exportPrompt:"Agent Prompt", sendAgent:"Fix once with AI Agent", advanced:"Advanced exports / bridge payload",
+      flow:["Watch daily","Prioritize changes","Fix with agent","Verify result"],
       blurb:"Weighted across four pillars on the 2026 model — being the cited source in AI answers is the new position #1."},
   th:{kicker:"2026 SEO · GEO/AEO · AI-CRAWLER · SOCIAL",
       h1:'เว็บคุณ <span class="glow">AI มองเห็นไหม?</span>',
@@ -261,9 +267,10 @@ const I18N = {
       chips:["เน้น AI search (GEO/AEO)","เช็คการบล็อก AI crawler","Local SEO สำหรับไทย","Open Graph / การแชร์โซเชียล","ทำไมไม่ติด Google?"],
       loading:["กำลังจุดเตาหลอม…","กำลังดึงหน้าเว็บจริง…","กำลังอ่าน robots.txt & sitemap…","กำลังให้ Claude วิเคราะห์…","กำลังหล่อรายงาน…"],
       newscan:"↻ สแกนใหม่", print:"⬇ ดาวน์โหลด PDF", overall:"คะแนนการมองเห็นรวม",
-      improve:"ให้ AI Mark ปรับปรุงเว็บนี้", packageText:"เปลี่ยนผลสแกนนี้ให้เป็น Action สำหรับ AI Agent: AI Mark เตรียมงาน ส่งผ่าน MCP Bridge แล้วให้ Agent แก้เว็บและตรวจผลจริง",
-      exportBundle:"ดูแพ็กเกจ", exportJson:"Action JSON", exportPrompt:"Agent Prompt", sendAgent:"เริ่มให้ AI Agent ดำเนินการ",
-      flow:["เตรียม Action","เชื่อม MCP Bridge","Agent แก้เว็บ","ตรวจผลและรายงาน"],
+      improve:"ขั้นตอนถัดไปที่แนะนำ", packageText:"Google และ AI Search เปลี่ยนเร็วมาก จึงทำให้ง่ายเป็นขั้นตอนเดียว: AI Mark เตรียมแผน เริ่มเฝ้าติดตาม และส่งงานให้ AI Agent แก้เมื่อเชื่อมต่อแล้ว",
+      nextLabel:"คำแนะนำหลัก", nextTitle:"เริ่ม AI Mark Watchtower", nextText:"เฝ้าตรวจ Google, Edge/Copilot, AI crawlers, schema, llms.txt และ content drift แล้วสั่งแก้เมื่อมีการเปลี่ยนแปลง",
+      startWatch:"เริ่ม Watchtower", exportBundle:"ดูแพ็กเกจ", exportJson:"Action JSON", exportPrompt:"Agent Prompt", sendAgent:"ให้ AI Agent แก้ครั้งนี้", advanced:"ตัวเลือกขั้นสูง / bridge payload",
+      flow:["เฝ้าตรวจทุกวัน","จัดลำดับสิ่งที่เปลี่ยน","สั่ง Agent แก้","ตรวจผลจริง"],
       blurb:"ถ่วงน้ำหนัก 4 เสาหลักตามโมเดลปี 2026 — การเป็นแหล่งที่ AI อ้างอิงคืออันดับ 1 ยุคใหม่"}
 };
 let LANG="en";
@@ -379,15 +386,21 @@ function render(scan){
     <section class="package reveal">
       <h3>${esc(t.improve)}</h3>
       <p>${esc(t.packageText)}</p>
+      <div class="nextbest">
+        <div><div class="nextbest__label">${esc(t.nextLabel)}</div><div class="nextbest__title">${esc(t.nextTitle)}</div><div class="nextbest__text">${esc(t.nextText)}</div></div>
+        <div class="actions"><button class="btn2 primaryAction" onclick="startWatchtower()">${esc(t.startWatch)}</button></div>
+      </div>
       <div class="flowgrid">
-        ${t.flow.map((x,i)=>`<div class="flowstep"><b>${String(i+1).padStart(2,"0")} · ${esc(x)}</b><span>${i===0?'Package from this scan':i===1?'MCP/action bridge':i===2?'Code/content/SEO fixes':'Live proof + next steps'}</span></div>`).join("")}
+        ${t.flow.map((x,i)=>`<div class="flowstep"><b>${String(i+1).padStart(2,"0")} · ${esc(x)}</b><span>${i===0?'Google + AI surfaces':i===1?'Only important changes':i===2?'MCP/agent when ready':'Before/after proof'}</span></div>`).join("")}
       </div>
-      <div class="actions">
-        <button class="btn2 primaryAction" onclick="sendAgentAction()">${esc(t.sendAgent)}</button>
-        <button class="btn2" onclick="exportPackage('bundle')">${esc(t.exportBundle)}</button>
-        <button class="btn2" onclick="exportPackage('action_json')">${esc(t.exportJson)}</button>
-        <button class="btn2" onclick="exportPackage('agent_prompt')">${esc(t.exportPrompt)}</button>
-      </div>
+      <details class="advanced"><summary>${esc(t.advanced)}</summary>
+        <div class="actions">
+          <button class="btn2" onclick="sendAgentAction()">${esc(t.sendAgent)}</button>
+          <button class="btn2" onclick="exportPackage('bundle')">${esc(t.exportBundle)}</button>
+          <button class="btn2" onclick="exportPackage('action_json')">${esc(t.exportJson)}</button>
+          <button class="btn2" onclick="exportPackage('agent_prompt')">${esc(t.exportPrompt)}</button>
+        </div>
+      </details>
       <pre class="exportbox" id="exportBox"></pre>
     </section>
     <div class="actions">
@@ -424,6 +437,23 @@ async function runScan(){
     render(data);
   }catch(e){stopLoading();go.disabled=false;err.textContent="Network error: "+e;err.style.display="block";}
 }
+async function startWatchtower(){
+  const box=document.getElementById("exportBox");
+  if(!currentScan||!box)return;
+  box.style.display="block";
+  box.textContent=LANG==="th"?"กำลังเริ่ม Watchtower จากผลสแกนนี้…":"Starting Watchtower from this scan…";
+  try{
+    const res=await fetch("/api/watchtower-start",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({scan:currentScan})});
+    const data=await res.json();
+    if(!res.ok){box.textContent=(data.error||"Watchtower locked")+"\n\n"+(data.cta?(LANG==="th"?data.cta.th:data.cta.en):"Start AI Mark Watchtower");return;}
+    const msg=data.connected
+      ? (LANG==="th"?"เริ่ม Watchtower แล้ว\n\n":"Watchtower started.\n\n")
+      : (LANG==="th"?"Watchtower plan พร้อมแล้ว ขั้นต่อไปคือเชื่อมระบบ monitoring อัตโนมัติ\n\n":"Watchtower plan is ready. Next step: connect automated monitoring.\n\n");
+    box.textContent=msg+JSON.stringify(data.watchtower||data,null,2);
+  }catch(e){box.textContent="Watchtower error: "+e;}
+}
+
 async function sendAgentAction(){
   const box=document.getElementById("exportBox");
   if(!currentScan||!box)return;
