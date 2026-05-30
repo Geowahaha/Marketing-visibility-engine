@@ -7,3 +7,7 @@ report.json
 *.egg-info/
 build/
 dist/
+web/.wrangler/
+web/.env
+web/.env.local
+web/*.env.local.txt

@@ -1,0 +1,12 @@
+name = "visibility-engine"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "."
+
+# The Claude API key is NOT stored here. Set it as a secret/env var:
+#   Dashboard: Workers & Pages → your project → Settings → Variables and Secrets
+#   add ANTHROPIC_API_KEY (encrypted). Optionally add CLAUDE_MODEL.
+# Or via CLI:  npx wrangler pages secret put ANTHROPIC_API_KEY --project-name visibility-engine
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "58cfdfc394754be09fd2afde6d49a51f"

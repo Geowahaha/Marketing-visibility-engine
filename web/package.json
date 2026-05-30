@@ -1,0 +1,13 @@
+{
+  "name": "visibility-engine-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free AI website-visibility scanner — Cloudflare Pages front-end + Function.",
+  "scripts": {
+    "dev": "wrangler pages dev . --compatibility-date=2024-11-01",
+    "deploy": "wrangler pages deploy . --project-name=visibility-engine"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

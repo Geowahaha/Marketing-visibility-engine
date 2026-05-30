@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Before / After — Visibility Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@500;700;900&family=IBM+Plex+Mono:wght@500;700&family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0d0f12;--panel:#15181d;--panel2:#1b1f26;--line:#2a2f38;--ink:#e9edf2;--muted:#8b94a3;
+    --molten:#ff7a18;--molten2:#ffb347;--good:#39d98a;--warn:#ffcc4d;--bad:#ff5d5d;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;--disp:'Saira','Noto Sans Thai',sans-serif;--body:'Noto Sans Thai','Saira',system-ui,sans-serif;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1100px 480px at 80% -10%,rgba(255,122,24,.10),transparent 60%),var(--bg);
+    color:var(--ink);font-family:var(--body);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 22px 80px}
+  a{color:var(--molten2);text-decoration:none}
+  .nav{display:flex;justify-content:space-between;align-items:center;gap:14px}
+  .logo{font-family:var(--disp);font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:13px;color:var(--molten);display:flex;gap:9px;align-items:center}
+  .spark{width:11px;height:11px;border-radius:2px;background:var(--molten);box-shadow:0 0 14px 2px rgba(255,122,24,.7)}
+  .links{font-family:var(--mono);font-size:12px;display:flex;gap:14px;align-items:center}
+  .langtoggle{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-family:var(--mono);font-size:12px}
+  .langtoggle button{background:transparent;color:var(--muted);border:0;padding:6px 12px;cursor:pointer;font:inherit}
+  .langtoggle button.on{background:var(--molten);color:#1a1205;font-weight:700}
+  h1{font-family:var(--disp);font-weight:900;font-size:clamp(28px,5vw,46px);margin:.5em 0 .1em;letter-spacing:-.01em}
+  .lede{color:var(--muted);max-width:62ch}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:20px;margin:22px 0}
+  .ranges{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:620px){.ranges{grid-template-columns:1fr}}
+  .rng h3{font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;font-size:13px;margin:0 0 8px;color:var(--muted)}
+  .rng.before h3{color:var(--muted)} .rng.after h3{color:var(--molten2)}
+  label{font-family:var(--mono);font-size:11px;color:var(--muted);display:block;margin:8px 0 3px}
+  input[type=date]{width:100%;background:#0f1216;border:1px solid var(--line);border-radius:9px;color:var(--ink);font-family:var(--mono);font-size:14px;padding:10px;outline:none}
+  input[type=date]:focus{border-color:var(--molten)}
+  .go{margin-top:16px;width:100%;border:0;border-radius:12px;cursor:pointer;background:linear-gradient(180deg,var(--molten2),var(--molten));color:#1a1205;font-family:var(--disp);font-weight:900;letter-spacing:.05em;text-transform:uppercase;font-size:16px;padding:15px}
+  .go:disabled{opacity:.55;cursor:wait}
+  .hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px}
+  .err{display:none;border:1px solid rgba(255,93,93,.4);background:rgba(255,93,93,.08);color:#ffb0b0;border-radius:12px;padding:14px;margin-top:14px;font-family:var(--mono);font-size:13px}
+  #out{display:none;margin-top:26px}
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:620px){.metrics{grid-template-columns:1fr}}
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .metric h4{font-family:var(--disp);text-transform:uppercase;letter-spacing:.05em;font-size:12px;color:var(--muted);margin:0 0 12px}
+  .ba{display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+  .ba .lab{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase}
+  .ba .num{font-family:var(--mono);font-weight:700;font-size:22px}
+  .num.before{color:var(--muted)} .num.after{color:var(--ink)}
+  .bars{margin:14px 0 8px}
+  .bar{height:12px;border-radius:6px;margin:6px 0;background:var(--line)}
+  .bar i{display:block;height:100%;border-radius:6px}
+  .bar.before i{background:var(--muted)} .bar.after i{background:linear-gradient(90deg,var(--molten),var(--molten2))}
+  .delta{font-family:var(--mono);font-weight:700;font-size:15px;padding:3px 10px;border-radius:8px;display:inline-block;margin-top:6px}
+  .up{background:rgba(57,217,138,.14);color:var(--good)} .down{background:rgba(255,93,93,.14);color:var(--bad)} .flat{background:rgba(139,148,163,.14);color:var(--muted)}
+  .ranges-note{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:14px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .btn2{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:11px 16px;cursor:pointer}
+  .btn2:hover{border-color:var(--molten)}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-family:var(--mono);font-size:12px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .reveal{opacity:0;transform:translateY(12px);animation:rise .6s cubic-bezier(.16,1,.3,1) forwards}@keyframes rise{to{opacity:1;transform:none}}
+  @media print{@page{margin:14mm}
+    :root{--bg:#fff;--panel:#fff;--panel2:#faf7f3;--line:#d8d2c8;--ink:#1a1a1a;--muted:#555}
+    body{background:#fff !important}
+    .nav,.panel,.err,.actions{display:none !important}
+    #out{display:block !important}
+    .metric{break-inside:avoid;box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <div class="logo"><span class="spark"></span> Visibility Engine</div>
+    <div class="links">
+      <a href="/">Scanner</a>
+      <div class="langtoggle"><button id="en" class="on" onclick="setLang('en')">EN</button><button id="th" onclick="setLang('th')">ไทย</button></div>
+    </div>
+  </nav>
+
+  <h1 data-i="h1">Traffic: Before / After</h1>
+  <p class="lede" data-i="lede">Pull real Cloudflare traffic for two periods and compare — the proof your client wants after you ship the fixes. Pick the baseline window (before) and the improved window (after).</p>
+
+  <section class="panel reveal">
+    <div class="ranges">
+      <div class="rng before">
+        <h3 data-i="before">Before (baseline)</h3>
+        <label data-i="from">From</label><input type="date" id="bStart">
+        <label data-i="to">To</label><input type="date" id="bEnd">
+      </div>
+      <div class="rng after">
+        <h3 data-i="after">After (improved)</h3>
+        <label data-i="from2">From</label><input type="date" id="aStart">
+        <label data-i="to2">To</label><input type="date" id="aEnd">
+      </div>
+    </div>
+    <button class="go" id="go" onclick="compare()" data-i="go">📊 Compare periods</button>
+    <div class="hint" data-i="hint">Data comes from your Cloudflare zone via the server (token stays private).</div>
+    <div class="err" id="err"></div>
+  </section>
+
+  <main id="out"></main>
+
+  <footer>
+    <span data-i="foot">Powered by Cloudflare GraphQL Analytics</span>
+    <span>github.com/Geowahaha/Marketing-visibility-engine</span>
+  </footer>
+</div>
+
+<script>
+const I={en:{h1:"Traffic: Before / After",
+  lede:"Pull real Cloudflare traffic for two periods and compare — the proof your client wants after you ship the fixes. Pick the baseline window (before) and the improved window (after).",
+  before:"Before (baseline)",after:"After (improved)",from:"From",to:"To",from2:"From",to2:"To",
+  go:"📊 Compare periods",hint:"Data comes from your Cloudflare zone via the server (token stays private).",
+  foot:"Powered by Cloudflare GraphQL Analytics",
+  pageViews:"Page views",requests:"Requests",uniques:"Unique visitors",
+  beforeL:"Before",afterL:"After",print:"⬇ Download PDF",again:"↻ New comparison",
+  note:"Unique visitors = sum of daily uniques (approximate across multi-day ranges)."},
+ th:{h1:"ทราฟฟิก: ก่อน / หลัง",
+  lede:"ดึงทราฟฟิกจริงจาก Cloudflare สองช่วงเวลามาเทียบกัน — หลักฐานที่ลูกค้าอยากเห็นหลังเราแก้เว็บเสร็จ เลือกช่วงตั้งต้น (ก่อน) และช่วงที่ปรับปรุงแล้ว (หลัง)",
+  before:"ก่อน (baseline)",after:"หลัง (ปรับปรุงแล้ว)",from:"ตั้งแต่",to:"ถึง",from2:"ตั้งแต่",to2:"ถึง",
+  go:"📊 เปรียบเทียบ",hint:"ข้อมูลมาจาก zone Cloudflare ของคุณผ่านเซิร์ฟเวอร์ (token ไม่หลุด)",
+  foot:"ขับเคลื่อนด้วย Cloudflare GraphQL Analytics",
+  pageViews:"เพจวิว",requests:"คำขอ (requests)",uniques:"ผู้เข้าชมไม่ซ้ำ",
+  beforeL:"ก่อน",afterL:"หลัง",print:"⬇ ดาวน์โหลด PDF",again:"↻ เปรียบเทียบใหม่",
+  note:"ผู้เข้าชมไม่ซ้ำ = ผลรวมรายวัน (เป็นค่าประมาณเมื่อช่วงเวลาหลายวัน)"}};
+let LANG="en";
+function setLang(l){LANG=l;document.getElementById("en").classList.toggle("on",l==="en");
+  document.getElementById("th").classList.toggle("on",l==="th");document.documentElement.lang=l;
+  const t=I[l];document.querySelectorAll("[data-i]").forEach(e=>{e.textContent=t[e.getAttribute("data-i")]||e.textContent;});
+  if(document.getElementById("out").style.display==="block")lastData&&render(lastData);}
+const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(1)+"k":String(n);
+const esc=s=>(s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function deltaBadge(d){const cls=d>0?"up":d<0?"down":"flat";const sign=d>0?"▲ +":d<0?"▼ ":"– ";return `<span class="delta ${cls}">${sign}${Math.abs(d)}%</span>`;}
+function metric(key,t,before,after,delta){
+  const max=Math.max(before,after,1);
+  return `<div class="metric reveal"><h4>${esc(t[key])}</h4>
+    <div class="bars">
+      <div class="ba"><span class="lab">${esc(t.beforeL)}</span><span class="num before">${fmt(before)}</span></div>
+      <div class="bar before"><i style="width:${(before/max*100).toFixed(1)}%"></i></div>
+      <div class="ba"><span class="lab">${esc(t.afterL)}</span><span class="num after">${fmt(after)}</span></div>
+      <div class="bar after"><i style="width:${(after/max*100).toFixed(1)}%"></i></div>
+    </div>${deltaBadge(delta)}</div>`;
+}
+let lastData=null;
+function render(d){
+  lastData=d;const t=I[LANG];
+  document.getElementById("out").innerHTML=`
+    <div class="metrics">
+      ${metric("pageViews",t,d.before.pageViews,d.after.pageViews,d.delta.pageViews)}
+      ${metric("requests",t,d.before.requests,d.after.requests,d.delta.requests)}
+      ${metric("uniques",t,d.before.uniques,d.after.uniques,d.delta.uniques)}
+    </div>
+    <div class="ranges-note">${esc(t.beforeL)}: ${esc(d.before.range)} (${d.before.days}d) &nbsp;·&nbsp; ${esc(t.afterL)}: ${esc(d.after.range)} (${d.after.days}d)<br>${esc(t.note)}</div>
+    <div class="actions">
+      <button class="btn2" onclick="window.scrollTo({top:0,behavior:'smooth'})">${esc(t.again)}</button>
+      <button class="btn2" onclick="window.print()">${esc(t.print)}</button>
+    </div>`;
+  document.getElementById("out").style.display="block";
+}
+async function compare(){
+  const v=id=>document.getElementById(id).value;
+  const err=document.getElementById("err");err.style.display="none";
+  const payload={beforeStart:v("bStart"),beforeEnd:v("bEnd"),afterStart:v("aStart"),afterEnd:v("aEnd")};
+  if(Object.values(payload).some(x=>!x)){err.textContent=LANG==="th"?"กรุณาเลือกวันให้ครบทั้ง 4 ช่อง":"Please pick all four dates.";err.style.display="block";return;}
+  const go=document.getElementById("go");go.disabled=true;
+  try{
+    const res=await fetch("/api/analytics",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+    const d=await res.json();go.disabled=false;
+    if(!res.ok||d.error){err.textContent=d.error||"Query failed";err.style.display="block";return;}
+    render(d);
+  }catch(e){go.disabled=false;err.textContent="Network error: "+e;err.style.display="block";}
+}
+// sensible defaults: previous 14d as before, last 14d as after
+(function(){const d=n=>{const x=new Date(Date.now()-n*864e5);return x.toISOString().slice(0,10);};
+  bStart.value=d(28);bEnd.value=d(15);aStart.value=d(14);aEnd.value=d(1);})();
+</script>
+</body>
+</html>
