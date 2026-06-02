@@ -26,6 +26,7 @@ import { creditCost } from "../functions/api/_credits.js";
 import { getSkill, skillCapabilities, skillCreditCost } from "../functions/api/_skills.js";
 import { onRequestPost as conversionAudit, analyzeConversion } from "../functions/api/conversion-audit.js";
 import { onRequestPost as localSeoAudit, analyzeLocalSeo } from "../functions/api/local-seo-audit.js";
+import { onRequestPost as techAudit, analyzeTech } from "../functions/api/tech-audit.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1457,6 +1458,52 @@ async function testLocalSeoSkillIsPricedAndPreviews() {
   assert.equal(/api[_-]?key|secret|bearer\s/i.test(JSON.stringify(data)), false, "preview must not leak secret-like fields");
 }
 await testLocalSeoSkillIsPricedAndPreviews();
+
+async function testTechAuditSkillIsPricedAndPreviews() {
+  assert.equal(creditCost("tech_audit"), 50, "tech_audit must be priced via the skill registry");
+  assert.ok(getSkill("security_audit"), "alias 'security_audit' must resolve to tech_audit");
+
+  // A hardened, well-structured page scores high...
+  const strongHtml =
+    `<!doctype html><html lang="th"><head>` +
+    `<title>Success Casting Foundry — Quality Metal Castings</title>` +
+    `<meta name="viewport" content="width=device-width, initial-scale=1">` +
+    `<meta name="description" content="Success Casting is a Thai metal-casting foundry making FC and FCD castings to drawing, single pieces to full lots, with quality checks and fast quotes.">` +
+    `<link rel="canonical" href="https://good.example/">` +
+    `<script type="application/ld+json">{"@type":"Organization","name":"Success Casting","datePublished":"2026-01-01"}</script>` +
+    `</head><body><header></header><nav></nav><main><article>` +
+    `<h1>Success Casting Foundry</h1><img src="a.jpg" alt="casting">` +
+    `<a href="/about">about</a><a href="/contact">contact</a><a href="/privacy">privacy</a><a href="/terms">terms</a><a href="/services">services</a>` +
+    `<script>gtag('config','G-X')</script>` +
+    `</article><section></section></main><footer></footer></body></html>`;
+  const strongHeaders = {
+    "strict-transport-security": "max-age=63072000; includeSubDomains",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "x-content-type-options": "nosniff",
+  };
+  const strong = analyzeTech(strongHtml, strongHeaders, "https://good.example/", "th");
+  assert.ok(strong.tech_score >= 80, `hardened page should score >=80, got ${strong.tech_score}`);
+  assert.equal(strong.security.hsts, true);
+  assert.equal(strong.security.clickjacking, true);
+
+  // ...a bare page with no security headers scores low and names the gaps.
+  const weak = analyzeTech(`<!doctype html><html><body><div>hi</div></body></html>`, {}, "https://bad.example", "en");
+  assert.ok(weak.tech_score <= 30, `bare page should score <=30, got ${weak.tech_score}`);
+  const weakGaps = weak.leaks.map((l) => l.id);
+  assert.ok(weakGaps.includes("hsts"), "must flag missing HSTS");
+  assert.ok(weakGaps.includes("clickjacking"), "must flag missing clickjacking protection");
+
+  // Endpoint free preview at the registry price, no secret leak.
+  const { status, data } = await post(techAudit, { html: "<html><body>x</body></html>", lang: "en" });
+  assert.equal(status, 200);
+  assert.equal(data.paid, false);
+  assert.equal(data.status, "preview");
+  assert.equal(data.upgrade.credits_required, 50);
+  assert.equal(typeof data.tech_score, "number");
+  assert.equal(/api[_-]?key|secret|bearer\s/i.test(JSON.stringify(data)), false, "preview must not leak secret-like fields");
+}
+await testTechAuditSkillIsPricedAndPreviews();
 console.log("api-smoke: ok");
 
 async function testSkillRegistryIsSingleSourceOfTruth() {
