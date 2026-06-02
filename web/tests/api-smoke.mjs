@@ -21,6 +21,9 @@ import { onRequestPost as postAgentJobProgress } from "../functions/api/agent/jo
 import { onRequestPost as postAgentJobResult } from "../functions/api/agent/jobs/result.js";
 import { jobProgress, onRequestGet as getAgentJobStatus } from "../functions/api/agent/jobs/status.js";
 import { agentQueueKey, signAgentToken } from "../functions/api/_agent.js";
+import { onRequestGet as listSkillsApi } from "../functions/api/skills.js";
+import { creditCost } from "../functions/api/_credits.js";
+import { getSkill, skillCapabilities, skillCreditCost } from "../functions/api/_skills.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1369,4 +1372,30 @@ await testBotIntelligenceLoopPersistsEvidenceMemory();
 testAgentJobProgressMetadata();
 await testAgentPollClaimsJobAndMarksDelivered();
 await testAgentDevicePairingJobResultEndToEnd();
+await testSkillRegistryIsSingleSourceOfTruth();
 console.log("api-smoke: ok");
+
+async function testSkillRegistryIsSingleSourceOfTruth() {
+  // Pricing is single-sourced: _credits.creditCost() must equal the registry
+  // for every charged skill, and the cost must be positive.
+  const charged = ["line_oa_growth_kit", "render_check", "proof_loop", "ai_bot_intelligence_loop", "export_package", "deploy_apply"];
+  for (const id of charged) {
+    assert.ok(skillCreditCost(id) > 0, `${id} must have a positive registry cost`);
+    assert.equal(creditCost(id), skillCreditCost(id), `credit cost for ${id} must come from the skill registry`);
+  }
+  // Unknown features never charge by accident.
+  assert.equal(creditCost("totally_unknown_feature"), 0);
+  // Least privilege is declared per skill, and lookup works by id and by alias.
+  assert.ok(skillCapabilities("deploy_apply").includes("github_pr"), "deploy must declare the github_pr capability");
+  assert.ok(skillCapabilities("render_check").includes("browser_snapshot"));
+  assert.ok(getSkill("deploy"), "alias 'deploy' must resolve to a skill");
+  assert.equal(getSkill("deploy").id, "deploy_apply");
+  // LINE kit never gets browser/deploy power and only drafts (guardrail).
+  assert.ok(skillCapabilities("line_oa_growth_kit").includes("line_draft"));
+  assert.equal(skillCapabilities("line_oa_growth_kit").includes("cloudflare_deploy"), false);
+  // Public endpoint lists skills and leaks no secret-like fields.
+  const { status, data } = await get(listSkillsApi);
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(data.skills) && data.skills.length >= charged.length, "skills endpoint must list the registry");
+  assert.equal(/api[_-]?key|secret|bearer|client_secret/i.test(JSON.stringify(data)), false, "skills endpoint must not leak secret-like fields");
+}

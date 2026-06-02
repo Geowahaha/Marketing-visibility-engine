@@ -1,4 +1,5 @@
 import { requireSession } from "./_auth.js";
+import { skillCreditCost } from "./_skills.js";
 
 export function checkoutCreditRecordFromSession(obj = {}) {
   const email = String(obj.customer_email || obj.customer_details?.email || "").toLowerCase();
@@ -29,6 +30,11 @@ function safeKey(value) {
 }
 
 export function creditCost(feature) {
+  // The Hermes skill registry (_skills.js) is the single source of truth for
+  // pricing. The table below is an identical fallback that keeps behavior
+  // stable if a skill id is missing from the registry.
+  const fromRegistry = skillCreditCost(feature);
+  if (Number.isFinite(fromRegistry) && fromRegistry > 0) return fromRegistry;
   const table = {
     line_oa_growth_kit: 100,
     render_check: 75,

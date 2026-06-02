@@ -1,6 +1,20 @@
 import { json, requireSession } from "../_auth.js";
 import { agentKv, agentUserKey, publicAgent, readQueue, writeQueue } from "../_agent.js";
 import { jobProgress } from "./jobs/status.js";
+import { skillForPayload } from "../_skills.js";
+
+// Stamp least-privilege capabilities + price from the skill registry onto the
+// job payload. The local bridge already honors payload.approved_actions, so a
+// new skill is gated and priced from one place (_skills.js) with no bridge edit.
+function applySkillManifest(payload = {}) {
+  const skill = skillForPayload(payload);
+  if (!skill) return payload;
+  const declared = Array.isArray(payload.approved_actions) ? payload.approved_actions : [];
+  payload.skill_id = skill.id;
+  payload.credit_cost = skill.credit_cost;
+  payload.approved_actions = [...new Set([...declared, ...skill.capabilities])];
+  return payload;
+}
 
 function jobId() {
   return `job_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
@@ -48,6 +62,7 @@ export async function onRequestPost({ request, env }) {
   try { payload = await request.json(); } catch {
     return json({ error: "invalid_json" }, 400);
   }
+  applySkillManifest(payload);
 
   const dedupeKey = jobDedupeKey(payload);
   const dedupeStoreKey = `agent_active_job:${session.sid}:${agent.agent_id}:${dedupeKey}`;
