@@ -24,6 +24,7 @@ import { agentQueueKey, signAgentToken } from "../functions/api/_agent.js";
 import { onRequestGet as listSkillsApi } from "../functions/api/skills.js";
 import { creditCost } from "../functions/api/_credits.js";
 import { getSkill, skillCapabilities, skillCreditCost } from "../functions/api/_skills.js";
+import { onRequestPost as conversionAudit, analyzeConversion } from "../functions/api/conversion-audit.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1373,6 +1374,48 @@ testAgentJobProgressMetadata();
 await testAgentPollClaimsJobAndMarksDelivered();
 await testAgentDevicePairingJobResultEndToEnd();
 await testSkillRegistryIsSingleSourceOfTruth();
+
+async function testConversionAuditSkillIsPricedAndPreviews() {
+  // Pricing is single-sourced from the skill registry (no separate table edit).
+  assert.equal(creditCost("conversion_audit"), 50, "conversion_audit must be priced via the skill registry");
+  assert.ok(getSkill("ad_audit"), "alias 'ad_audit' must resolve to the conversion_audit skill");
+
+  // Deterministic analyzer: a strong landing page scores high...
+  const strong = analyzeConversion(
+    `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">` +
+    `<script>gtag('config','G-XXXX')</script></head><body>` +
+    `<h1>โรงหล่อเหล็ก รับงานชิ้นเดียว ไม่มีขั้นต่ำ</h1>` +
+    `<p>บริษัทของเรารับผลิตชิ้นส่วนหล่อโลหะตามแบบ ด้วยประสบการณ์ 25 ปี ได้รับการรับรองมาตรฐาน ISO 9001 ` +
+    `มีรีวิวลูกค้าจริงและผลงานจำนวนมาก รับประกันคุณภาพทุกชิ้นงาน ส่งมอบตรงเวลา ราคายุติธรรม ` +
+    `รองรับงานตั้งแต่ชิ้นเดียวจนถึงล็อตใหญ่ ทีมงานวิศวกรพร้อมให้คำปรึกษาตลอดกระบวนการผลิตและตรวจสอบคุณภาพ</p>` +
+    `<a href="tel:0986362356">โทร</a> <a href="https://line.me/R/ti/p/@scnw">เพิ่มเพื่อน LINE</a>` +
+    `<a href="#quote"><button>ขอใบเสนอราคา</button></a>` +
+    `<form><input name="name"><input type="hidden" name="src"></form></body></html>`,
+    "https://good.example", "th",
+  );
+  assert.ok(strong.conversion_score >= 70, `strong page should score >=70, got ${strong.conversion_score}`);
+  assert.equal(strong.tracking_detected, true);
+  assert.equal(strong.channels.line, true);
+
+  // ...and a bare page scores low and names the real leaks.
+  const weak = analyzeConversion(`<!doctype html><html><head><title>x</title></head><body><div>welcome</div></body></html>`, "https://bad.example", "en");
+  assert.ok(weak.conversion_score <= 40, `bare page should score <=40, got ${weak.conversion_score}`);
+  assert.equal(weak.tracking_detected, false);
+  const weakLeaks = weak.leaks.map((l) => l.id);
+  assert.ok(weakLeaks.includes("conversion_tracking"), "bare page must flag missing tracking");
+  assert.ok(weakLeaks.includes("cta"), "bare page must flag missing CTA");
+
+  // Endpoint free preview: score + honest upsell at the registry price, no secret leak.
+  const { status, data } = await post(conversionAudit, { html: "<html><body><div>nothing here</div></body></html>", lang: "en" });
+  assert.equal(status, 200);
+  assert.equal(data.paid, false);
+  assert.equal(data.status, "preview");
+  assert.equal(data.upgrade.required, true);
+  assert.equal(data.upgrade.credits_required, 50);
+  assert.equal(typeof data.conversion_score, "number");
+  assert.equal(/api[_-]?key|secret|bearer\s/i.test(JSON.stringify(data)), false, "preview must not leak secret-like fields");
+}
+await testConversionAuditSkillIsPricedAndPreviews();
 console.log("api-smoke: ok");
 
 async function testSkillRegistryIsSingleSourceOfTruth() {

@@ -228,6 +228,19 @@ export const SKILLS = [
     proof: { baseline: true, recheck: false },
     runner_hint: "Apply via PR/deploy for human approval; capture a baseline first.",
   },
+  {
+    id: "conversion_audit",
+    label: "Ad / landing conversion audit",
+    label_th: "ตรวจหน้าแลนดิ้ง — เงินค่าโฆษณารั่วตรงไหน",
+    kinds: ["conversion_audit", "conversion", "ad_audit", "ads_audit", "landing_audit"],
+    tier: "credits",
+    credit_cost: 50,
+    capabilities: [...BASE_CAPABILITIES, "public_http_fetch"],
+    input: ["url"],
+    output: "Conversion-readiness score + where ad spend leaks (offer, CTA, LINE/contact path, trust, tracking, form friction) + a site-specific fix plan.",
+    proof: { baseline: false, recheck: false },
+    runner_hint: "Audit only the public landing page that receives paid traffic; report observable conversion leaks. Never claim to see ad spend or conversions without account access.",
+  },
 ];
 
 function norm(value) {
