@@ -241,6 +241,19 @@ export const SKILLS = [
     proof: { baseline: false, recheck: false },
     runner_hint: "Audit only the public landing page that receives paid traffic; report observable conversion leaks. Never claim to see ad spend or conversions without account access.",
   },
+  {
+    id: "local_seo_audit",
+    label: "Google Business / Local SEO fixer",
+    label_th: "ตัวช่วย Google Business / Local SEO",
+    kinds: ["local_seo_audit", "local_seo", "gbp", "gbp_fixer", "google_business", "local_audit"],
+    tier: "credits",
+    credit_cost: 75,
+    capabilities: [...BASE_CAPABILITIES, "public_http_fetch"],
+    input: ["url"],
+    output: "Local-readiness score (NAP, LocalBusiness schema, geo, hours, map, reviews, GBP link) + generated LocalBusiness JSON-LD + a Google Business Profile checklist.",
+    proof: { baseline: false, recheck: false },
+    runner_hint: "Audit on-site local signals from the public site only; generate LocalBusiness JSON-LD + a GBP action checklist. Never read or claim to read the live Google Business Profile; never invent an address or rating.",
+  },
 ];
 
 function norm(value) {
