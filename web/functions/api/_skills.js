@@ -254,6 +254,19 @@ export const SKILLS = [
     proof: { baseline: false, recheck: false },
     runner_hint: "Audit on-site local signals from the public site only; generate LocalBusiness JSON-LD + a GBP action checklist. Never read or claim to read the live Google Business Profile; never invent an address or rating.",
   },
+  {
+    id: "tech_audit",
+    label: "Technical & Security audit",
+    label_th: "ตรวจเทคนิค & ความปลอดภัย",
+    kinds: ["tech_audit", "technical_audit", "security_audit", "tech_security"],
+    tier: "credits",
+    credit_cost: 50,
+    capabilities: [...BASE_CAPABILITIES, "public_http_fetch"],
+    input: ["url"],
+    output: "Deterministic technical/security score: security headers (HSTS, clickjacking, Referrer-Policy, nosniff), canonical/viewport, H1, internal links, alt coverage, title/meta, JSON-LD, semantic tags, freshness, trust pages, analytics + prioritized fix plan.",
+    proof: { baseline: false, recheck: false },
+    runner_hint: "Audit technical SEO + security headers + structured data from the public page only; report observable gaps and give exact header lines to add.",
+  },
 ];
 
 function norm(value) {
