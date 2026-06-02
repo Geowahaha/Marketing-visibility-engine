@@ -25,6 +25,7 @@ import { onRequestGet as listSkillsApi } from "../functions/api/skills.js";
 import { creditCost } from "../functions/api/_credits.js";
 import { getSkill, skillCapabilities, skillCreditCost } from "../functions/api/_skills.js";
 import { onRequestPost as conversionAudit, analyzeConversion } from "../functions/api/conversion-audit.js";
+import { onRequestPost as localSeoAudit, analyzeLocalSeo } from "../functions/api/local-seo-audit.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1416,6 +1417,46 @@ async function testConversionAuditSkillIsPricedAndPreviews() {
   assert.equal(/api[_-]?key|secret|bearer\s/i.test(JSON.stringify(data)), false, "preview must not leak secret-like fields");
 }
 await testConversionAuditSkillIsPricedAndPreviews();
+
+async function testLocalSeoSkillIsPricedAndPreviews() {
+  // Pricing single-sourced from the skill registry.
+  assert.equal(creditCost("local_seo_audit"), 75, "local_seo_audit must be priced via the skill registry");
+  assert.ok(getSkill("gbp"), "alias 'gbp' must resolve to the local_seo_audit skill");
+
+  // Deterministic analyzer: a complete local page scores high...
+  const strong = analyzeLocalSeo(
+    `<!doctype html><html><head><script type="application/ld+json">` +
+    `{"@context":"https://schema.org","@type":"LocalBusiness","name":"Success Casting",` +
+    `"telephone":"+66-2-800-1234","address":{"@type":"PostalAddress","streetAddress":"123 ถนนสุขุมวิท","addressLocality":"กรุงเทพ","postalCode":"10110"},` +
+    `"geo":{"@type":"GeoCoordinates","latitude":13.7,"longitude":100.5},` +
+    `"openingHours":"Mo-Fr 08:00-17:00","aggregateRating":{"@type":"AggregateRating","ratingValue":"4.8","reviewCount":"52"},` +
+    `"sameAs":["https://g.page/successcasting"]}</script></head><body>` +
+    `<address>123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพ 10110</address>` +
+    `<a href="tel:028001234">โทร</a> เวลาทำการ จันทร์-ศุกร์ พื้นที่ให้บริการทั่วประเทศ ` +
+    `<a href="https://maps.google.com/?q=successcasting">แผนที่</a> รีวิวลูกค้า 4.8 ดาว</body></html>`,
+    "https://good.example", "th",
+  );
+  assert.ok(strong.local_score >= 80, `complete local page should score >=80, got ${strong.local_score}`);
+  assert.equal(strong.signals.localbusiness_schema, true);
+  assert.equal(strong.signals.reviews, true);
+
+  // ...and a bare page scores low and names the real gaps.
+  const weak = analyzeLocalSeo(`<!doctype html><html><head><title>x</title></head><body><div>welcome</div></body></html>`, "https://bad.example", "en");
+  assert.ok(weak.local_score <= 30, `bare page should score <=30, got ${weak.local_score}`);
+  const weakGaps = weak.leaks.map((l) => l.id);
+  assert.ok(weakGaps.includes("localbusiness_schema"), "bare page must flag missing LocalBusiness schema");
+  assert.ok(weakGaps.includes("nap_phone"), "bare page must flag missing phone");
+
+  // Endpoint free preview at the registry price, no secret leak.
+  const { status, data } = await post(localSeoAudit, { html: "<html><body><div>nothing</div></body></html>", lang: "en" });
+  assert.equal(status, 200);
+  assert.equal(data.paid, false);
+  assert.equal(data.status, "preview");
+  assert.equal(data.upgrade.credits_required, 75);
+  assert.equal(typeof data.local_score, "number");
+  assert.equal(/api[_-]?key|secret|bearer\s/i.test(JSON.stringify(data)), false, "preview must not leak secret-like fields");
+}
+await testLocalSeoSkillIsPricedAndPreviews();
 console.log("api-smoke: ok");
 
 async function testSkillRegistryIsSingleSourceOfTruth() {
