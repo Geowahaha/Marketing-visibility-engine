@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Mark — AI Visibility Agent</title>
+<meta name="description" content="AI Mark: chat with an AI visibility expert. Scan your website & social, see what passes and fails, and get one-click fixes that make AI engines recommend your brand.">
+<style>
+:root{--bg:#0b0d12;--panel:#11141c;--panel2:#161a24;--line:#232838;--text:#e7ebf3;--muted:#8a93a6;--accent:#14b8a6;--accent2:#0ea5b7;--good:#3fb950;--warn:#d6a72e;--bad:#f0556a;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;height:100vh}
+a{color:var(--accent)}
+header{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);background:rgba(11,13,18,.85);backdrop-filter:blur(8px);position:sticky;top:0;z-index:20}
+.brand{font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.grow{flex:1}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}
+.btn:hover{border-color:var(--accent);color:#fff}
+.btn.solid{background:var(--accent);border-color:var(--accent);color:#03201d;font-weight:600}
+.btn.solid:hover{background:var(--accent2)}
+.lang{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.lang button{background:transparent;border:0;color:var(--muted);padding:7px 11px;cursor:pointer;font-family:inherit;font-size:13px}
+.lang button.on{background:var(--accent);color:#03201d;font-weight:600}
+#thread{flex:1;overflow-y:auto;padding:26px 18px 140px}
+.wrap{max-width:820px;margin:0 auto}
+.msg{margin:18px 0;display:flex;gap:12px;align-items:flex-start}
+.msg .who{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);min-width:64px;padding-top:4px}
+.msg.user .who{color:var(--accent)}
+.bubble{flex:1;min-width:0}
+.msg.user .bubble{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.bubble p{margin:.4em 0;line-height:1.65}
+.status{color:var(--muted);font:13px/1.7 var(--mono)}
+.status .row{opacity:.5;transition:opacity .3s}
+.status .row.done{opacity:1;color:var(--text)}
+.status .row.active{opacity:1;color:var(--accent)}
+.cursor::after{content:"▌";color:var(--accent);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.scoreline{display:flex;align-items:baseline;gap:10px;margin:10px 0 4px}
+.scoreline .big{font-size:34px;font-weight:700;letter-spacing:-.03em}
+.grade{font:700 13px/1 var(--mono);padding:4px 8px;border-radius:6px;border:1px solid var(--line)}
+.bar{display:grid;grid-template-columns:150px 1fr 42px;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+.bar .track{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden}
+.bar .track i{display:block;height:100%;border-radius:6px}
+.bar b{text-align:right;font-variant-numeric:tabular-nums}
+.t-good{color:var(--good)} .t-warn{color:var(--warn)} .t-bad{color:var(--bad)}
+.bg-good{background:var(--good)} .bg-warn{background:var(--warn)} .bg-bad{background:var(--bad)}
+.checks{margin:12px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.checks .cat{background:var(--panel2);padding:8px 12px;font:600 12px/1 var(--mono);letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+.chk{display:flex;gap:10px;padding:9px 12px;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
+.tag{font:600 10px/1 var(--mono);padding:3px 6px;border-radius:5px;min-width:42px;text-align:center}
+.tag.pass{background:rgba(63,185,80,.12);color:var(--good)}
+.tag.fail{background:rgba(240,85,106,.12);color:var(--bad)}
+.tag.warn{background:rgba(214,167,46,.14);color:var(--warn)}
+.chk .nm{font-weight:600}
+.chk .dt{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 2px}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text);font-family:inherit;transition:.15s}
+.chip:hover{border-color:var(--accent);color:#fff}
+.chip.pro{border-color:#7c5cff55}
+.code{background:#0a0c11;border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+.code .hd{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font:11px/1 var(--mono);color:var(--muted)}
+.code pre{margin:0;padding:12px;overflow:auto;font:12px/1.6 var(--mono);max-height:340px}
+table.r{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+table.r th,table.r td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.r th{color:var(--muted);font:600 11px/1 var(--mono);text-transform:uppercase}
+.composer{position:fixed;left:0;right:0;bottom:0;padding:14px 18px 18px;background:linear-gradient(transparent,var(--bg) 30%)}
+.composer .box{max-width:820px;margin:0 auto;display:flex;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 16px;align-items:center}
+.composer input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font-size:15px;font-family:inherit;padding:10px 0}
+.composer .hint{max-width:820px;margin:8px auto 0;text-align:center;color:var(--muted);font-size:12px}
+.send{width:40px;height:40px;border-radius:10px;border:0;background:var(--accent);color:#03201d;font-size:18px;cursor:pointer}
+.send:disabled{opacity:.5;cursor:default}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:40}
+.modal.on{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:460px;width:92%}
+.row2{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);gap:10px}
+.muted{color:var(--muted);font-size:13px}
+.foot{max-width:820px;margin:22px auto 0;color:var(--muted);font-size:12px;text-align:center;line-height:1.8}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> AI Mark <span class="muted" style="font-weight:400;font-size:12px">· AI Visibility Agent</span></div>
+  <div class="grow"></div>
+  <div class="lang"><button id="lEn" class="on" onclick="setLang('en')">EN</button><button id="lTh" onclick="setLang('th')">ไทย</button></div>
+  <button class="btn" id="connectBtn" onclick="openConnect()">Connect</button>
+  <button class="btn solid" id="signinBtn" onclick="openConnect()">Sign in</button>
+</header>
+
+<main id="thread"><div class="wrap" id="threadInner"></div></main>
+
+<div class="composer">
+  <div class="box">
+    <input id="input" autocomplete="off" spellcheck="false" placeholder="Paste a website, Facebook, YouTube, TikTok, LINE OA… or ask anything">
+    <button class="send" id="send" onclick="onSend()">↑</button>
+  </div>
+  <div class="hint" id="hint">SSL-secure · Powered by Claude AI · We only read public pages · No password needed</div>
+</div>
+
+<div class="modal" id="connectModal" onclick="if(event.target===this)closeConnect()">
+  <div class="card">
+    <h3 style="margin:0 0 4px">Sign in & connect</h3>
+    <div class="muted" id="connectSub">Sign in to save scans and connect tools so the agent can act for you.</div>
+    <div style="margin-top:14px">
+      <div class="row2"><div><b>Google</b><div class="muted" id="cGoogle">Sign in with Gmail</div></div><a class="btn" href="/api/auth/start/google">Sign in</a></div>
+      <div class="row2"><div><b>GitHub</b><div class="muted">Sign in / connect to open PRs to your site</div></div><a class="btn" href="/api/auth/start/github">Connect</a></div>
+      <div class="row2"><div><b>Google Drive</b><div class="muted">Export reports & content (coming soon)</div></div><span class="muted">soon</span></div>
+      <div class="row2" style="border-bottom:0"><div><b>MCP tools</b><div class="muted">Connect an MCP server for deeper automation (coming soon)</div></div><span class="muted">soon</span></div>
+    </div>
+    <button class="btn" style="margin-top:14px;width:100%" onclick="closeConnect()">Close</button>
+  </div>
+</div>
+
+<script>
+/* ---------- state + i18n ---------- */
+let LANG="en";
+const T={
+  en:{hint:"SSL-secure · Powered by Claude AI · We only read public pages · No password needed",
+      ph:"Paste a website, Facebook, YouTube, TikTok, LINE OA… or ask anything",
+      greet:"Hi — I'm your AI visibility agent. Paste your website or a social link and I'll check whether Google and AI engines (ChatGPT, Claude, Perplexity, Gemini) can find and recommend you — then I'll fix it with you.",
+      think:["Fetching the page…","Reading the HTML, robots.txt and sitemap…","Checking AI-crawler access and structured data…","Measuring page performance…","Scoring against the 2026 model…"],
+      passes:"What's already good",fails:"What to fix",overall:"Overall visibility"},
+  th:{hint:"ปลอดภัยด้วย SSL · ขับเคลื่อนด้วย Claude AI · อ่านเฉพาะหน้าเว็บสาธารณะ · ไม่ต้องใช้รหัสผ่าน",
+      ph:"วางลิงก์เว็บ, Facebook, YouTube, TikTok, LINE OA… หรือพิมพ์ถามได้เลย",
+      greet:"สวัสดีครับ ผมคือ AI agent ด้านการมองเห็น วางลิงก์เว็บหรือโซเชียลมา ผมจะตรวจว่า Google และ AI (ChatGPT, Claude, Perplexity, Gemini) เจอและแนะนำคุณไหม แล้วช่วยแก้ให้",
+      think:["กำลังดึงหน้าเว็บ…","กำลังอ่าน HTML, robots.txt และ sitemap…","กำลังตรวจการเข้าถึงของบอท AI และโครงสร้างข้อมูล…","กำลังวัดประสิทธิภาพ…","กำลังให้คะแนนตามโมเดลปี 2026…"],
+      passes:"สิ่งที่ดีอยู่แล้ว",fails:"สิ่งที่ควรแก้",overall:"คะแนนการมองเห็นรวม"}
+};
+const t=(k)=>T[LANG][k];
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tone=s=>s>=80?"good":s>=55?"warn":"bad";
+const $=id=>document.getElementById(id);
+function setLang(l){LANG=l;$("lEn").classList.toggle("on",l==="en");$("lTh").classList.toggle("on",l==="th");$("input").placeholder=t("ph");$("hint").textContent=t("hint");document.documentElement.lang=l;}
+
+/* ---------- thread + streaming ---------- */
+const thread=$("threadInner");
+function scrollDown(){const m=$("thread");m.scrollTop=m.scrollHeight;}
+function userMsg(text){const d=document.createElement("div");d.className="msg user";d.innerHTML=`<div class="who">You</div><div class="bubble"><p>${esc(text)}</p></div>`;thread.appendChild(d);scrollDown();}
+function agentMsg(){
+  const d=document.createElement("div");d.className="msg agent";
+  d.innerHTML=`<div class="who">AI Mark</div><div class="bubble"></div>`;
+  thread.appendChild(d);scrollDown();
+  const body=d.querySelector(".bubble");
+  return {
+    body,
+    status(steps){const s=document.createElement("div");s.className="status";s.innerHTML=steps.map((x,i)=>`<div class="row ${i===0?'active':''}">— ${esc(x)}</div>`).join("");body.appendChild(s);scrollDown();
+      let i=0;const rows=[...s.querySelectorAll(".row")];const iv=setInterval(()=>{if(i<rows.length){rows[i].classList.remove("active");rows[i].classList.add("done");}i++;if(i<rows.length)rows[i].classList.add("active");else clearInterval(iv);},700);
+      return {stop(){clearInterval(iv);s.remove();}};},
+    async stream(text){const p=document.createElement("p");p.className="cursor";body.appendChild(p);const words=String(text).split(/(\s+)/);let acc="";for(const w of words){acc+=w;p.textContent=acc;scrollDown();await new Promise(r=>setTimeout(r,14));}p.classList.remove("cursor");return p;},
+    add(node){body.appendChild(node);scrollDown();},
+    html(h){const x=document.createElement("div");x.innerHTML=h;body.appendChild(x);scrollDown();return x;},
+  };
+}
+function chips(container,items){const c=document.createElement("div");c.className="chips";items.forEach(it=>{const b=document.createElement("button");b.className="chip"+(it.pro?" pro":"");b.textContent=it.label+(it.pro?" · Pro":"");b.onclick=()=>{b.disabled=true;it.run();};c.appendChild(b);});container.add(c);}
+
+function bar(label,score){const tn=tone(score);return `<div class="bar"><span>${esc(label)}</span><div class="track"><i class="bg-${tn}" style="width:${Math.max(3,score)}%"></i></div><b class="t-${tn}">${score}</b></div>`;}
+function codeBlock(title,content){const id="c"+Math.random().toString(36).slice(2,8);const d=document.createElement("div");d.className="code";d.innerHTML=`<div class="hd"><span>${esc(title)}</span><button class="btn" style="padding:3px 9px" onclick="(()=>{const e=document.getElementById('${id}');navigator.clipboard&&navigator.clipboard.writeText(e.textContent);})()">Copy</button></div><pre id="${id}">${esc(content)}</pre>`;return d;}
+
+/* ---------- api ---------- */
+async function api(path,body){const o={headers:{}};if(body){o.method="POST";o.headers["content-type"]="application/json";o.body=JSON.stringify(body);}const r=await fetch(path,o);let d={};try{d=await r.json();}catch{}return {status:r.status,data:d};}
+
+/* ---------- input routing ---------- */
+function cleanUrl(s){s=String(s||"").trim();const m=s.match(/https?:\/\/[^\s]+/i)||s.match(/(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}[^\s]*/i);let u=m?m[0]:s;return /^https?:\/\//i.test(u)?u:"https://"+u.replace(/^https?:\/\//i,"");}
+function isUrl(s){return /[a-z0-9-]+\.[a-z]{2,}/i.test(s);}
+function platformOf(u){const h=(()=>{try{return new URL(cleanUrl(u)).hostname.replace(/^www\./,"").toLowerCase();}catch{return"";}})();if(/facebook\.com/.test(h))return cleanUrl(u).includes("profile.php")?"facebook_profile":"facebook_page";if(/youtube\.com|youtu\.be/.test(h))return"youtube";if(/instagram\.com/.test(h))return"instagram";if(/tiktok\.com/.test(h))return"tiktok";if(/lin\.ee|line\.me/.test(h))return"line_oa";if(/google\.|maps\.app|goo\.gl/.test(h))return"google_business";if(/linkedin\.com/.test(h))return"linkedin";return"website";}
+
+let lastScan=null;
+function onSend(){const v=$("input").value.trim();if(!v)return;$("input").value="";userMsg(v);if(isUrl(v)){const p=platformOf(v);if(p==="website")runScan(cleanUrl(v));else runSocial(cleanUrl(v),p);}else freeReply(v);}
+$("input").addEventListener("keydown",e=>{if(e.key==="Enter")onSend();});
+
+function freeReply(text){const m=agentMsg();m.stream(LANG==="th"?"วางลิงก์เว็บหรือโซเชียลของคุณมา แล้วผมจะเริ่มตรวจการมองเห็นและช่วยแก้ให้ทันทีครับ":"Paste your website or a social link and I'll start the visibility check and help you fix it right away.");}
+
+/* ---------- scan ---------- */
+async function runScan(url){
+  const m=agentMsg();const st=m.status(t("think"));
+  const {status,data}=await api("/api/scan",{url,lang:LANG});
+  st.stop();
+  if(status!==200||data.error){await m.stream((data.error||"Scan failed")+(data.detail?" — "+data.detail:""));return;}
+  lastScan=data;
+  await m.stream(data.summary||"Here is your visibility analysis.");
+  // scoreboard
+  const cats=data._category_scores||{};
+  let h=`<div class="scoreline"><span class="big t-${tone(data.overall|0)}">${data.overall|0}</span><span class="muted">/100 · ${esc(t("overall"))}</span><span class="grade t-${tone(data.overall|0)}">${esc(data.grade||"")}</span></div>`;
+  Object.keys(cats).forEach(k=>h+=bar(k,cats[k]|0));
+  if(data._performance!=null)h+=bar("Performance (PSI)",data._performance|0);
+  m.html(h);
+  // checks: pass + fail grouped by category
+  renderChecks(m,data._checks||[]);
+  // top fixes (detail from LLM)
+  const fixes=(data.categories||[]).flatMap(c=>(c.findings||[]).filter(f=>["fail","warn"].includes(String(f.status||"").toLowerCase())).map(f=>({cat:c.name,...f})));
+  if(fixes.length){let fh=`<h4 style="margin:14px 0 4px">${LANG==="th"?"สิ่งที่ควรแก้ (เรียงความสำคัญ)":"Priority fixes"}</h4><table class="r"><tr><th>${LANG==="th"?"จุด":"Issue"}</th><th>${LANG==="th"?"วิธีแก้":"Fix"}</th></tr>`;fixes.slice(0,8).forEach(f=>fh+=`<tr><td><b>${esc(f.check||"")}</b><div class="muted">${esc(f.detail||"")}</div></td><td>${esc(f.fix||"")}</td></tr>`);fh+=`</table>`;m.html(fh);}
+  // action chips
+  chips(m,[
+    {label:LANG==="th"?"แก้ให้เลย (สร้างไฟล์)":"Generate all fixes",run:()=>runImprove(url)},
+    {label:LANG==="th"?"แผนเนื้อหา + ตัวตน":"Content & authority plan",run:()=>runContent(url)},
+    {label:LANG==="th"?"AI แนะนำใครตอนนี้":"Who AI recommends",pro:true,run:()=>runGap(url)},
+    {label:LANG==="th"?"บอท AI อ่านได้ไหม":"Can AI bots read you",run:()=>runBots(url)},
+    {label:LANG==="th"?"สแกนทั้งเว็บ":"Whole-site crawl",run:()=>runDeep(url)},
+    {label:LANG==="th"?"ดูแพ็กเกจ":"See plans",run:()=>runPlans()},
+  ]);
+}
+function renderChecks(m,checks){
+  if(!checks.length)return;
+  const byCat={};checks.forEach(c=>{(byCat[c.category]=byCat[c.category]||[]).push(c);});
+  const wrap=document.createElement("div");wrap.className="checks";
+  Object.keys(byCat).forEach(cat=>{
+    const rows=byCat[cat].sort((a,b)=>(a.status===b.status)?0:a.status==="pass"?1:-1);
+    wrap.innerHTML+=`<div class="cat">${esc(cat)}</div>`+rows.map(c=>{const tg=c.status==="pass"?"pass":"fail";const lbl=c.status==="pass"?(LANG==="th"?"ผ่าน":"PASS"):(LANG==="th"?"แก้":"FIX");return `<div class="chk"><span class="tag ${tg}">${lbl}</span><span><span class="nm">${esc(c.check)}</span>${c.detail?` <span class="dt">— ${esc(c.detail)}</span>`:""}</span></div>`;}).join("");
+  });
+  m.add(wrap);
+}
+
+/* ---------- follow-up actions (reuse APIs) ---------- */
+async function gated(m,res,onLockLabel,onLockRun){if(res.status===402){await m.stream(LANG==="th"?"ฟีเจอร์นี้อยู่ในแพ็กเกจแบบชำระเงิน":"This is a paid feature.");chips(m,[{label:onLockLabel||"See plans",run:onLockRun||(()=>runPlans())}]);return true;}return false;}
+
+async function runImprove(url){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังเขียนไฟล์แก้ทั้งหมด…":"Generating all the fixes…"]);const{status,data}=await api("/api/improve",{url,scan:lastScan});st.stop();if(await gated(m,{status},))return;if(data.error){await m.stream(esc(data.error));return;}await m.stream(LANG==="th"?"นี่คือไฟล์แก้ที่พร้อมวางลงเว็บได้เลย:":"Here are your ready-to-paste fixes:");const a=data.artifacts||{};const names={head_block:"Head / meta + Open Graph",json_ld:"Schema (JSON-LD)",robots_txt:"robots.txt",llms_txt:"llms.txt",faq_block:"AI-answer FAQ block",social_calendar:"30-day social calendar"};["head_block","json_ld","robots_txt","llms_txt","faq_block","social_calendar"].forEach(k=>{const it=a[k];if(!it)return;if(it.locked){m.html(`<div class="muted" style="margin:6px 0">${esc(names[k])} — ${LANG==="th"?"ปลดล็อกด้วยแพ็กเกจ":"unlock with a plan"}</div>`);return;}const body=it.code!==undefined?it.code:JSON.stringify(it.calendar||it,null,2);m.add(codeBlock(names[k]+(it.where_to_paste?" · "+it.where_to_paste:""),body));});if(data.upgrade&&data.upgrade.required)chips(m,[{label:LANG==="th"?"ปลดล็อกทั้งหมด":"Unlock all fixes",run:()=>runPlans()}]);else chips(m,[{label:LANG==="th"?"พิสูจน์ผล before/after":"Prove the lift",run:()=>runProof(url)}]);}
+
+async function runContent(url){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังดึงคำถามจริงที่คนถาม…":"Pulling the real questions buyers ask…",LANG==="th"?"วางแผนเนื้อหา + backlink + ตัวตน…":"Planning content + backlinks + entity…"]);const{status,data}=await api("/api/content-engine",{url,lang:LANG});st.stop();if(data.error){await m.stream(esc(data.error));return;}await m.stream((data.business_summary||"")+ (LANG==="th"?" นี่คือแผนเนื้อหาให้ AI แนะนำคุณ:":" Here's the plan to get AI to recommend you:"));if(data.query_map&&data.query_map.clusters){let h=`<h4 style="margin:10px 0 4px">${LANG==="th"?"คำถามจริง & คีย์เวิร์ด":"Real questions & keywords"}</h4>`;data.query_map.clusters.slice(0,5).forEach(c=>h+=`<p><b>${esc(c.theme||"")}</b><br><span class="muted">${esc((c.buyer_questions||[]).slice(0,4).join(" · "))}</span></p>`);m.html(h);}if(data.content_plan){let h=`<table class="r"><tr><th>${LANG==="th"?"หน้าที่ควรมี":"Page to create"}</th><th>${LANG==="th"?"ตอบคำถาม":"Answers"}</th></tr>`;data.content_plan.forEach(p=>h+=`<tr><td><b>${esc(p.title||"")}</b></td><td class="muted">${esc(p.target_question||"")}</td></tr>`);h+=`</table>`;m.html(h);}if(data.backlinks&&!data.backlinks[0]?.locked){let h=`<h4 style="margin:12px 0 4px">${LANG==="th"?"รายการ backlink":"Backlink targets"}</h4><table class="r">`;data.backlinks.slice(0,8).forEach(b=>h+=`<tr><td><b>${esc(b.name||"")}</b> <span class="muted">(${esc(b.type||"")})</span><div class="muted">${esc(b.how_to_get||"")}</div></td></tr>`);h+=`</table>`;m.html(h);}if(data.upgrade&&data.upgrade.required)chips(m,[{label:LANG==="th"?"ปลดล็อกเนื้อหาเต็ม + เขียนหน้า":"Unlock full content + drafts",run:()=>runPlans()}]);else chips(m,[{label:LANG==="th"?"ดูช่องว่างที่ AI แนะนำคู่แข่ง":"See where AI picks rivals",pro:true,run:()=>runGap(url)}]);}
+
+async function runGap(url){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังถาม AI จริงว่าแนะนำใคร…":"Asking the live AI engines who they recommend…"]);const{status,data}=await api("/api/answer-gap",{url,lang:LANG});st.stop();if(await gated(m,{status},LANG==="th"?"อัปเป็น Pro":"Upgrade to Pro",()=>runPlans()))return;if(data.setup_required){await m.stream(esc(data.setup_required));return;}if(data.error){await m.stream(esc(data.error));return;}await m.stream((data.summary||"")+` (${LANG==="th"?"คุณอยู่ในคำตอบ":"you appear in"} ${esc(data.observed_share_of_answer||"0/0")})`);let h=`<table class="r"><tr><th>${LANG==="th"?"คำถาม":"Question"}</th><th>${LANG==="th"?"AI แนะนำ":"AI recommends"}</th></tr>`;(data.questions||[]).forEach(q=>h+=`<tr><td><b>${esc(q.question)}</b> <span class="tag ${q.client_present?'pass':'fail'}">${q.client_present?(LANG==="th"?"อยู่":"in"):(LANG==="th"?"ไม่อยู่":"out")}</span><div class="muted">${esc(q.winning_angle||q.your_gap||"")}</div></td><td class="muted">${esc((q.ai_recommends||[]).slice(0,4).join(", "))}</td></tr>`);h+=`</table>`;m.html(h);chips(m,[{label:LANG==="th"?"เขียนหน้าชิงคำตอบ":"Write pages to win these",run:()=>runContent(url)}]);}
+
+async function runBots(url){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังส่งบอท AI แต่ละตัวไปลองอ่านหน้าจริง…":"Hitting the page as each AI crawler…"]);const{data}=await api("/api/bot-access",{url});st.stop();if(data.error){await m.stream(esc(data.error));return;}await m.stream(data.summary&&data.summary.headline||"");let h=`<table class="r"><tr><th>Bot</th><th>${LANG==="th"?"ผล":"Result"}</th></tr>`;(data.bots||[]).forEach(b=>{const ok=b.verdict==="can_read";h+=`<tr><td><b>${esc(b.bot)}</b> <span class="muted">${esc(b.engine)}</span></td><td><span class="tag ${ok?'pass':'fail'}">${ok?(LANG==="th"?"อ่านได้":"can read"):(LANG==="th"?"อ่านไม่ได้":"blocked")}</span> <span class="muted">${esc(b.note||"")}</span></td></tr>`;});h+=`</table>`;m.html(h);if(data.js_render_risk&&data.js_render_risk.likely)m.html(`<p class="t-warn">${esc(data.js_render_risk.note)}</p>`);}
+
+async function runDeep(url){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังไล่สแกนหลายหน้าทั้งเว็บ…":"Crawling pages across the whole site…"]);const{data}=await api("/api/deep-scan",{url,max_pages:10});st.stop();if(data.error){await m.stream(esc(data.error));return;}await m.stream(data.headline||"");let h=`<table class="r"><tr><th>${LANG==="th"?"หน้า":"Page"}</th><th>SEO</th><th>AI</th><th>${LANG==="th"?"โซเชียล":"Social"}</th><th>${LANG==="th"?"รวม":"Overall"}</th></tr>`;(data.pages||[]).forEach(p=>{if(p.error)return;h+=`<tr><td class="muted">${esc((p.url||"").replace(/^https?:\/\/[^/]+/,""))||"/"}</td><td>${p.technical}</td><td class="${tone(p.ai)==='bad'?'t-bad':''}">${p.ai}</td><td>${p.social}</td><td><b>${p.overall}</b></td></tr>`;});h+=`</table>`;m.html(h);}
+
+async function runProof(url){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังบันทึก baseline / สแกนซ้ำ…":"Capturing baseline / re-scanning…"]);let acct="";try{const u=JSON.parse(localStorage.getItem("aimark_user")||"{}");acct=u.email||u.name||"";}catch{}const{data}=await api("/api/proof",{url,account:acct});st.stop();await m.stream(data.headline||(LANG==="th"?"บันทึก baseline แล้ว — หลังแก้เว็บแล้วกลับมากดอีกครั้งเพื่อดูคะแนนขยับ":"Baseline saved — after you apply fixes, run this again to see the lift."));}
+
+async function runSocial(url,platform){const m=agentMsg();const st=m.status([LANG==="th"?"กำลังอ่านสัญญาณสาธารณะของช่องนี้…":"Reading the channel's public signals…",LANG==="th"?"ให้คะแนนตามอัลกอริทึม 2026…":"Scoring against 2026 algorithms…"]);const ch={};ch[platform]=url;const{data}=await api("/api/social-visibility",{channels:ch,lang:LANG});st.stop();if(data.error){await m.stream(esc(data.error));return;}await m.stream(data.next_best_action||"");let h=`<div class="scoreline"><span class="big t-${tone(data.scores.visibility_graph|0)}">${data.scores.visibility_graph|0}</span><span class="muted">/100</span></div>`;(data.connected_channels||[]).forEach(c=>{h+=bar(c.label+" ("+(c.confidence||"")+")",c.score|0);});m.html(h);(data.connected_channels||[]).forEach(c=>{if((c.fixes||[]).length){let fh=`<h4 style="margin:10px 0 4px">${esc(c.label)}</h4><ul style="margin:4px 0;padding-left:18px;font-size:13px">`;c.fixes.slice(0,4).forEach(f=>fh+=`<li><b>${esc(f.action||"")}</b> <span class="muted">${esc(f.why||"")}</span></li>`);fh+=`</ul>`;m.html(fh);}});}
+
+async function runPlans(){const m=agentMsg();const{data}=await api("/api/checkout");const cur=data.currency||"THB";await m.stream(LANG==="th"?"นี่คือแพ็กเกจครับ — มีรหัสโปรโมชันก็กรอกใช้ฟรีได้":"Here are the plans — or enter a promo code to unlock free:");const order=data.order||["free","starter","growth","pro"];let h=`<table class="r"><tr><th>${LANG==="th"?"แพ็กเกจ":"Plan"}</th><th>${LANG==="th"?"ราคา":"Price"}</th><th></th></tr>`;order.forEach(k=>{const it=k==="free"?data.free_tier:(data.catalog||{})[k];if(!it)return;const price=k==="free"?(LANG==="th"?"ฟรี":"Free"):`${cur} ${it.display_amount}/${LANG==="th"?"ด":"mo"}`;h+=`<tr><td><b>${esc(it.name)}</b><div class="muted">${esc((it.tagline&&(LANG==="th"?it.tagline.th:it.tagline.en))||"")}</div></td><td>${esc(price)}</td><td>${k==="free"?"":`<button class="chip" onclick="buy('${k}')">${LANG==="th"?"เลือก":"Choose"}</button> <button class="chip" onclick="buy('${k}','promptpay')">PromptPay</button>`}</td></tr>`;});h+=`</table><div style="display:flex;gap:8px;margin-top:8px"><input id="promo" placeholder="${LANG==="th"?"รหัสโปรโมชัน":"Promo code"}" style="flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:inherit;padding:9px 12px"><button class="btn" onclick="redeem()">${LANG==="th"?"ใช้รหัส":"Apply"}</button><span id="promoMsg" class="muted"></span></div>`;m.html(h);}
+async function buy(product,method){const{data}=await api("/api/checkout",{product,method});if(data.checkout_url){window.open(data.checkout_url,"_blank","noopener");return;}if(data.test_confirm_url){window.open(data.test_confirm_url,"_blank","noopener");return;}alert(data.setup||data.error||"Not configured");}
+async function redeem(){const c=($("promo")||{}).value||"";const msg=$("promoMsg");if(!c.trim()){if(msg)msg.textContent=LANG==="th"?"กรอกรหัส":"Enter a code";return;}const r=await fetch("/api/checkout?action=redeem&code="+encodeURIComponent(c.trim()));const d=await r.json();if(msg){msg.style.color=d.ok?"var(--good)":"var(--bad)";msg.textContent=(d.message&&(LANG==="th"?d.message.th:d.message.en))||(d.ok?"Unlocked":"Invalid");}}
+
+/* ---------- connect ---------- */
+function openConnect(){$("connectModal").classList.add("on");}
+function closeConnect(){$("connectModal").classList.remove("on");}
+
+/* ---------- boot ---------- */
+(function(){const g=agentMsg();g.stream(T[LANG].greet);})();
+</script>
+</body>
+</html>

@@ -1,12 +1,27 @@
-name = "visibility-engine"
+name = "aimark"
 compatibility_date = "2024-11-01"
 pages_build_output_dir = "."
 
-# The Claude API key is NOT stored here. Set it as a secret/env var:
-#   Dashboard: Workers & Pages → your project → Settings → Variables and Secrets
-#   add ANTHROPIC_API_KEY (encrypted). Optionally add CLAUDE_MODEL.
-# Or via CLI:  npx wrangler pages secret put ANTHROPIC_API_KEY --project-name visibility-engine
+# Secrets are NOT stored here. Set them as encrypted secrets:
+#   Dashboard: Workers & Pages → aimark → Settings → Variables and Secrets
+#   or CLI: npx wrangler pages secret put <NAME> --project-name aimark
+# Needed: ANTHROPIC_API_KEY (or GROQ_API_KEY / KIMI_API_KEY), PAID_EXPORT_SECRET,
+#         GEMINI_API_KEY and/or PERPLEXITY_API_KEY, STRIPE_SECRET_KEY,
+#         STRIPE_WEBHOOK_SECRET, GOOGLE_PSI_KEY (optional).
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "58cfdfc394754be09fd2afde6d49a51f"
+
+[[kv_namespaces]]
+binding = "ENTITLEMENTS_KV"
+id = "6a0b422349f6471aaaa3ab49f87ab8f3"
+
+[[kv_namespaces]]
+binding = "PROOF_KV"
+id = "5fe56d51c7544ee790d5984add2a81ea"
+
+[[d1_databases]]
+binding = "AGENT_DB"
+database_name = "aimark-agent"
+database_id = "1123fcd7-f4fd-4e25-90f3-5fc79357d5ed"

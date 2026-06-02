@@ -18,9 +18,13 @@
  *                         If unbound, rate limiting is skipped (fail-open).
  */
 
+import { callLLM } from "./_llm.js";
+
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const RATE_WINDOW_SEC = 3600;          // 1 hour
 const RATE_LIMIT_DEFAULT = 5;          // scans per IP per window
+const PSI_CACHE_TTL_SEC = 24 * 60 * 60; // 24 hours per URL to avoid quota burn
+const PSI_ERROR_CACHE_TTL_SEC = 10 * 60; // short backoff for quota/timeout errors
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 VisibilityEngine/1.0";
@@ -85,6 +89,7 @@ function normalizeUrl(u) {
 async function tryFetchText(url, timeoutMs = 12000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const started = Date.now();
   try {
     const r = await fetch(url, {
       headers: { "User-Agent": UA, "Accept-Language": "th,en;q=0.9" },
@@ -94,9 +99,9 @@ async function tryFetchText(url, timeoutMs = 12000) {
     });
     const body = await r.text();
     return { status: r.status, ok: r.ok, body, finalUrl: r.url,
-             headers: Object.fromEntries(r.headers) };
+             headers: Object.fromEntries(r.headers), fetchMs: Date.now() - started };
   } catch (e) {
-    return { status: 0, ok: false, body: "", error: String(e), finalUrl: url, headers: {} };
+    return { status: 0, ok: false, body: "", error: String(e), finalUrl: url, headers: {}, fetchMs: Date.now() - started };
   } finally {
     clearTimeout(t);
   }
@@ -181,6 +186,61 @@ function getSitemapUrls(sitemapBody) {
     .map((m) => m[1].trim())
     .filter(Boolean)
     .slice(0, 200);
+}
+
+function countMatches(text, regex) {
+  return (String(text || "").match(regex) || []).length;
+}
+
+function headerValue(headers = {}, name = "") {
+  const direct = headers[name] || headers[name.toLowerCase()] || headers[name.toUpperCase()];
+  if (direct != null) return String(direct);
+  const found = Object.keys(headers || {}).find((key) => key.toLowerCase() === name.toLowerCase());
+  return found ? String(headers[found]) : "";
+}
+
+function buildPerformanceLite(home) {
+  const html = String(home?.body || "");
+  const headers = home?.headers || {};
+  const htmlBytes = new TextEncoder().encode(html).length;
+  const htmlKb = Math.round(htmlBytes / 10.24) / 100;
+  const fetchMs = Number(home?.fetchMs || 0);
+  const compression = headerValue(headers, "content-encoding");
+  const cacheControl = headerValue(headers, "cache-control");
+  const contentType = headerValue(headers, "content-type");
+  const resourceHints = countMatches(html, /<link[^>]+rel=["'](?:preconnect|dns-prefetch|preload|modulepreload)["']/gi);
+  const scriptCount = countMatches(html, /<script\b/gi);
+  const stylesheetCount = countMatches(html, /<link[^>]+rel=["']stylesheet["']/gi);
+  const imageCount = countMatches(html, /<img\b/gi);
+  let score = home?.ok ? 100 : 0;
+  if (fetchMs > 5000) score -= 30;
+  else if (fetchMs > 2500) score -= 18;
+  else if (fetchMs > 1200) score -= 8;
+  if (htmlBytes > 500_000) score -= 15;
+  else if (htmlBytes > 200_000) score -= 8;
+  if (!compression && htmlBytes > 60_000) score -= 8;
+  if (scriptCount > 40) score -= 10;
+  else if (scriptCount > 20) score -= 5;
+  if (stylesheetCount > 15) score -= 5;
+  if (imageCount > 50) score -= 6;
+  if (resourceHints === 0 && (scriptCount > 12 || stylesheetCount > 6)) score -= 4;
+  return {
+    source: "AI Mark public fetch performance-lite",
+    verified_core_web_vitals: false,
+    available: !!home?.ok,
+    score: clamp(score),
+    html_fetch_ms: fetchMs || null,
+    html_kb: htmlKb,
+    html_bytes: htmlBytes,
+    compression: compression || "",
+    cache_control: cacheControl || "",
+    content_type: contentType || "",
+    resource_hints: resourceHints,
+    script_count: scriptCount,
+    stylesheet_count: stylesheetCount,
+    image_count: imageCount,
+    note: "This is low-resource public fetch evidence, not Lighthouse or Core Web Vitals. It keeps the scan useful when PSI quota is unavailable.",
+  };
 }
 
 function hostOf(value) {
@@ -288,35 +348,67 @@ function extractJson(text) {
 }
 
 async function callClaude(env, messages, maxTokens = 8000) {
-  let resp;
+  // Delegates to the shared multi-provider caller (Anthropic → Groq → Kimi).
+  const r = await callLLM(env, { system: SYSTEM_PROMPT, messages, maxTokens, temperature: 0 });
+  if (!r.ok) return { ok: false, error: r.error, detail: r.detail, status: r.status || 502 };
+  return { ok: true, text: r.text, provider: r.provider };
+}
+
+function shortHash(input) {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  const text = String(input || "");
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}`;
+}
+
+function pageSpeedCacheKv(env) {
+  return env.PROOF_KV || env.RATE_LIMIT_KV || env.ENTITLEMENTS_KV || null;
+}
+
+function pageSpeedCacheKey(targetUrl) {
+  return `psi:v2:${shortHash(targetUrl)}`;
+}
+
+async function readCachedPSI(targetUrl, env) {
+  const kv = pageSpeedCacheKv(env);
+  if (!kv) return null;
   try {
-    resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: env.CLAUDE_MODEL || DEFAULT_MODEL,
-        max_tokens: maxTokens,
-        temperature: 0,
-        system: SYSTEM_PROMPT,
-        messages,
-      }),
-    });
-  } catch (e) {
-    return { ok: false, error: "Could not reach the Claude API: " + String(e), status: 502 };
+    const rec = await kv.get(pageSpeedCacheKey(targetUrl), "json");
+    if (!rec || !rec.result) return null;
+    return {
+      ...rec.result,
+      cached: true,
+      cache_status: "hit",
+      cached_at: rec.cached_at || null,
+      cache_ttl_seconds: rec.cache_ttl_seconds || null,
+    };
+  } catch {
+    return null;
   }
+}
 
-  if (!resp.ok) {
-    const errText = await resp.text();
-    return { ok: false, error: "Claude API error " + resp.status, detail: errText.slice(0, 500), status: 502 };
+async function writeCachedPSI(targetUrl, env, result) {
+  const kv = pageSpeedCacheKv(env);
+  if (!kv || !result) return false;
+  const hasScore = result.performanceScore != null;
+  const ttl = hasScore ? PSI_CACHE_TTL_SEC : PSI_ERROR_CACHE_TTL_SEC;
+  try {
+    await kv.put(pageSpeedCacheKey(targetUrl), JSON.stringify({
+      cached_at: new Date().toISOString(),
+      cache_ttl_seconds: ttl,
+      result: { ...result, cached: false, cache_status: "miss" },
+    }), { expirationTtl: ttl });
+    return true;
+  } catch {
+    return false;
   }
-
-  const data = await resp.json();
-  const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-  return { ok: true, text, stopReason: data.stop_reason || null };
 }
 
 /**
@@ -325,6 +417,9 @@ async function callClaude(env, messages, maxTokens = 8000) {
  * Returns null on any failure/timeout so the scan still completes.
  */
 async function fetchPSI(targetUrl, env, timeoutMs = 22000) {
+  const cached = await readCachedPSI(targetUrl, env);
+  if (cached) return cached;
+  const cacheAvailable = !!pageSpeedCacheKv(env);
   const key = env.GOOGLE_PSI_KEY ? `&key=${env.GOOGLE_PSI_KEY}` : "";
   const api =
     "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?strategy=mobile" +
@@ -333,13 +428,30 @@ async function fetchPSI(targetUrl, env, timeoutMs = 22000) {
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(api, { signal: ctrl.signal });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      let message = `PageSpeed Insights HTTP ${r.status}`;
+      try {
+        const err = await r.json();
+        message = err?.error?.message || message;
+      } catch {}
+      const result = {
+        source: "PageSpeed Insights",
+        performanceScore: null,
+        error: message,
+        status: r.status,
+        cached: false,
+        cache_status: cacheAvailable ? "miss" : "disabled",
+        cache_ttl_seconds: cacheAvailable ? PSI_ERROR_CACHE_TTL_SEC : null,
+      };
+      await writeCachedPSI(targetUrl, env, result);
+      return result;
+    }
     const d = await r.json();
     const lab = d.lighthouseResult || {};
     const audits = lab.audits || {};
     const field = (d.loadingExperience && d.loadingExperience.metrics) || {};
     const fc = (m) => (field[m] ? { value: field[m].percentile, rating: field[m].category } : null);
-    return {
+    const result = {
       source: Object.keys(field).length ? "field (CrUX real users)" : "lab (Lighthouse)",
       performanceScore: lab.categories?.performance ? Math.round(lab.categories.performance.score * 100) : null,
       lcp: fc("LARGEST_CONTENTFUL_PAINT_MS") ||
@@ -353,22 +465,204 @@ async function fetchPSI(targetUrl, env, timeoutMs = 22000) {
                   ? { value: Math.round(audits["cumulative-layout-shift"].numericValue * 100) / 100, rating: null }
                   : null)),
       ttfb: fc("EXPERIMENTAL_TIME_TO_FIRST_BYTE"),
+      cached: false,
+      cache_status: cacheAvailable ? "miss" : "disabled",
+      cache_ttl_seconds: cacheAvailable ? PSI_CACHE_TTL_SEC : null,
     };
-  } catch {
-    return null;
+    await writeCachedPSI(targetUrl, env, result);
+    return result;
+  } catch (err) {
+    const result = {
+      source: "PageSpeed Insights",
+      performanceScore: null,
+      error: String(err?.name || err?.message || "PageSpeed request failed"),
+      status: 0,
+      cached: false,
+      cache_status: cacheAvailable ? "miss" : "disabled",
+      cache_ttl_seconds: cacheAvailable ? PSI_ERROR_CACHE_TTL_SEC : null,
+    };
+    await writeCachedPSI(targetUrl, env, result);
+    return result;
   } finally {
     clearTimeout(t);
   }
 }
 
+/**
+ * DETERMINISTIC scoring — the numeric score must NOT depend on which LLM runs.
+ * Computed from the extracted signals so the same site always scores the same
+ * (stable before/after proof). The LLM only explains the findings.
+ */
+function clamp(n) { return Math.max(0, Math.min(100, Math.round(n))); }
+function computeScores(facts) {
+  const p = facts.page || {}; const f = facts.fetch || {}; const og = p.og || {};
+  const wc = p.approxWordCount || 0; const sample = p.textSample || "";
+  const bots = facts.botPolicy || {};
+  const blocked = Object.entries(bots).filter(([, v]) => v === "blocked").map(([k]) => k);
+  const TECH = "Technical SEO (Google 2026)", AI = "AI Search / GEO-AEO", CR = "AI Crawler Access", SO = "Social Sharing & Open Graph", PERF = "Performance / Core Web Vitals";
+  const C = [];
+  const add = (category, check, ok, severity, w, detail, status) =>
+    C.push({ category, check, ok, severity, w, detail: detail || "", status });
+  add(TECH, "HTTPS", /^https:/i.test(facts.requestedUrl || ""), "high", 12);
+  add(TECH, "Title tag", !!(p.title && p.title.length >= 10 && p.title.length <= 70), "high", 12, p.title ? `length ${p.title.length}` : "missing");
+  add(TECH, "Meta description", !!(p.metaDescription && p.metaDescription.length >= 80), "medium", 10, p.metaDescription ? `length ${p.metaDescription.length}` : "missing");
+  add(TECH, "Mobile viewport", !!p.viewport, "medium", 6);
+  add(TECH, "H1 heading", (p.h1 || []).length >= 1, "medium", 8);
+  add(TECH, "Canonical URL", !!p.canonical, "low", 6);
+  add(TECH, "Structured data (JSON-LD)", !!p.hasJsonLd, "high", 12);
+  add(TECH, "Image alt text", p.imgCount === 0 || ((p.imgCount - (p.imgMissingAlt || 0)) / Math.max(p.imgCount, 1)) >= 0.7, "low", 6);
+  add(TECH, "Substantive content (>=400 words)", wc >= 400, "critical", 18, `~${wc} words`);
+  add(AI, "Depth for AI citation (>=600 words)", wc >= 600, "critical", 22, `~${wc} words`);
+  add(AI, "FAQ / question-style content", /faq|frequently asked|คำถาม|ถามบ่อย|how to|what is|why /i.test(sample), "high", 16);
+  add(AI, "Schema types present", (p.schemaTypes || []).length > 0, "high", 16, (p.schemaTypes || []).join(", "));
+  add(AI, "Answer/entity schema (FAQ/Article/LocalBusiness)", (p.schemaTypes || []).some((t) => /FAQ|HowTo|Article|Product|Service|LocalBusiness|Organization/i.test(t)), "medium", 12);
+  add(AI, "Freshness signal", /20(2[4-9]|[3-9]\d)|updated|ล่าสุด/i.test(sample), "low", 10);
+  add(AI, "Baseline content (>=300 words)", wc >= 300, "high", 12, `~${wc} words`);
+  add(AI, "Shareable description", !!og.description, "low", 12);
+  add(CR, "robots.txt present", !!(f.robots && f.robots.present), "high", 22);
+  add(CR, "Sitemap present", !!(f.sitemap && f.sitemap.present), "high", 24);
+  add(CR, "llms.txt present", !!(f.llms && f.llms.present), "low", 14);
+  add(CR, "AI/search bots not blocked", blocked.length === 0, "critical", 28, blocked.length ? `blocked: ${blocked.join(", ")}` : "none blocked");
+  add(CR, "Crawlable content present", wc >= 200, "medium", 12, `~${wc} words`);
+  add(SO, "og:title", !!og.title, "high", 26);
+  add(SO, "og:description", !!og.description, "medium", 24);
+  add(SO, "og:image", !!og.image, "high", 28);
+  add(SO, "Twitter card", !!p.twitterCard, "medium", 22);
+  const cwv = facts.coreWebVitals;
+  const perfVerified = !!(cwv && cwv.performanceScore != null);
+  add(PERF, "PageSpeed / Core Web Vitals verified", perfVerified, "info", 0, perfVerified ? `${cwv.performanceScore}/100` : (cwv?.error || "PageSpeed unavailable"), perfVerified ? "pass" : "unverified");
+  const catScore = (cat) => { const arr = C.filter((c) => c.category === cat); const max = arr.reduce((a, c) => a + c.w, 0) || 1; const got = arr.filter((c) => c.ok).reduce((a, c) => a + c.w, 0); return clamp(got * 100 / max); };
+  const technical = catScore(TECH), ai = catScore(AI), crawler = catScore(CR), social = catScore(SO);
+  const perf = perfVerified ? clamp(cwv.performanceScore) : null;
+  const effectivePerf = perfVerified ? perf : 0;
+  const parts = [[crawler, 25], [ai, 25], [technical, 22], [social, 16], [effectivePerf, 12]];
+  const wsum = 100;
+  const overall = clamp(parts.reduce((a, x) => a + x[0] * x[1], 0) / wsum);
+  const grade = overall >= 90 ? "A" : overall >= 80 ? "B" : overall >= 70 ? "C" : overall >= 55 ? "D" : "F";
+  return {
+    overall,
+    grade,
+    categories: { [TECH]: technical, [AI]: ai, [CR]: crawler, [SO]: social },
+    performance: perf,
+    performanceVerified: perfVerified,
+    checks: C.map((c) => ({ category: c.category, check: c.check, status: c.status || (c.ok ? "pass" : "fail"), severity: c.severity, detail: c.detail })),
+  };
+}
+
+function gradeFor(score) {
+  return score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 55 ? "D" : "F";
+}
+
+function fallbackFix(check, lang) {
+  const th = lang === "th";
+  if (/title/i.test(check)) return th ? "เขียน title ให้สั้น ชัด มีชื่อแบรนด์และคำค้นหลักของบริการ" : "Write a concise title with the brand and primary service keyword.";
+  if (/meta description/i.test(check)) return th ? "เพิ่ม meta description 140-160 ตัวอักษรที่บอกประโยชน์ พื้นที่บริการ และ CTA" : "Add a 140-160 character meta description with benefit, service area, and CTA.";
+  if (/canonical/i.test(check)) return th ? "ตั้ง canonical ให้ชี้ URL หลักที่ต้องการให้ Google index เพียงเวอร์ชันเดียว" : "Set the canonical URL to the single version Google should index.";
+  if (/Structured data|Schema/i.test(check)) return th ? "เพิ่ม JSON-LD Organization/LocalBusiness/FAQPage ให้ตรงกับธุรกิจจริง" : "Add JSON-LD Organization/LocalBusiness/FAQPage schema grounded in the real business.";
+  if (/FAQ|question/i.test(check)) return th ? "เพิ่ม FAQ ที่ตอบคำถามลูกค้าจริงแบบสั้น ชัด และแสดงบนหน้าเว็บ" : "Add visible answer-led FAQ content for real buyer questions.";
+  if (/robots/i.test(check)) return th ? "สร้างหรือแก้ robots.txt ให้ crawler สำคัญและ AI bots อ่านหน้า public ได้" : "Create or update robots.txt so search crawlers and AI bots can access public pages.";
+  if (/Sitemap/i.test(check)) return th ? "สร้าง sitemap.xml และอ้างใน robots.txt เพื่อให้ Google เจอหน้าสำคัญครบ" : "Create sitemap.xml and reference it in robots.txt so Google finds key pages.";
+  if (/llms/i.test(check)) return th ? "เพิ่ม llms.txt ที่สรุปบริการ หน้าเด่น และช่องทางติดต่อสำหรับ AI crawler" : "Add llms.txt summarizing services, key pages, and contact paths for AI crawlers.";
+  if (/og:image|Open Graph|og:/i.test(check)) return th ? "เพิ่ม Open Graph title/description/image ให้แชร์แล้วดูน่าเชื่อถือและคลิกง่าย" : "Add Open Graph title, description, and image for stronger social previews.";
+  if (/content|words|citation/i.test(check)) return th ? "เพิ่มเนื้อหาหน้าบริการให้ตอบ ใคร/ทำอะไร/เหมาะกับใคร/ราคาเริ่มต้น/ติดต่ออย่างไร" : "Add service-page content that answers who it helps, what it does, proof, pricing cues, and contact path.";
+  if (/PageSpeed|Core Web Vitals/i.test(check)) return th ? "รอระบบวัด PageSpeed สำเร็จ หรือใช้ GA4/Search Console/CrUX ตรวจซ้ำ ไม่ใช่จุดแก้เว็บจนกว่าจะมี metric จริง" : "Wait for PageSpeed verification or validate with GA4/Search Console/CrUX; this is not a site fix until real metrics are available.";
+  return th ? "ตรวจจุดนี้ใน CMS หรือ repo แล้วแก้ให้ข้อมูล public อ่านได้ชัดสำหรับ Google และ AI" : "Inspect this in the CMS or repo and make the public signal clearer for Google and AI.";
+}
+
+function buildDeterministicScan(url, facts, det, lang, reason = "") {
+  const th = lang === "th";
+  const agentFirstReason = reason === "agent_first_local_runner";
+  const categoryNames = Object.keys(det.categories);
+  const categories = categoryNames.map((name) => {
+    const score = det.categories[name];
+    const findings = det.checks
+      .filter((c) => c.category === name)
+      .map((c) => ({
+        check: c.check,
+        status: c.status,
+        severity: c.severity,
+        detail: c.detail || (c.status === "pass" ? (th ? "ผ่านจากสัญญาณที่ตรวจได้" : "Passed based on detected public signals.") : ""),
+        fix: ["fail", "warn"].includes(String(c.status || "").toLowerCase()) ? fallbackFix(c.check, lang) : "",
+      }));
+    return { name, score, grade: gradeFor(score), findings };
+  });
+  const fixable = det.checks.filter((c) => ["fail", "warn"].includes(String(c.status || "").toLowerCase()));
+  const unverified = det.checks.filter((c) => String(c.status || "").toLowerCase() === "unverified");
+  const perfNote = det.performanceVerified
+    ? ""
+    : (th
+      ? " Performance ยังไม่ได้ verify จึงกันคะแนน 12% ไว้ก่อนและไม่อนุญาตให้คะแนนเต็ม 100"
+      : " Performance is not verified, so the 12% performance weight is held back and the score cannot be 100.");
+  const verificationNote = unverified.length
+    ? (th ? ` มีข้อมูลที่ต้องตรวจเพิ่ม ${unverified.length} จุด` : ` ${unverified.length} item(s) need verification`)
+    : "";
+  const verification = {
+    score_status: det.performanceVerified ? "verified" : "provisional",
+    missing_evidence: unverified.map((c) => ({
+      category: c.category,
+      check: c.check,
+      detail: c.detail || "",
+    })),
+    cannot_infer_from_public_scan: [
+      "traffic_source_attribution",
+      "GA4_sessions",
+      "Google_Search_Console_clicks_queries",
+      "ad_spend_or_CAC",
+      "actual_AI_citations_without_live_probe",
+    ],
+    score_guardrail: det.performanceVerified
+      ? "All weighted score components used by the deterministic rubric were available."
+      : "Performance/Core Web Vitals could not be verified, so the 12% performance weight is held at zero and the score cannot reach 100.",
+  };
+  const summaryPrefix = agentFirstReason
+    ? (th
+      ? "สแกน public signals สำเร็จ คะแนนนี้คำนวณจากสัญญาณจริงของเว็บ เช่น meta, schema, robots, sitemap, llms.txt และ Open Graph"
+      : "Public-signal scan completed. This score is computed from real public signals such as metadata, schema, robots, sitemap, llms.txt, and Open Graph")
+    : (th
+      ? "สแกนพื้นฐานสำเร็จโดยไม่ใช้ Cloud LLM คะแนนนี้คำนวณจากสัญญาณจริงของเว็บ เช่น meta, schema, robots, sitemap, llms.txt และ Open Graph"
+      : "Baseline scan completed without a Cloud LLM. This score is computed from real public signals such as metadata, schema, robots, sitemap, llms.txt, and Open Graph");
+  return {
+    url,
+    summary: th
+      ? `${summaryPrefix}${fixable.length ? ` พบจุดที่ควรแก้ ${fixable.length} จุด` : " ยังไม่พบจุดแก้จาก public signals ที่ตรวจได้"}${verificationNote}.${perfNote}`
+      : `${summaryPrefix}${fixable.length ? ` with ${fixable.length} fixable gap(s)` : " with no fixable gaps found in the detected public signals"}${verificationNote}.${perfNote}`,
+    overall: det.overall,
+    grade: det.grade,
+    categories,
+    _scoring: "deterministic_rubric",
+    _engine_provider: null,
+    _llm_fallback: !agentFirstReason,
+    _llm_error: reason || "llm_unavailable",
+    _checks: det.checks,
+    _category_scores: det.categories,
+    _performance: det.performance,
+    _performance_verified: det.performanceVerified,
+    _performance_lite: facts.performanceLite,
+    _score_status: det.performanceVerified ? "verified" : "provisional",
+    _score_note: perfNote.trim(),
+    _verification: verification,
+    _facts: facts,
+    _cwv: facts.coreWebVitals,
+    _agent_recommended: true,
+    _agent_reason: th
+      ? "ถ้าต้องรู้ว่าคนดูมาจาก Google, AI, social หรือ ads ต้องให้ agent ตรวจ GA4, Google Search Console, UTM และ server/Cloudflare logs"
+      : "Traffic source attribution requires the agent to inspect GA4, Google Search Console, UTM data, and server/Cloudflare logs.",
+  };
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!env.ANTHROPIC_API_KEY) {
-    return json({ error: "Server is missing ANTHROPIC_API_KEY. Set it in the Cloudflare Pages project settings." }, 500);
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400);
   }
-
+  const agentFirst = !!(payload.deterministic_only || payload.agent_first);
   const ip = request.headers.get("CF-Connecting-IP") || "";
-  const rl = await checkRateLimit(env, ip);
+  const rl = agentFirst
+    ? { allowed: true, remaining: 999, resetIn: 0, enforced: false, bypassed: true, reason: "agent_first_no_llm" }
+    : await checkRateLimit(env, ip);
   if (!rl.allowed) {
     const mins = Math.ceil(rl.resetIn / 60);
     return json(
@@ -377,13 +671,6 @@ export async function onRequestPost(context) {
       429,
       { "Retry-After": String(rl.resetIn) }
     );
-  }
-
-  let payload;
-  try {
-    payload = await request.json();
-  } catch {
-    return json({ error: "Invalid JSON body." }, 400);
   }
   const url = normalizeUrl(payload.url);
   const userPrompt = (payload.prompt || "").toString().slice(0, 2000);
@@ -401,6 +688,7 @@ export async function onRequestPost(context) {
   ]);
 
   const pageFacts = home.ok ? extractFacts(home.body) : null;
+  const performanceLite = buildPerformanceLite(home);
   const facts = {
     requestedUrl: url,
     fetch: {
@@ -413,18 +701,35 @@ export async function onRequestPost(context) {
     page: pageFacts,
     migration: migrationSignals(url, home.finalUrl, pageFacts, robots.body, sitemap.body, alternateHome),
     coreWebVitals: psi,
+    performanceLite,
     robotsTxt: robots.ok ? robots.body.slice(0, 3000) : "",
     botPolicy: robots.ok ? botVerdict(robots.body) : null,
   };
 
+  const lang = (payload.lang === "th") ? "th" : "en";
+  const det = computeScores(facts); // authoritative, model-independent scores
+  if (agentFirst) {
+    return json({
+      ...buildDeterministicScan(url, facts, det, lang, "agent_first_local_runner"),
+      _agent_first: true,
+      _agent_reason: lang === "th"
+        ? "ใช้ deterministic scan ก่อน แล้วส่งงานที่ต้องใช้ reasoning/ข้อมูลจริงให้ local Codex agent เพื่อตัดการพึ่งพา Claude API"
+        : "Using deterministic scan first, then handing reasoning and real-data work to the local Codex agent to avoid relying on the Claude API.",
+      scanned_at: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC",
+      _rateRemaining: rl.remaining,
+    }, 200);
+  }
   const userBlock =
     `Audit this website. Signals follow as JSON.\n\n` +
+    `IMPORTANT: the numeric overall + category scores are computed by the system from the deterministic CHECK RESULTS below — do NOT invent different numbers (any scores you output will be overridden). Your job is the qualitative report: write a sharp "summary" and, for every check with status "fail", a specific, detailed finding with a concrete fix. Add any extra issues you genuinely observe in the signals. Cover the failed checks first, especially "critical"/"high".\n\n` +
+    `Write the "summary" and every finding "detail" and "fix" in ${lang === "th" ? "Thai (ภาษาไทย)" : "English"}. Keep the four category "name" values and all JSON keys exactly as the system prompt specifies.\n\n` +
     (userPrompt ? `User focus / instructions: ${userPrompt}\n\n` : "") +
-    `SIGNALS:\n${JSON.stringify(facts, null, 2)}`;
+    `DETERMINISTIC CHECK RESULTS (authoritative — explain the fails):\n${JSON.stringify(det.checks, null, 2)}\n\n` +
+    `RAW SIGNALS:\n${JSON.stringify(facts, null, 2)}`;
 
   const first = await callClaude(env, [{ role: "user", content: userBlock }], 8000);
   if (!first.ok) {
-    return json(first.detail ? { error: first.error, detail: first.detail } : { error: first.error }, first.status || 502);
+    return json(buildDeterministicScan(url, facts, det, lang, first.detail || first.error), 200);
   }
 
   let scan;
@@ -450,6 +755,46 @@ export async function onRequestPost(context) {
       return json({ error: "Model did not return valid JSON after retry.", raw: second.text.slice(0, 800) }, 502);
     }
   }
+
+  // Override LLM numbers with deterministic scores so the score is stable
+  // regardless of which model (Claude/Groq/…) produced the narrative.
+  scan.overall = det.overall;
+  scan.grade = det.grade;
+  if (Array.isArray(scan.categories)) {
+    scan.categories.forEach((c) => {
+      const key = Object.keys(det.categories).find((k) => k.toLowerCase() === String(c.name || "").toLowerCase());
+      if (key) { c.score = det.categories[key]; c.grade = det.categories[key] >= 90 ? "A" : det.categories[key] >= 80 ? "B" : det.categories[key] >= 70 ? "C" : det.categories[key] >= 55 ? "D" : "F"; }
+    });
+  }
+  scan._scoring = "deterministic_rubric";
+  scan._engine_provider = first.provider || null;
+  scan._checks = det.checks;          // ALL checks (pass + fail) so the UI can show both
+  scan._category_scores = det.categories;
+  scan._performance = det.performance;
+  scan._performance_verified = det.performanceVerified;
+  scan._performance_lite = facts.performanceLite;
+  scan._score_status = det.performanceVerified ? "verified" : "provisional";
+  scan._score_note = det.performanceVerified
+    ? ""
+    : (lang === "th"
+      ? "Performance ยังไม่ได้ verify จึงกันคะแนน 12% ไว้ก่อนและไม่อนุญาตให้คะแนนเต็ม 100"
+      : "Performance is not verified, so the 12% performance weight is held back and the score cannot be 100.");
+  scan._verification = {
+    score_status: scan._score_status,
+    missing_evidence: det.checks
+      .filter((c) => String(c.status || "").toLowerCase() === "unverified")
+      .map((c) => ({ category: c.category, check: c.check, detail: c.detail || "" })),
+    cannot_infer_from_public_scan: [
+      "traffic_source_attribution",
+      "GA4_sessions",
+      "Google_Search_Console_clicks_queries",
+      "ad_spend_or_CAC",
+      "actual_AI_citations_without_live_probe",
+    ],
+    score_guardrail: det.performanceVerified
+      ? "All weighted score components used by the deterministic rubric were available."
+      : "Performance/Core Web Vitals could not be verified, so the 12% performance weight is held at zero and the score cannot reach 100.",
+  };
 
   scan.url = scan.url || url;
   scan.scanned_at = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";

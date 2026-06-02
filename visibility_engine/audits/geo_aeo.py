@@ -27,6 +27,16 @@ STAT_RE = re.compile(
 QUESTION_RE = re.compile(r"\b(what|how|why|when|where|which|who|คือ|อย่างไร|ทำไม)\b", re.I)
 
 
+def _walk_jsonld(value):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _walk_jsonld(nested)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_jsonld(item)
+
+
 def _jsonld_types(soup) -> set[str]:
     types: set[str] = set()
     for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
@@ -34,13 +44,25 @@ def _jsonld_types(soup) -> set[str]:
             data = json.loads(tag.string or "{}")
         except (json.JSONDecodeError, TypeError):
             continue
-        for obj in (data if isinstance(data, list) else [data]):
-            t = obj.get("@type") if isinstance(obj, dict) else None
+        for obj in _walk_jsonld(data):
+            t = obj.get("@type")
             if isinstance(t, list):
                 types.update(t)
             elif t:
                 types.add(t)
     return types
+
+
+def _jsonld_has_freshness_date(soup) -> bool:
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            data = json.loads(tag.string or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for obj in _walk_jsonld(data):
+            if any(obj.get(k) for k in ("datePublished", "dateModified", "uploadDate")):
+                return True
+    return False
 
 
 def audit(result: FetchResult) -> AuditResult:
@@ -125,7 +147,8 @@ def audit(result: FetchResult) -> AuditResult:
 
     # --- E-E-A-T: freshness date ---
     has_date = (soup.find("time") is not None
-                or soup.find("meta", attrs={"property": "article:modified_time"}) is not None)
+                or soup.find("meta", attrs={"property": "article:modified_time"}) is not None
+                or _jsonld_has_freshness_date(soup))
     if has_date:
         r.add("E-E-A-T: freshness date", Status.PASS, Severity.MEDIUM)
     else:

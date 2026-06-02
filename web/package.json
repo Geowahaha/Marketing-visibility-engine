@@ -1,13 +1,20 @@
 {
-  "name": "visibility-engine-web",
+  "name": "aimark-web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Free AI website-visibility scanner — Cloudflare Pages front-end + Function.",
   "scripts": {
     "dev": "wrangler pages dev . --compatibility-date=2024-11-01",
-    "deploy": "wrangler pages deploy . --project-name=visibility-engine"
+    "deploy": "wrangler pages deploy . --project-name=aimark",
+    "test:api": "node tests/api-smoke.mjs",
+    "test:bridge": "node ../scripts/test-aimark-local-bridge.mjs",
+    "test:bridge:real": "node ../scripts/test-aimark-local-bridge-real-runner.mjs --runner-provider codex --runner-cmd codex --runner-mode full-access",
+    "test:bridge:real:apply": "node ../scripts/test-aimark-local-bridge-real-apply.mjs --runner-provider codex --runner-cmd codex --runner-mode full-access",
+    "verify:production": "node ../scripts/aimark-verify-production.mjs",
+    "verify:local": "node ../scripts/aimark-verify-production.mjs --skip-production"
   },
   "devDependencies": {
-    "wrangler": "^3.90.0"
+    "wrangler": "^4.96.0"
   }
 }

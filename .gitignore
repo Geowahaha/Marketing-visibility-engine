@@ -10,4 +10,18 @@ dist/
 web/.wrangler/
 web/.env
 web/.env.local
+web/.dev.vars
 web/*.env.local.txt
+.aimark-agent/
+
+# Dependencies / caches / local runtime artifacts — never commit
+node_modules/
+.pytest_cache/
+*.log
+.dev.vars
+.env
+.env.local
+*.env.local.txt
+# Local OAuth client secret files (belong in a secret manager, never git)
+client_secret*.json
+*.apps.googleusercontent.com.json

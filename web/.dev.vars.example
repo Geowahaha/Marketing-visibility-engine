@@ -1,0 +1,40 @@
+# Copy this file to `.dev.vars` (same folder) and fill in real values.
+# `wrangler pages dev` loads .dev.vars automatically as local env vars.
+# .dev.vars is gitignored — never commit real keys.
+
+# --- LLM for scan / improve / competitor (need at least ONE of the three) ---
+# NOTE: correct name is ANTHROPIC_API_KEY (your notes had "Anthopic" — a typo).
+# Use a FRESHLY ROTATED key, not the one from .env.local.txt.
+ANTHROPIC_API_KEY=sk-ant-...
+# Backup providers (automatic failover: Anthropic → Groq → Kimi). OpenAI-compatible.
+# GROQ_API_KEY=gsk_...
+# KIMI_API_KEY=sk-...
+# KIMI_BASE_URL=https://api.moonshot.ai/v1   # use .cn if you're on the China endpoint
+
+# --- Unlocks paid features locally (any long random string) ---
+# To "buy" locally: POST /api/checkout returns a test_confirm_url; opening it
+# sets the aimark_paid_export cookie = this value, unlocking improve/deploy/etc.
+PAID_EXPORT_SECRET=dev-unlock-secret-change-me
+
+# --- Live AI-citation probe (at least one) ---
+GEMINI_API_KEY=AIza...
+# PERPLEXITY_API_KEY=pplx-...
+
+# --- Optional ---
+# STRIPE_SECRET_KEY=sk_test_...        # test-mode key → real Stripe redirect
+# STRIPE_WEBHOOK_SECRET=whsec_...      # webhook must receive checkout.session.completed
+#                                     # + checkout.session.async_payment_succeeded/failed
+# GOOGLE_PSI_KEY=AIza...               # real Core Web Vitals, higher quota
+# CLAUDE_MODEL=claude-sonnet-4-6
+# CHECKOUT_CURRENCY=thb
+# SITE_ORIGIN=http://localhost:8788
+
+# --- OAuth login / repo connect ---
+# Google Cloud Console OAuth web app:
+#   Authorized redirect URI: http://localhost:8788/api/auth/callback/google
+# GitHub OAuth App:
+#   Authorization callback URL: http://localhost:8788/api/auth/callback/github
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...

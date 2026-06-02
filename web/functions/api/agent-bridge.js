@@ -1,31 +1,10 @@
+import { paidStatus } from "./_auth.js";
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
   });
-
-function listEnv(value) {
-  return String(value || "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
-function canExport(request, env) {
-  const ip = request.headers.get("CF-Connecting-IP") || "";
-  const bypassIps = [
-    ...listEnv(env.EXPORT_BYPASS_IPS),
-    ...listEnv(env.RATE_LIMIT_BYPASS_IPS),
-  ];
-  if (ip && bypassIps.includes(ip)) return { allowed: true, reason: "tester_ip_bypass" };
-
-  const auth = request.headers.get("authorization") || "";
-  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-  const paidSecret = String(env.PAID_EXPORT_SECRET || "").trim();
-  if (paidSecret && bearer && bearer === paidSecret) return { allowed: true, reason: "paid_package_token" };
-
-  return { allowed: false, reason: "paid_package_required" };
-}
 
 function buildBridgePayload(scan, permission) {
   const categories = Array.isArray(scan.categories) ? scan.categories : [];
@@ -104,7 +83,8 @@ function buildBridgePayload(scan, permission) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const permission = canExport(request, env);
+  const status = await paidStatus(request, env, "paid_package_required");
+  const permission = { allowed: status.paid, reason: status.reason };
   if (!permission.allowed) {
     return json({
       error: "AI Agent action requires the paid improvement package.",

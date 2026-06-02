@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Approve AI Mark Agent Bridge</title>
+<style>
+:root{--bg:#050505;--panel:#171717;--panel2:#101010;--line:#303030;--text:#f4f4f4;--muted:#9a9a9a;--good:#45c46b;--bad:#ef5f72}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:grid;place-items:center;padding:22px}
+.card{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+.brand{font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.16em;color:#aaa;text-transform:uppercase;margin-bottom:22px}
+h1{font-size:28px;line-height:1.12;margin:0 0 10px;letter-spacing:-.02em}
+p{color:var(--muted);line-height:1.6;margin:0 0 18px}
+label{display:block;color:#cfcfcf;font-size:13px;margin:14px 0 7px}
+input{width:100%;background:#080808;border:1px solid var(--line);border-radius:12px;color:var(--text);font:700 22px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;text-align:center;padding:16px;text-transform:uppercase}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+button,a.btn{border:1px solid var(--line);background:#111;color:#eee;border-radius:12px;padding:12px 15px;font-weight:700;text-decoration:none;cursor:pointer}
+button.primary,a.primary{background:#f2f2f2;border-color:#f2f2f2;color:#070707}
+.status{margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--muted);line-height:1.55}
+.ok{color:var(--good)}.err{color:var(--bad)}
+.hidden{display:none!important}
+.trust{display:grid;gap:7px;margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:14px;background:#111;color:#aaa;font-size:13px;line-height:1.45}
+.trust span{display:flex;gap:8px}
+.code-wrap.hidden{display:none}
+.launcher{display:none;margin-top:16px;padding:14px;border:1px solid #2e4735;background:#101a13;border-radius:14px}
+.launcher.on{display:block}
+.launcher h2{font-size:18px;margin:0 0 6px}
+.launcher p{font-size:13px;margin-bottom:12px}
+.success-badge{display:inline-flex;align-items:center;gap:8px;border:1px solid #2e4735;background:#0e1b12;color:#71e594;border-radius:999px;padding:8px 12px;font-weight:700;font-size:13px;margin-bottom:14px}
+.next-action{font-size:15px!important;color:#d6d6d6!important}
+details{margin-top:12px;color:#aaa}
+summary{cursor:pointer;font-size:12px}
+pre{white-space:pre-wrap;word-break:break-word;background:#080808;border:1px solid var(--line);border-radius:12px;padding:12px;color:#ddd;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">AI Mark</div>
+  <h1 id="title">Approve Agent Bridge</h1>
+  <p id="intro">อนุมัติให้ AI Mark ส่งงานเข้า agent bridge ของเครื่องนี้ โดยไม่ต้องให้รหัสผ่านหรือ token กับ AI Mark</p>
+  <div class="trust">
+    <span>✓ ใช้ Google session ของคุณเพื่อยืนยันตัวตน</span>
+    <span>✓ AI Mark ไม่ขอ password, GitHub token หรือ LINE token</span>
+    <span>✓ คุณยกเลิกสิทธิ์ได้จากบัญชี/เครื่องของคุณภายหลัง</span>
+  </div>
+  <div class="code-wrap" id="codeWrap">
+    <label for="code">Pair code</label>
+    <input id="code" autocomplete="one-time-code" placeholder="ABCD-EFGH">
+  </div>
+  <div class="row" id="approvalActions">
+    <button class="primary" id="approveBtn" onclick="approve()">Approve bridge</button>
+    <button id="googleBtn" onclick="login(false)">Sign in with Google</button>
+    <a class="btn" href="/">Back to AI Mark</a>
+  </div>
+  <div class="status" id="status">กำลังตรวจ session...</div>
+  <div class="launcher" id="launcherPanel">
+    <div class="success-badge">Approved</div>
+    <h2>เหลือเปิด starter หนึ่งครั้ง</h2>
+    <p class="next-action" id="starterHelp">ผมกำลังดาวน์โหลดไฟล์ starter ให้ ถ้า browser ไม่เริ่มดาวน์โหลด ให้กดปุ่มด้านล่าง</p>
+    <div class="row">
+      <button class="primary" id="downloadBtn" onclick="downloadLauncher()">Download bridge starter</button>
+      <button onclick="copyLauncherCommand()">Copy start command</button>
+      <a class="btn" href="/">Back to AI Mark</a>
+    </div>
+    <details>
+      <summary>Show command</summary>
+      <pre id="launcherCommand"></pre>
+    </details>
+  </div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const params=new URLSearchParams(location.search);
+const initial=params.get("code")||"";
+if(initial)$("code").value=initial.toUpperCase();
+if(initial)$("codeWrap").classList.add("hidden");
+let signedIn=false;
+let approvedDeviceCode="";
+let starterDownloadAttempted=false;
+const CLOUD_BASE=location.origin==="null"?"https://aimark.pages.dev":location.origin;
+async function load(){
+  try{
+    const r=await fetch("/api/auth/me",{cache:"no-store"});
+    const d=await r.json();
+    signedIn=!!d.authenticated;
+    $("googleBtn").style.display=signedIn?"none":"inline-block";
+    $("approveBtn").textContent=signedIn
+      ? "Approve Agent Bridge"
+      : "Continue with Google + approve";
+    $("status").innerHTML=signedIn
+      ? `Signed in as <b>${escapeHtml(d.user?.email||d.user?.name||"user")}</b>. กด Approve เพื่ออนุมัติ bridge นี้`
+      : "กดปุ่มเดียวเพื่อเข้าสู่ระบบ Google แล้วกลับมา approve ให้อัตโนมัติ";
+    if(signedIn&&initial&&params.get("auto_approve")==="1"){
+      setTimeout(()=>approve(),250);
+    }
+  }catch{
+    $("status").textContent="ตรวจ session ไม่สำเร็จ";
+  }
+}
+function login(autoApprove=true){
+  const nextUrl=new URL(location.href);
+  if(autoApprove)nextUrl.searchParams.set("auto_approve","1");
+  const next=nextUrl.pathname+nextUrl.search;
+  location.href="/api/auth/start/google?next="+encodeURIComponent(next);
+}
+async function approve(){
+  const code=$("code").value.trim();
+  if(!code){$("status").innerHTML='<span class="err">กรอกรหัสก่อน</span>';return;}
+  if(!signedIn){login();return;}
+  $("approveBtn").disabled=true;
+  $("status").textContent="กำลัง approve bridge...";
+  try{
+    const r=await fetch("/api/agent/pair/approve",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({user_code:code})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||"approve_failed");
+    approvedDeviceCode=d.device_code||"";
+    showApprovedState();
+  }catch(e){
+    $("status").innerHTML='<span class="err">'+escapeHtml(String(e.message||e))+'</span>';
+    $("approveBtn").disabled=false;
+  }
+}
+
+function showApprovedState(){
+  $("title").textContent="Agent Bridge Approved";
+  $("intro").textContent="อนุมัติสำเร็จแล้ว bridge ที่ใช้ลิงก์นี้จะเชื่อมต่อกับ AI Mark ได้";
+  $("approvalActions").classList.add("hidden");
+  $("codeWrap").classList.add("hidden");
+  $("status").innerHTML='<span class="ok">Approved แล้ว</span> ไม่ต้องกด approve ซ้ำ';
+  if(approvedDeviceCode){
+    $("launcherCommand").textContent=launcherCommand(approvedDeviceCode);
+    $("launcherPanel").classList.add("on");
+    if(!starterDownloadAttempted){
+      starterDownloadAttempted=true;
+      setTimeout(()=>downloadLauncher(true),300);
+    }
+  }
+}
+
+function launcherCommand(deviceCode){
+  const script=`${CLOUD_BASE}/downloads/start-aimark-bridge.ps1`;
+  return `powershell -ExecutionPolicy Bypass -Command "$p=Join-Path $env:TEMP 'start-aimark-bridge.ps1'; Invoke-WebRequest '${script}' -OutFile $p; powershell -ExecutionPolicy Bypass -File $p -DeviceCode '${deviceCode}' -CloudBase '${CLOUD_BASE}' -AutoRun"`;
+}
+function copyLauncherCommand(){
+  const cmd=$("launcherCommand").textContent||launcherCommand(approvedDeviceCode);
+  navigator.clipboard&&navigator.clipboard.writeText(cmd);
+  $("status").innerHTML='<span class="ok">คัดลอกคำสั่งแล้ว</span> เปิด PowerShell แล้ววางคำสั่งนี้ถ้าดาวน์โหลด starter ไม่ได้';
+}
+function downloadLauncher(auto=false){
+  if(!approvedDeviceCode)return;
+  const cmd=`@echo off\r\n${launcherCommand(approvedDeviceCode)}\r\npause\r\n`;
+  const blob=new Blob([cmd],{type:"application/octet-stream"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="start-aimark-agent-bridge.cmd";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  $("starterHelp").textContent=auto
+    ? "ถ้าไฟล์ดาวน์โหลดแล้ว ให้เปิด start-aimark-agent-bridge.cmd หนึ่งครั้งเพื่อเริ่ม bridge"
+    : "เปิดไฟล์ start-aimark-agent-bridge.cmd ที่ดาวน์โหลดมาเพื่อเริ่ม bridge";
+  $("downloadBtn").textContent="Download starter again";
+}
+function escapeHtml(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+load();
+</script>
+</body>
+</html>

@@ -28,6 +28,10 @@ export async function onRequestGet(context) {
   const state = btoa(JSON.stringify({ next, ts: Date.now() })).replace(/=+$/g, "");
 
   if (provider === "github") {
+    if (url.searchParams.get("check") === "1") {
+      const ready = !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
+      return json({ provider: "github", ready, missing_env: ready ? [] : ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"] });
+    }
     if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
       return setupRequired("github", ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]);
     }
@@ -35,12 +39,16 @@ export async function onRequestGet(context) {
     const authUrl = new URL("https://github.com/login/oauth/authorize");
     authUrl.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
     authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("scope", "read:user user:email");
+    authUrl.searchParams.set("scope", "repo read:user user:email");
     authUrl.searchParams.set("state", state);
     return Response.redirect(authUrl.toString(), 302);
   }
 
   if (provider === "google" || provider === "gmail") {
+    if (url.searchParams.get("check") === "1") {
+      const ready = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+      return json({ provider: "google", ready, missing_env: ready ? [] : ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] });
+    }
     if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
       return setupRequired("google", ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]);
     }

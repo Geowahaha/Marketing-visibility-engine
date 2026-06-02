@@ -66,6 +66,38 @@ def test_geo_detects_faq_and_stats():
     assert checks["Question-format headings"] == Status.PASS
 
 
+def test_geo_detects_nested_jsonld_faq_and_date_modified():
+    html = """<!doctype html><html><head>
+<title>Bangkok Accounting Firm | Example</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {"@type": "WebPage", "dateModified": "2026-06-01"},
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type": "Question", "name": "How do I start?", "acceptedAnswer": {"@type": "Answer", "text": "Contact us."}}
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<h1>Bangkok Accounting Firm</h1>
+<p>Example Accounting is a Bangkok accounting firm helping companies with tax, payroll, registration, and monthly reporting in Thailand.</p>
+<h2>How do I start accounting service?</h2>
+<ul><li>Send company documents</li><li>Share monthly records</li></ul>
+<p>We support 14 day onboarding, 10 years of team experience, and 500+ clients.</p>
+<a href="https://www.dbd.go.th">DBD</a>
+<a href="https://www.rd.go.th">Revenue Department</a>
+</body></html>"""
+    geo = geo_aeo.audit(_fr(html))
+    checks = {f.check: f.status for f in geo.findings}
+    assert checks["FAQ schema"] == Status.PASS
+    assert checks["E-E-A-T: freshness date"] == Status.PASS
+
+
 def test_robots_blocking_detection():
     blocking = "User-agent: GPTBot\nDisallow: /\nUser-agent: *\nAllow: /"
     assert ai_crawlers._blocks(blocking, "GPTBot") is True

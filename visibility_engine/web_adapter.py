@@ -18,11 +18,13 @@ import httpx
 
 
 def public_visibility_packages() -> list[dict]:
+    # Tiers mirror GROWTH_ENGINE_PLAN.md §5. Prices illustrative (THB) — the
+    # live checkout amounts are the source of truth in web/functions/api/checkout.js.
     return [
-        {"name": "Free Visibility Starter", "price": "ฟรี", "promise": "สแกน 1 เว็บ + top 5 fixes + robots/llms/schema direction", "best_for": "เจ้าของเว็บที่อยากรู้จุดอ่อนทันที"},
-        {"name": "Visibility Fix Pack", "price": "one-time", "promise": "แก้ schema, llms.txt, OG preview, FAQ, AI-answer section และ trust signals", "best_for": "เว็บที่มีบริการจริงแต่ AI/Google อ่านไม่ชัด"},
-        {"name": "Growth Monitor", "price": "monthly", "promise": "สแกนรายเดือน, before/after report, content recommendations, competitor/AI-search tracking", "best_for": "SME ที่ต้องการ lead และ trust ต่อเนื่อง"},
-        {"name": "Managed Blutenstein Growth", "price": "managed", "promise": "ทีม Blutenstein ดูแล visibility + content + lead capture + automation ใต้ umbrella", "best_for": "ลูกค้าที่อยากให้เราถือ end-to-end"},
+        {"name": "Free", "price": "ฟรี", "promise": "สแกน 1 เว็บ + คะแนน + top 5 fixes (พรีวิว) + ตรวจการเข้าถึงของบอท AI", "best_for": "เจ้าของเว็บที่อยากรู้จุดอ่อนทันที"},
+        {"name": "Starter", "price": "฿390/เดือน", "promise": "Improve Engine ไฟล์แก้ครบ: head/meta, schema, robots, llms.txt, FAQ (AEO), ปฏิทินโซเชียล 30 วัน · 1 เว็บ · นำไปใช้ 1 คลิก", "best_for": "เว็บที่มีบริการจริงแต่ AI/Google อ่านไม่ชัด"},
+        {"name": "Growth", "price": "฿990/เดือน", "promise": "ทุกอย่างใน Starter + เทียบคู่แข่ง, ตรวจการถูกอ้างอิงโดย AI สด, สแกนทั้งเว็บ, รายงาน before/after · สูงสุด 3 เว็บ", "best_for": "SME ที่ต้องการ lead และ trust ต่อเนื่อง"},
+        {"name": "Pro", "price": "฿2,490/เดือน", "promise": "ทุกอย่างใน Growth + เรนเดอร์ คนเห็น vs บอท AI, ทำคอนเทนต์โซเชียลให้, ซัพพอร์ตลำดับแรก · สูงสุด 10 เว็บ", "best_for": "ลูกค้าที่อยากให้เราดูแล end-to-end"},
     ]
 
 

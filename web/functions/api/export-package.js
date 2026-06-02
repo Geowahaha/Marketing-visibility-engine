@@ -1,41 +1,11 @@
+import { paidStatus } from "./_auth.js";
+import { consumeCredits, creditCost } from "./_credits.js";
+
 const json = (obj, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(obj), {
     status,
     headers: { "content-type": "application/json; charset=utf-8", ...extraHeaders },
   });
-
-function listEnv(value) {
-  return String(value || "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
-function canExport(request, env) {
-  const ip = request.headers.get("CF-Connecting-IP") || "";
-  const bypassIps = [
-    ...listEnv(env.EXPORT_BYPASS_IPS),
-    ...listEnv(env.RATE_LIMIT_BYPASS_IPS),
-  ];
-  if (ip && bypassIps.includes(ip)) {
-    return { allowed: true, reason: "tester_ip_bypass" };
-  }
-
-  const auth = request.headers.get("authorization") || "";
-  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-  const paidSecret = String(env.PAID_EXPORT_SECRET || "").trim();
-  if (paidSecret && bearer && bearer === paidSecret) {
-    return { allowed: true, reason: "paid_package_token" };
-  }
-
-  const cookie = request.headers.get("cookie") || "";
-  const paidCookie = cookie.split(";").map((x) => x.trim()).find((x) => x.startsWith("aimark_paid_export="));
-  if (paidSecret && paidCookie && paidCookie.slice("aimark_paid_export=".length) === paidSecret) {
-    return { allowed: true, reason: "paid_package_cookie" };
-  }
-
-  return { allowed: false, reason: "locked" };
-}
 
 const severityRank = { critical: 0, high: 1, medium: 2, low: 3 };
 function effortFromSeverity(sev) {
@@ -133,7 +103,8 @@ function buildAgentPrompt(actionJson) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const permission = canExport(request, env);
+  const status = await paidStatus(request, env, "locked");
+  const permission = { allowed: status.paid, reason: status.reason };
   if (!permission.allowed) {
     return json({
       error: "Paid package required to export.",
@@ -155,12 +126,33 @@ export async function onRequestPost(context) {
   }
   const scan = payload.scan || payload;
   const type = String(payload.type || "bundle").toLowerCase();
+  let creditCharge = null;
+  if (status.reason === "credit_balance") {
+    creditCharge = await consumeCredits(request, env, {
+      feature: "export_package",
+      amount: creditCost("export_package"),
+      idempotency_key: `export_package:${scan.url || payload.url || "site"}:${type}`,
+      metadata: { url: scan.url || payload.url || "", type },
+    });
+    if (!creditCharge.ok) {
+      return json({
+        error: creditCharge.error || "credit_debit_failed",
+        upgrade_required: true,
+        checkout_url: creditCharge.checkout_url || "/?modal=credits",
+        credits_required: creditCharge.amount || creditCost("export_package"),
+        credits_balance: creditCharge.balance ?? null,
+        credits_needed: creditCharge.needed ?? null,
+      }, 402);
+    }
+  }
   const actionJson = buildActionJson(scan, permission);
+  actionJson.credit_charge = creditCharge;
 
   if (type === "action_json") return json(actionJson);
   if (type === "agent_prompt") return json({
     export_allowed: true,
     export_reason: permission.reason,
+    credit_charge: creditCharge,
     package_name: actionJson.package_name,
     client_url: actionJson.client_url,
     prompt: buildAgentPrompt(actionJson),
@@ -169,6 +161,7 @@ export async function onRequestPost(context) {
   return json({
     export_allowed: true,
     export_reason: permission.reason,
+    credit_charge: creditCharge,
     package_name: actionJson.package_name,
     action_json: actionJson,
     agent_prompt: buildAgentPrompt(actionJson),
