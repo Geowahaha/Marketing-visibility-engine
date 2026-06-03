@@ -30,6 +30,8 @@ import { onRequestPost as techAudit, analyzeTech } from "../functions/api/tech-a
 import { toolDefinitions, executeTool, resolveToolId } from "../functions/api/_tools.js";
 import { onRequestPost as mcpPost } from "../functions/api/mcp.js";
 import { onRequestGet as cockpitGet } from "../functions/api/cockpit.js";
+import { onRequestPost as createSession } from "../functions/api/agent/session.js";
+import { onRequestGet as readSessionMsg, onRequestPost as postSessionMsg } from "../functions/api/agent/session/[id]/message.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1624,4 +1626,51 @@ async function testOwnerCockpitAggregatesRealAccountData() {
   assert.equal(/api[_-]?key|secret|bearer|client_secret/i.test(JSON.stringify(r.data)), false, "cockpit must not leak secret-like fields");
 }
 await testOwnerCockpitAggregatesRealAccountData();
+
+async function testLiveAgentSessionRelay() {
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "relay-secret", ENTITLEMENTS_KV: kv };
+  const { token } = await signSession({ sid: "sid_relay_owner", provider: "google", email: "owner@example.com", name: "Owner" }, env.AUTH_SESSION_SECRET);
+  const ownerCookie = { cookie: `aimark_session=${token}` };
+
+  // Owner creates a session (cookie-auth) and gets a worker join token.
+  const created = await (await createSession({
+    request: new Request("https://aimark.pages.dev/api/agent/session", { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ title: "Pinpoint cluster", approved_actions: ["progress_report", "repo_edit", "deploy"] }) }),
+    env,
+  })).json();
+  assert.equal(created.status, "created");
+  const id = created.session.id;
+  const workerToken = created.join.worker_token;
+  assert.ok(id && workerToken, "create returns session id + worker token");
+  assert.equal(created.session.approved_actions.includes("deploy"), true);
+
+  const msgUrl = `https://aimark.pages.dev/api/agent/session/${id}/message`;
+  const params = { id };
+
+  // Owner posts a plan (seq 1); worker posts progress via token (seq 2).
+  const r1 = await (await postSessionMsg({ request: new Request(msgUrl, { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ type: "plan", text: "Build the foreigner cluster" }) }), env, params })).json();
+  assert.equal(r1.seq, 1);
+  assert.equal(r1.message.sender.role, "owner");
+  const r2 = await (await postSessionMsg({ request: new Request(msgUrl, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${workerToken}` }, body: JSON.stringify({ type: "progress", text: "deployed guide page" }) }), env, params })).json();
+  assert.equal(r2.seq, 2);
+  assert.equal(r2.message.sender.role, "agent");
+
+  // Owner reads from cursor 0 → both messages; worker reads from 1 → only the 2nd.
+  const readAll = await (await readSessionMsg({ request: new Request(`${msgUrl}?since=0`, { headers: ownerCookie }), env, params })).json();
+  assert.equal(readAll.messages.length, 2);
+  assert.equal(readAll.cursor, 2);
+  const readSince = await (await readSessionMsg({ request: new Request(`${msgUrl}?since=1`, { headers: { authorization: `Bearer ${workerToken}` } }), env, params })).json();
+  assert.equal(readSince.messages.length, 1);
+  assert.equal(readSince.messages[0].seq, 2);
+
+  // Security: no auth → 401; invalid message type → 400.
+  const noAuth = await postSessionMsg({ request: new Request(msgUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "chat", text: "hi" }) }), env, params });
+  assert.equal(noAuth.status, 401);
+  const badType = await postSessionMsg({ request: new Request(msgUrl, { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ type: "rm_rf", text: "x" }) }), env, params });
+  assert.equal(badType.status, 400);
+
+  // The relay must not leak the signing secret.
+  assert.equal(/relay-secret|AUTH_SESSION_SECRET/.test(JSON.stringify(created)), false, "session relay must not leak the signing secret");
+}
+await testLiveAgentSessionRelay();
 console.log("api-smoke: ok");

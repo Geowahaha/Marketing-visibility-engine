@@ -212,6 +212,57 @@ export async function writeQueue(kv, agentId, queue) {
   await kv.put(agentQueueKey(agentId), JSON.stringify(queue.slice(0, 50)), { expirationTtl: 60 * 60 * 24 * 7 });
 }
 
+/* ─── Live Agent Session relay (the "TeamViewer between agents" bus) ─── */
+// A session is a shared, capability-scoped channel where multiple AIs (owner +
+// invited agents like Claude/GPT) exchange TYPED messages in near-real-time.
+// The relay only CARRIES messages — side effects still go through gated tools.
+export function liveSessionKey(id) { return `agent_live_session:${id}`; }
+export function liveSessionMsgsKey(id) { return `agent_live_msgs:${id}`; }
+export function userSessionsKey(sid) { return `agent_live_sessions_user:${sid}`; }
+
+const SESSION_TTL_SEC = 60 * 60 * 24 * 7;
+
+/** Mint a session-scoped participant token (for an external AI to join one session). */
+export async function signSessionToken(claims, env, ttlSec = SESSION_TTL_SEC) {
+  const secret = authSecret(env);
+  if (!secret) throw new Error("AUTH_SESSION_SECRET or PAID_EXPORT_SECRET is required for session tokens.");
+  const now = Math.floor(Date.now() / 1000);
+  const body = {
+    typ: "aimark_session",
+    session_id: String(claims.session_id || ""),
+    role: ["owner", "reviewer", "agent"].includes(claims.role) ? claims.role : "agent",
+    label: String(claims.label || "agent").slice(0, 60),
+    approved_actions: Array.isArray(claims.approved_actions) ? claims.approved_actions.slice(0, 20) : [],
+    iat: now,
+    exp: now + ttlSec,
+  };
+  const payload = base64url(enc.encode(JSON.stringify(body)));
+  const sig = await hmacHex(secret, payload);
+  return `${payload}.${sig}`;
+}
+
+export async function verifySessionToken(token, env) {
+  try {
+    const secret = authSecret(env);
+    const [payload, sig] = String(token || "").split(".");
+    if (!payload || !sig || !secret) return null;
+    const expected = await hmacHex(secret, payload);
+    if (!timingSafeEqual(expected, sig)) return null;
+    const data = JSON.parse(dec.decode(unbase64url(payload)));
+    if (data.typ !== "aimark_session" || !data.session_id) return null;
+    if (Number(data.exp || 0) < Math.floor(Date.now() / 1000)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Bearer token from the Authorization header, if present. */
+export function bearer(request) {
+  const auth = request.headers.get("authorization") || "";
+  return auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+}
+
 export function sessionAgentRecord(session, agentId, deviceName, extra = {}) {
   const user = publicUser(session);
   const now = new Date().toISOString();
