@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Mark — Owner Cockpit</title>
+<meta name="description" content="AI Mark Owner Cockpit — open your browser and see your AI company running: missions, approvals, and proof.">
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#13171c; --panel2:#171c22; --line:#232a32;
+    --txt:#e7edf3; --muted:#8b97a4; --accent:#5b9dff; --good:#46c08a; --warn:#e0a14b; --bad:#e06b6b;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 -apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif}
+  a{color:inherit;text-decoration:none}
+  .muted{color:var(--muted)}
+  .wrap{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+  /* Top bar */
+  .topbar{grid-column:1 / -1;display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .brand{font-weight:700;letter-spacing:.2px}
+  .brand small{display:block;font-weight:400;font-size:11px;color:var(--muted);letter-spacing:0}
+  .topbar .spacer{flex:1}
+  .pill{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+  .pill.live{color:var(--good);border-color:#23463a}
+  .pill.warn{color:var(--warn);border-color:#4a3c22}
+  .pill.off{color:var(--bad);border-color:#4a2626}
+  .langbtn{cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted);padding:4px 10px;border-radius:8px;font-size:12px}
+  /* Left nav */
+  nav.side{border-right:1px solid var(--line);background:var(--panel);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+  nav.side a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;color:var(--muted);font-size:14px}
+  nav.side a:hover{background:var(--panel2);color:var(--txt)}
+  nav.side a.active{background:var(--panel2);color:var(--txt);box-shadow:inset 2px 0 0 var(--accent)}
+  nav.side .navhint{margin-top:auto;padding:12px;font-size:11px;color:var(--muted);border-top:1px solid var(--line)}
+  /* Main */
+  main{padding:18px 22px;display:flex;flex-direction:column;gap:18px;overflow:auto}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .kpi .lab{font-size:12px;color:var(--muted)}
+  .kpi .val{font-size:24px;font-weight:700;margin-top:6px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .cols{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .card h2{margin:0 0 4px;font-size:15px}
+  .card .csub{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .row{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:0}
+  .dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:0 0 auto;background:var(--muted)}
+  .dot.good{background:var(--good)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)} .dot.run{background:var(--accent)}
+  .row .meta{flex:1;min-width:0}
+  .row .meta b{font-weight:600}
+  .row .meta .d{font-size:12px;color:var(--muted);margin-top:2px}
+  .tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 7px;white-space:nowrap}
+  .empty{color:var(--muted);font-size:13px;padding:14px 0}
+  .btn{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);padding:7px 12px;border-radius:9px;font-size:13px}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#06101f;font-weight:600}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .ledger{display:flex;flex-direction:column}
+  .footline{font-size:12px;color:var(--muted);text-align:center;padding:8px 0 18px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}nav.side{display:none}.kpis{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand">AI Mark<small data-i="tagline">ห้องทำงานบริษัท AI ของคุณ</small></div>
+    <span id="connPill" class="pill" data-i="conn_checking">กำลังเช็กการเชื่อมต่อ…</span>
+    <span id="healthPill" class="pill" data-i="health_checking">กำลังเช็กระบบ…</span>
+    <div class="spacer"></div>
+    <span id="whoami" class="muted" style="font-size:13px"></span>
+    <button class="langbtn" id="langBtn" onclick="toggleLang()">EN</button>
+  </header>
+
+  <nav class="side">
+    <a class="active" href="#" data-i="nav_overview">ภาพรวมบริษัท</a>
+    <a href="/index.html" data-i="nav_web">เว็บ &amp; AI Visibility</a>
+    <a href="/index.html" data-i="nav_leads">Leads &amp; ติดตาม</a>
+    <a href="/index.html" data-i="nav_inbox">Inbox</a>
+    <a href="/index.html" data-i="nav_content">ปฏิทินคอนเทนต์</a>
+    <a href="/index.html" data-i="nav_customers">ลูกค้า</a>
+    <a href="/index.html" data-i="nav_agents">Agents</a>
+    <a href="#proof" data-i="nav_proof">Proof Log</a>
+    <a href="/index.html" data-i="nav_settings">Settings / Policies</a>
+    <div class="navhint" data-i="positioning">Hermes ทำให้งานรันได้ — AI Mark ทำให้บริษัทเดินต่อได้</div>
+  </nav>
+
+  <main>
+    <!-- KPI strip: "วันนี้บริษัทเป็นยังไง" -->
+    <section class="kpis">
+      <div class="kpi"><div class="lab" data-i="kpi_status">สถานะระบบวันนี้</div><div class="val" id="kpiStatus">—</div><div class="sub" id="kpiStatusSub" data-i="kpi_status_sub">core lanes</div></div>
+      <div class="kpi"><div class="lab" data-i="kpi_connector">Connector / Codex</div><div class="val" id="kpiConn">—</div><div class="sub" id="kpiConnSub"></div></div>
+      <div class="kpi"><div class="lab" data-i="kpi_skills">สกิลที่ทำได้</div><div class="val" id="kpiSkills">—</div><div class="sub" data-i="kpi_skills_sub">งานที่ AI ทำให้ได้</div></div>
+      <div class="kpi"><div class="lab" data-i="kpi_approvals">รออนุมัติ</div><div class="val" id="kpiApprovals">—</div><div class="sub" data-i="kpi_approvals_sub">งานที่ต้องคุณกด</div></div>
+    </section>
+
+    <div class="cols">
+      <!-- Center: Mission timeline + right: approval queue -->
+      <section class="card">
+        <h2 data-i="missions_h">Mission Timeline</h2>
+        <div class="csub" data-i="missions_sub">งานที่บริษัทกำลังเดิน · observing → drafting → waiting approval → deployed → verified</div>
+        <div id="missions"><div class="empty" data-i="loading">กำลังโหลด…</div></div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <a class="btn primary" href="/index.html" data-i="cta_new">เริ่มงานใหม่ใน AI Mark</a>
+          <button class="btn" onclick="refreshAll()" data-i="cta_refresh">รีเฟรช</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 data-i="approve_h">Owner Approval Queue</h2>
+        <div class="csub" data-i="approve_sub">สิ่งที่ต้องให้เจ้าของกดก่อนทำงานเสี่ยง</div>
+        <div id="approvals"><div class="empty" data-i="loading">กำลังโหลด…</div></div>
+      </section>
+    </div>
+
+    <!-- Bottom: Proof Ledger -->
+    <section class="card" id="proof">
+      <h2 data-i="proof_h">Proof Ledger</h2>
+      <div class="csub" data-i="proof_sub">หลักฐานทุกอย่าง: ใคร/เมื่อไหร่/ทำไม · before-after, commit, deploy URL</div>
+      <div id="ledger" class="ledger"><div class="empty" data-i="proof_empty">ยังไม่มีหลักฐานในเครื่องนี้ — เริ่มงานใน AI Mark แล้วผลจะถูกบันทึกที่นี่</div></div>
+    </section>
+
+    <div class="footline"><span data-i="foot">AI Mark · Owner Cockpit v1 · honest by design — ไม่มีการรับประกันอันดับ วัดผลจากหลักฐานจริงเท่านั้น</span></div>
+  </main>
+</div>
+
+<script>
+const BRIDGE_BASE="http://127.0.0.1:8799";
+let LANG=localStorage.getItem("aimark_lang")||"th";
+
+const I18N={
+  th:{tagline:"ห้องทำงานบริษัท AI ของคุณ",conn_checking:"กำลังเช็กการเชื่อมต่อ…",health_checking:"กำลังเช็กระบบ…",
+    nav_overview:"ภาพรวมบริษัท",nav_web:"เว็บ & AI Visibility",nav_leads:"Leads & ติดตาม",nav_inbox:"Inbox",nav_content:"ปฏิทินคอนเทนต์",nav_customers:"ลูกค้า",nav_agents:"Agents",nav_proof:"Proof Log",nav_settings:"Settings / Policies",
+    positioning:"Hermes ทำให้งานรันได้ — AI Mark ทำให้บริษัทเดินต่อได้",
+    kpi_status:"สถานะระบบวันนี้",kpi_status_sub:"core lanes",kpi_connector:"Connector / Codex",kpi_skills:"สกิลที่ทำได้",kpi_skills_sub:"งานที่ AI ทำให้ได้",kpi_approvals:"รออนุมัติ",kpi_approvals_sub:"งานที่ต้องคุณกด",
+    missions_h:"Mission Timeline",missions_sub:"งานที่บริษัทกำลังเดิน · observing → drafting → waiting approval → deployed → verified",
+    approve_h:"Owner Approval Queue",approve_sub:"สิ่งที่ต้องให้เจ้าของกดก่อนทำงานเสี่ยง",
+    proof_h:"Proof Ledger",proof_sub:"หลักฐานทุกอย่าง: ใคร/เมื่อไหร่/ทำไม · before-after, commit, deploy URL",
+    proof_empty:"ยังไม่มีหลักฐานในเครื่องนี้ — เริ่มงานใน AI Mark แล้วผลจะถูกบันทึกที่นี่",
+    cta_new:"เริ่มงานใหม่ใน AI Mark",cta_refresh:"รีเฟรช",loading:"กำลังโหลด…",foot:"AI Mark · Owner Cockpit v1 · honest by design — ไม่มีการรับประกันอันดับ วัดผลจากหลักฐานจริงเท่านั้น",
+    m_none:"ยังไม่มี mission ที่กำลังเดิน — เปิด AI Mark วางลิงก์เว็บ แล้วสั่งงานได้เลย",
+    a_none:"ไม่มีงานรออนุมัติตอนนี้",a_runrow:"กำลังทำงานหลังบ้าน",
+    conn_on:"เชื่อมต่อแล้ว",conn_off:"ยังไม่เชื่อม",conn_cloud:"ผ่าน Cloud",
+    s_ready:"พร้อม",s_partial:"พร้อมบางส่วน",s_setup:"ต้องตั้งค่า"},
+  en:{tagline:"Your AI company workspace",conn_checking:"Checking connection…",health_checking:"Checking system…",
+    nav_overview:"Company Overview",nav_web:"Website & AI Visibility",nav_leads:"Leads & Follow-up",nav_inbox:"Inbox",nav_content:"Content Calendar",nav_customers:"Customers",nav_agents:"Agents",nav_proof:"Proof Log",nav_settings:"Settings / Policies",
+    positioning:"Hermes runs agents — AI Mark runs the business loop",
+    kpi_status:"System status today",kpi_status_sub:"core lanes",kpi_connector:"Connector / Codex",kpi_skills:"Skills available",kpi_skills_sub:"what AI can do for you",kpi_approvals:"Awaiting approval",kpi_approvals_sub:"needs your tap",
+    missions_h:"Mission Timeline",missions_sub:"What the company is running · observing → drafting → waiting approval → deployed → verified",
+    approve_h:"Owner Approval Queue",approve_sub:"What the owner must approve before high-impact work",
+    proof_h:"Proof Ledger",proof_sub:"Every proof: who / when / why · before-after, commit, deploy URL",
+    proof_empty:"No proof on this machine yet — start a job in AI Mark and results land here.",
+    cta_new:"Start a new job in AI Mark",cta_refresh:"Refresh",loading:"Loading…",foot:"AI Mark · Owner Cockpit v1 · honest by design — no ranking guarantees, proof-measured only",
+    m_none:"No active missions yet — open AI Mark, paste a website link, and start.",
+    a_none:"No jobs awaiting approval right now.",a_runrow:"running in the background",
+    conn_on:"Connected",conn_off:"Not connected",conn_cloud:"via Cloud",
+    s_ready:"Ready",s_partial:"Partial",s_setup:"Needs setup"}
+};
+function t(k){return (I18N[LANG]&&I18N[LANG][k])||(I18N.th[k])||k;}
+function applyI18n(){document.querySelectorAll("[data-i]").forEach(el=>{const k=el.getAttribute("data-i");if(I18N[LANG][k]!==undefined)el.textContent=I18N[LANG][k];});document.documentElement.lang=LANG;document.getElementById("langBtn").textContent=LANG==="th"?"EN":"ไทย";}
+function toggleLang(){LANG=LANG==="th"?"en":"th";localStorage.setItem("aimark_lang",LANG);applyI18n();refreshAll();}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function el(id){return document.getElementById(id);}
+
+async function getJSON(url,opts){try{const r=await fetch(url,Object.assign({cache:"no-store"},opts||{}));if(!r.ok)return null;return await r.json();}catch(e){return null;}}
+
+// --- System health -> KPI + status pill ---
+async function loadHealth(){
+  const d=await getJSON("/api/system-health");
+  const pill=el("healthPill");
+  if(!d){pill.className="pill off";pill.textContent=LANG==="th"?"เช็กระบบไม่ได้":"Health unavailable";el("kpiStatus").textContent="—";return;}
+  const prod=d.production||{};const lanes=Array.isArray(prod.lanes)?prod.lanes:[];
+  const ready=lanes.filter(l=>l.ready).length;
+  el("kpiStatus").textContent=ready+"/"+(lanes.length||"—");
+  const core=prod.core_live_ready;
+  pill.className="pill "+(core?"live":(ready?"warn":"off"));
+  pill.textContent=(LANG==="th"?"ระบบ: ":"System: ")+(core?t("s_ready"):(ready?t("s_partial"):t("s_setup")));
+}
+
+// --- Skills -> KPI ---
+async function loadSkills(){
+  const d=await getJSON("/api/skills");
+  const list=(d&&(d.skills||d.catalog||[]))||[];
+  el("kpiSkills").textContent=Array.isArray(list)?list.length:"—";
+}
+
+// --- Auth -> whoami ---
+async function loadMe(){
+  const d=await getJSON("/api/auth/me");
+  const u=d&&(d.user||d.account||d);
+  if(u&&(u.email||u.name))el("whoami").textContent=(u.name||u.email||"");
+}
+
+// --- Connector / current mission (local bridge first, honest if absent) ---
+async function loadConnector(){
+  const pill=el("connPill"),kv=el("kpiConn"),sub=el("kpiConnSub");
+  // Try the friendly "/" status, then current job.
+  const root=await getJSON(BRIDGE_BASE+"/");
+  if(!root){
+    pill.className="pill off";pill.textContent=t("conn_off");
+    kv.textContent=t("conn_off");sub.textContent="";
+    renderMissions(null,false);renderApprovals(null);
+    return;
+  }
+  const connected=!!root.cloud_connected;
+  pill.className="pill "+(connected?"live":"warn");
+  pill.textContent=(root.runner_label||"Runner")+" · "+(connected?t("conn_on"):t("conn_off"));
+  kv.textContent=root.runner_active?(LANG==="th"?"กำลังทำงาน":"Working"):t("conn_on");
+  sub.textContent=root.runner_label||"";
+  const cur=await getJSON(BRIDGE_BASE+"/aimark/jobs/current");
+  renderMissions(cur,root.runner_active);
+  renderApprovals(cur);
+}
+
+function statusDot(s){s=String(s||"").toLowerCase();if(/verified|deployed|ok|done|complete/.test(s))return"good";if(/fail|error|blocked/.test(s))return"bad";if(/running|active|progress|observing|drafting/.test(s))return"run";if(/wait|approval|pending/.test(s))return"warn";return"";}
+
+function renderMissions(cur,active){
+  const host=el("missions");
+  const rows=[];
+  if(cur&&cur.progress){const p=cur.progress;rows.push({title:p.summary||p.message||(p.job_id||"Mission"),detail:(p.stage||p.status||"")+(p.updated_at?" · "+new Date(p.updated_at).toLocaleString():""),status:active?"running":(p.status||"")});}
+  if(cur&&cur.last_result){const r=cur.last_result;rows.push({title:r.summary||r.job_id||"Last job",detail:(r.status||"")+(r.updated_at?" · "+new Date(r.updated_at).toLocaleString():""),status:r.status});}
+  if(!rows.length){host.innerHTML='<div class="empty">'+esc(t("m_none"))+'</div>';return;}
+  host.innerHTML=rows.map(r=>'<div class="row"><span class="dot '+statusDot(r.status)+'"></span><div class="meta"><b>'+esc(r.title)+'</b><div class="d">'+esc(r.detail)+'</div></div><span class="tag">'+esc(r.status||"")+'</span></div>').join("");
+}
+
+function renderApprovals(cur){
+  const host=el("approvals");
+  // Honest v1: surface a running job as an item to watch; real approval gates wire in next.
+  if(cur&&cur.runner_active){
+    el("kpiApprovals").textContent="0";
+    host.innerHTML='<div class="row"><span class="dot run"></span><div class="meta"><b>'+esc(cur.current_job_id||"Job")+'</b><div class="d">'+esc(t("a_runrow"))+'</div></div><a class="btn sm" href="/index.html">'+esc(LANG==="th"?"ดูสด":"View live")+'</a></div>';
+    return;
+  }
+  el("kpiApprovals").textContent="0";
+  host.innerHTML='<div class="empty">'+esc(t("a_none"))+'</div>';
+}
+
+// --- Proof ledger: read history for the last-scanned site shared with index.html ---
+async function loadProof(){
+  const host=el("ledger");
+  let url="";try{url=localStorage.getItem("aimark_last_url")||"";}catch(e){}
+  if(!url){return;} // keep honest empty state
+  const d=await getJSON("/api/proof?url="+encodeURIComponent(url));
+  if(!d||d.exists===false||!Array.isArray(d.history)||!d.history.length)return;
+  host.innerHTML=d.history.slice().reverse().map(h=>'<div class="row"><span class="dot '+statusDot("verified")+'"></span><div class="meta"><b>'+esc(url)+'</b><div class="d">'+(LANG==="th"?"คะแนน ":"score ")+esc(h.overall)+" "+esc(h.grade||"")+(h.at?" · "+new Date(h.at).toLocaleString():"")+'</div></div></div>').join("");
+}
+
+async function refreshAll(){applyI18n();await Promise.all([loadHealth(),loadSkills(),loadMe(),loadConnector(),loadProof()]);}
+applyI18n();
+refreshAll();
+setInterval(loadConnector,8000); // keep current mission / connector fresh
+</script>
+</body>
+</html>
