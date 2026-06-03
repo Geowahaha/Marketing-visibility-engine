@@ -109,6 +109,17 @@ export async function onRequestPost({ request, env }) {
     await kv.put(dedupeStoreKey, job.id, { expirationTtl: 60 * 60 * 24 * 14 });
   }
   await kv.put(`agent_latest_job:${session.sid}`, job.id, { expirationTtl: 60 * 60 * 24 * 14 });
+  // Per-user job index so the Owner Cockpit can list recent missions, not just the latest one.
+  const idxKey = `agent_jobs_index:${session.sid}`;
+  const idx = (await kv.get(idxKey, "json")) || [];
+  idx.unshift({
+    job_id: job.id,
+    kind: payload.kind || payload.type || payload.skill_id || "agent_job",
+    title: compactText(payload.hermes_task?.goal || payload.notes || payload.client_url || payload.scan?.url || "", 120),
+    high_impact: (payload.approved_actions || []).some((a) => /github_pr|cloudflare_deploy|deploy/i.test(String(a))),
+    created_at: job.created_at,
+  });
+  await kv.put(idxKey, JSON.stringify(idx.slice(0, 20)), { expirationTtl: 60 * 60 * 24 * 14 });
 
   return json({
     status: "queued_for_agent",

@@ -29,6 +29,7 @@ import { onRequestPost as localSeoAudit, analyzeLocalSeo } from "../functions/ap
 import { onRequestPost as techAudit, analyzeTech } from "../functions/api/tech-audit.js";
 import { toolDefinitions, executeTool, resolveToolId } from "../functions/api/_tools.js";
 import { onRequestPost as mcpPost } from "../functions/api/mcp.js";
+import { onRequestGet as cockpitGet } from "../functions/api/cockpit.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1581,4 +1582,46 @@ async function testSkillRegistryIsSingleSourceOfTruth() {
   assert.equal(/api[_-]?key|secret|bearer|client_secret/i.test(JSON.stringify(data)), false, "skills endpoint must not leak secret-like fields");
 }
 await testSkillRegistryIsSingleSourceOfTruth();
+
+async function testOwnerCockpitAggregatesRealAccountData() {
+  // Unauthenticated: honest, no fabricated data.
+  const anon = await get(cockpitGet, { env: { AUTH_SESSION_SECRET: "cockpit-secret", ENTITLEMENTS_KV: memoryKv() }, url: "https://aimark.pages.dev/api/cockpit" });
+  assert.equal(anon.status, 200);
+  assert.equal(anon.data.authenticated, false);
+
+  // Authenticated with seeded per-account data.
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "cockpit-secret", ENTITLEMENTS_KV: kv };
+  const sid = "sid_cockpit_owner";
+  const { token } = await signSession({ sid, provider: "google", email: "owner@example.com", name: "Owner" }, env.AUTH_SESSION_SECRET);
+  const now = new Date().toISOString();
+  await kv.put(`agent_user:${sid}`, JSON.stringify({ agent_id: "ag1", device_name: "Owner PC" }));
+  await kv.put(`agent_jobs_index:${sid}`, JSON.stringify([
+    { job_id: "job_b", kind: "deploy_apply", title: "deploy fixes", high_impact: true, created_at: now },
+    { job_id: "job_a", kind: "scan", title: "scan example.com", high_impact: false, created_at: now },
+  ]));
+  await kv.put(`agent_job_user:${sid}:job_a`, JSON.stringify({ status: "completed", updated_at: now }));
+  await kv.put(`agent_job_user:${sid}:job_b`, JSON.stringify({ status: "running", updated_at: now }));
+  await kv.put(`cockpit_leads:${sid}`, JSON.stringify({ query: "clinics bangkok", count: 3, leads: [{ host: "a.example", score: 5, headline: "weak site" }], generated_at: now }));
+
+  const r = await get(cockpitGet, { env, headers: { cookie: `aimark_session=${token}` }, url: "https://aimark.pages.dev/api/cockpit" });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.authenticated, true);
+  assert.equal(r.data.connected, true);
+  assert.equal(r.data.kpis.missions_total, 2);
+  assert.equal(r.data.kpis.missions_active, 1, "only the running job is active");
+  // The high-impact running job surfaces as an approval to review.
+  assert.equal(r.data.approvals.items.length, 1);
+  assert.equal(r.data.approvals.items[0].job_id, "job_b");
+  assert.equal(r.data.approvals.items[0].reason, "high_impact_in_progress");
+  // Completed scan shows as a verified mission.
+  assert.ok(r.data.missions.items.some((m) => m.job_id === "job_a" && m.bucket === "verified"));
+  // Leads are real; inbox/content are honestly not-connected (no fabrication).
+  assert.equal(r.data.leads.count, 3);
+  assert.equal(r.data.leads.items[0].host, "a.example");
+  assert.equal(r.data.inbox.available, false);
+  assert.equal(r.data.content.available, false);
+  assert.equal(/api[_-]?key|secret|bearer|client_secret/i.test(JSON.stringify(r.data)), false, "cockpit must not leak secret-like fields");
+}
+await testOwnerCockpitAggregatesRealAccountData();
 console.log("api-smoke: ok");

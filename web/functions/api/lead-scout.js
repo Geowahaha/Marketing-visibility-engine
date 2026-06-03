@@ -12,9 +12,29 @@
  *   TAVILY_API_KEY (fallback: web discovery)
  */
 
+import { requireSession } from "./_auth.js";
+import { agentKv } from "./_agent.js";
+
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 AI-Mark-LeadScout/1.0";
+
+// Persist a compact lead snapshot for a signed-in owner so the Owner Cockpit can
+// show a real Leads panel. Best-effort: never blocks or fails the response.
+async function persistLeadsForOwner(request, env, query, ranked) {
+  try {
+    const session = await requireSession(request, env);
+    const kv = session && agentKv(env);
+    if (!session || !kv || !Array.isArray(ranked) || !ranked.length) return;
+    const leads = ranked.slice(0, 10).map((l) => ({
+      host: l.host || "", url: l.url || "", score: l.qualification?.score ?? null,
+      headline: l.qualification?.headline || l.title || "",
+    }));
+    await kv.put(`cockpit_leads:${session.sid}`, JSON.stringify({
+      query, count: ranked.length, leads, generated_at: new Date().toISOString(),
+    }), { expirationTtl: 60 * 60 * 24 * 30 });
+  } catch { /* persistence is optional */ }
+}
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
@@ -572,6 +592,7 @@ export async function onRequestPost(context) {
     lead.outreach_message = lead.outreach_pack.dm.message;
   });
   const outreachBatch = buildOutreachBatch({ ranked, lang, query, rejected });
+  await persistLeadsForOwner(request, env, query, ranked);
   return json({
     query,
     lang,

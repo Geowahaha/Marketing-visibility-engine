@@ -40,6 +40,7 @@
   .kpi .val{font-size:24px;font-weight:700;margin-top:6px}
   .kpi .sub{font-size:12px;color:var(--muted);margin-top:2px}
   .cols{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+  .cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
   .card h2{margin:0 0 4px;font-size:15px}
   .card .csub{font-size:12px;color:var(--muted);margin-bottom:12px}
@@ -57,7 +58,7 @@
   .btn.sm{padding:5px 10px;font-size:12px}
   .ledger{display:flex;flex-direction:column}
   .footline{font-size:12px;color:var(--muted);text-align:center;padding:8px 0 18px}
-  @media(max-width:900px){.wrap{grid-template-columns:1fr}nav.side{display:none}.kpis{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}nav.side{display:none}.kpis{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.cols3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -112,6 +113,25 @@
       </section>
     </div>
 
+    <!-- Leads / Inbox / Content -->
+    <div class="cols3">
+      <section class="card">
+        <h2 data-i="leads_h">Leads</h2>
+        <div class="csub" data-i="leads_sub">ลูกค้าเป้าหมายล่าสุดจาก Find prospects</div>
+        <div id="leadsPanel"><div class="empty" data-i="signin_hint">เข้าสู่ระบบเพื่อดูข้อมูลบัญชีคุณ</div></div>
+      </section>
+      <section class="card">
+        <h2 data-i="inbox_h">Inbox</h2>
+        <div class="csub" data-i="inbox_sub">LINE / อีเมล</div>
+        <div id="inboxPanel"><div class="empty" data-i="signin_hint">เข้าสู่ระบบเพื่อดูข้อมูลบัญชีคุณ</div></div>
+      </section>
+      <section class="card">
+        <h2 data-i="content_h">Content Calendar</h2>
+        <div class="csub" data-i="content_sub">ปฏิทินคอนเทนต์</div>
+        <div id="contentPanel"><div class="empty" data-i="signin_hint">เข้าสู่ระบบเพื่อดูข้อมูลบัญชีคุณ</div></div>
+      </section>
+    </div>
+
     <!-- Bottom: Proof Ledger -->
     <section class="card" id="proof">
       <h2 data-i="proof_h">Proof Ledger</h2>
@@ -126,6 +146,7 @@
 <script>
 const BRIDGE_BASE="http://127.0.0.1:8799";
 let LANG=localStorage.getItem("aimark_lang")||"th";
+let cloudAuthed=false; // when the signed-in /api/cockpit owns missions/approvals, the local bridge must not overwrite them
 
 const I18N={
   th:{tagline:"ห้องทำงานบริษัท AI ของคุณ",conn_checking:"กำลังเช็กการเชื่อมต่อ…",health_checking:"กำลังเช็กระบบ…",
@@ -140,7 +161,9 @@ const I18N={
     m_none:"ยังไม่มี mission ที่กำลังเดิน — เปิด AI Mark วางลิงก์เว็บ แล้วสั่งงานได้เลย",
     a_none:"ไม่มีงานรออนุมัติตอนนี้",a_runrow:"กำลังทำงานหลังบ้าน",
     conn_on:"เชื่อมต่อแล้ว",conn_off:"ยังไม่เชื่อม",conn_cloud:"ผ่าน Cloud",
-    s_ready:"พร้อม",s_partial:"พร้อมบางส่วน",s_setup:"ต้องตั้งค่า"},
+    s_ready:"พร้อม",s_partial:"พร้อมบางส่วน",s_setup:"ต้องตั้งค่า",
+    leads_h:"Leads",leads_sub:"ลูกค้าเป้าหมายล่าสุดจาก Find prospects",inbox_h:"Inbox",inbox_sub:"LINE / อีเมล",content_h:"ปฏิทินคอนเทนต์",content_sub:"คอนเทนต์ที่วางแผนไว้",
+    signin_hint:"เข้าสู่ระบบเพื่อดูข้อมูลบัญชีคุณ",leads_none:"ยังไม่มี lead — รัน Find prospects ใน AI Mark",not_connected:"ยังไม่ได้เชื่อม",coming_soon:"ยังไม่มีระบบนี้ — เร็วๆ นี้"},
   en:{tagline:"Your AI company workspace",conn_checking:"Checking connection…",health_checking:"Checking system…",
     nav_overview:"Company Overview",nav_web:"Website & AI Visibility",nav_leads:"Leads & Follow-up",nav_inbox:"Inbox",nav_content:"Content Calendar",nav_customers:"Customers",nav_agents:"Agents",nav_proof:"Proof Log",nav_settings:"Settings / Policies",
     positioning:"Hermes runs agents — AI Mark runs the business loop",
@@ -153,7 +176,9 @@ const I18N={
     m_none:"No active missions yet — open AI Mark, paste a website link, and start.",
     a_none:"No jobs awaiting approval right now.",a_runrow:"running in the background",
     conn_on:"Connected",conn_off:"Not connected",conn_cloud:"via Cloud",
-    s_ready:"Ready",s_partial:"Partial",s_setup:"Needs setup"}
+    s_ready:"Ready",s_partial:"Partial",s_setup:"Needs setup",
+    leads_h:"Leads",leads_sub:"Latest prospects from Find prospects",inbox_h:"Inbox",inbox_sub:"LINE / email",content_h:"Content Calendar",content_sub:"Planned content",
+    signin_hint:"Sign in to see your account data",leads_none:"No leads yet — run Find prospects in AI Mark",not_connected:"Not connected",coming_soon:"No system yet — coming soon"}
 };
 function t(k){return (I18N[LANG]&&I18N[LANG][k])||(I18N.th[k])||k;}
 function applyI18n(){document.querySelectorAll("[data-i]").forEach(el=>{const k=el.getAttribute("data-i");if(I18N[LANG][k]!==undefined)el.textContent=I18N[LANG][k];});document.documentElement.lang=LANG;document.getElementById("langBtn").textContent=LANG==="th"?"EN":"ไทย";}
@@ -198,7 +223,7 @@ async function loadConnector(){
   if(!root){
     pill.className="pill off";pill.textContent=t("conn_off");
     kv.textContent=t("conn_off");sub.textContent="";
-    renderMissions(null,false);renderApprovals(null);
+    if(!cloudAuthed){renderMissions(null,false);renderApprovals(null);}
     return;
   }
   const connected=!!root.cloud_connected;
@@ -206,9 +231,44 @@ async function loadConnector(){
   pill.textContent=(root.runner_label||"Runner")+" · "+(connected?t("conn_on"):t("conn_off"));
   kv.textContent=root.runner_active?(LANG==="th"?"กำลังทำงาน":"Working"):t("conn_on");
   sub.textContent=root.runner_label||"";
-  const cur=await getJSON(BRIDGE_BASE+"/aimark/jobs/current");
-  renderMissions(cur,root.runner_active);
-  renderApprovals(cur);
+  if(!cloudAuthed){
+    const cur=await getJSON(BRIDGE_BASE+"/aimark/jobs/current");
+    renderMissions(cur,root.runner_active);
+    renderApprovals(cur);
+  }
+}
+
+// Signed-in, per-account overview. Owns missions/approvals/leads when authenticated.
+async function loadCockpit(){
+  const d=await getJSON("/api/cockpit");
+  const leadsP=el("leadsPanel"),inboxP=el("inboxPanel"),contentP=el("contentPanel");
+  if(!d||!d.authenticated){
+    cloudAuthed=false;
+    [leadsP,inboxP,contentP].forEach(p=>{if(p)p.innerHTML='<div class="empty">'+esc(t("signin_hint"))+'</div>';});
+    return;
+  }
+  cloudAuthed=true;
+  const k=d.kpis||{};
+  if(k.approvals!=null)el("kpiApprovals").textContent=k.approvals;
+  // Missions
+  const mi=(d.missions&&d.missions.items)||[];
+  if(mi.length){
+    el("missions").innerHTML=mi.map(m=>'<div class="row"><span class="dot '+statusDot(m.bucket)+'"></span><div class="meta"><b>'+esc(m.title)+'</b><div class="d">'+esc(m.kind)+(m.created_at?" · "+new Date(m.created_at).toLocaleString():"")+'</div></div><span class="tag">'+esc(m.bucket)+'</span></div>').join("");
+  } else { el("missions").innerHTML='<div class="empty">'+esc(t("m_none"))+'</div>'; }
+  // Approvals
+  const ap=(d.approvals&&d.approvals.items)||[];
+  if(ap.length){
+    el("approvals").innerHTML=ap.map(a=>'<div class="row"><span class="dot '+(a.reason==="failed_needs_attention"?"bad":"warn")+'"></span><div class="meta"><b>'+esc(a.title)+'</b><div class="d">'+esc(a.reason.replace(/_/g," "))+'</div></div><a class="btn sm" href="/index.html">'+esc(LANG==="th"?"ตรวจ":"Review")+'</a></div>').join("");
+  } else { el("approvals").innerHTML='<div class="empty">'+esc(t("a_none"))+'</div>'; }
+  // Leads
+  const ld=d.leads||{};const litems=ld.items||[];
+  if(litems.length){
+    leadsP.innerHTML='<div class="muted" style="font-size:12px;margin-bottom:6px">'+esc(ld.query||"")+' · '+esc(ld.count||litems.length)+'</div>'+
+      litems.slice(0,6).map(l=>'<div class="row"><span class="dot run"></span><div class="meta"><b>'+esc(l.host||l.url||"")+'</b><div class="d">'+esc(l.headline||"")+'</div></div>'+(l.score!=null?'<span class="tag">'+esc(l.score)+'</span>':'')+'</div>').join("");
+  } else { leadsP.innerHTML='<div class="empty">'+esc(t("leads_none"))+'</div>'; }
+  // Inbox / Content — honest: no backing system yet
+  inboxP.innerHTML='<div class="empty">'+esc((d.inbox&&d.inbox.available)?"":t("coming_soon"))+'</div>';
+  contentP.innerHTML='<div class="empty">'+esc((d.content&&d.content.available)?"":t("coming_soon"))+'</div>';
 }
 
 function statusDot(s){s=String(s||"").toLowerCase();if(/verified|deployed|ok|done|complete/.test(s))return"good";if(/fail|error|blocked/.test(s))return"bad";if(/running|active|progress|observing|drafting/.test(s))return"run";if(/wait|approval|pending/.test(s))return"warn";return"";}
@@ -244,7 +304,7 @@ async function loadProof(){
   host.innerHTML=d.history.slice().reverse().map(h=>'<div class="row"><span class="dot '+statusDot("verified")+'"></span><div class="meta"><b>'+esc(url)+'</b><div class="d">'+(LANG==="th"?"คะแนน ":"score ")+esc(h.overall)+" "+esc(h.grade||"")+(h.at?" · "+new Date(h.at).toLocaleString():"")+'</div></div></div>').join("");
 }
 
-async function refreshAll(){applyI18n();await Promise.all([loadHealth(),loadSkills(),loadMe(),loadConnector(),loadProof()]);}
+async function refreshAll(){applyI18n();await loadCockpit();await Promise.all([loadHealth(),loadSkills(),loadMe(),loadConnector(),loadProof()]);}
 applyI18n();
 refreshAll();
 setInterval(loadConnector,8000); // keep current mission / connector fresh
