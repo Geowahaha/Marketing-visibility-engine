@@ -1694,10 +1694,15 @@ function shouldUseAgentFirst(){
 async function pollLocalAgentResult(jobId,m=null){
   if(!jobId)return null;
   try{
-    const r=await fetch(`${BRIDGE_BASE}/aimark/result/latest`,bridgeRequestOptions({cache:"no-store"}));
-    const d=await r.json();
-    const result=d.result||null;
-    if(!r.ok||!result||String(result.job_id||"")!==String(jobId))return null;
+    // Read the job-specific result so a stale global "latest" is never shown (improve connection.md #6).
+    let result=null;
+    const jr=await fetch(`${BRIDGE_BASE}/aimark/jobs/${encodeURIComponent(jobId)}/result`,bridgeRequestOptions({cache:"no-store"}));
+    if(jr.ok){result=(await jr.json()).result||null;}
+    else{ // older bridge without per-job endpoint — fall back to global latest
+      const r=await fetch(`${BRIDGE_BASE}/aimark/result/latest`,bridgeRequestOptions({cache:"no-store"}));
+      if(r.ok)result=(await r.json()).result||null;
+    }
+    if(!result||String(result.job_id||"")!==String(jobId))return null;
     clearInterval(localAgentPollTimer);
     localAgentPollTimer=null;
     const runner=result.result?.runner_label||runnerLabelFromPreference();
@@ -2250,6 +2255,58 @@ async function runScan(url,prompt=""){
     {label:LANG==="th"?"เติมเครดิต":"Add credits",run:()=>runPlans()},
   ]);
   autoHandoff({kind:"scan",scan:lastScan});
+}
+
+// Generic runner for the deterministic audit skills (conversion / local / tech).
+async function runAudit(endpoint,scoreKey,titleTh,titleEn,url){
+  if(!url){const inp=$("input");if(inp){inp.focus();try{inp.scrollIntoView({behavior:"smooth",block:"center"});}catch(e){}}showToast(LANG==="th"?"วางลิงก์เว็บก่อน แล้วกดสกิลอีกครั้ง":"Paste a website link first, then click the skill.");return;}
+  const m=agentMsg();const st=m.status(t("think"));
+  const {status,data}=await api(endpoint,{url,lang:LANG});
+  st.stop();
+  if(status!==200||data.error){await m.stream((data.error||"Request failed")+(data.detail?" — "+data.detail:""));return;}
+  const score=(data[scoreKey]|0);
+  await m.stream((LANG==="th"?titleTh:titleEn)+": "+score+"/100 ("+(data.grade||"")+")");
+  m.html(`<div class="scoreline"><span class="big t-${tone(score)}">${score}</span><span class="muted">/100</span><span class="grade t-${tone(score)}">${esc(data.grade||"")}</span></div>`);
+  const leaks=data.leaks||[];
+  if(leaks.length){
+    let fh=`<table class="r"><tr><th>${LANG==="th"?"จุดที่ควรแก้":"Issue"}</th><th>${LANG==="th"?"วิธีแก้":"Fix"}</th></tr>`;
+    leaks.slice(0,8).forEach(l=>{fh+=`<tr><td><b>${esc(l.label||l.id||"")}</b><div class="muted">${esc(l.detail||"")}</div></td><td>${esc(l.fix||"")}</td></tr>`;});
+    fh+=`</table>`;m.html(fh);
+  }
+  if(data.honest_note)m.html(`<div class="muted" style="margin-top:8px;font-size:12px">${esc(data.honest_note)}</div>`);
+  const cs=[];
+  if(data.upgrade&&data.upgrade.required)cs.push({label:(LANG==="th"?"ปลดล็อกแผนแก้ไข · ":"Unlock fix plan · ")+(data.upgrade.credits_required||"")+(LANG==="th"?" เครดิต":" credits"),pro:true,run:()=>runPlans()});
+  cs.push({label:LANG==="th"?"แก้ให้เลย (สร้างไฟล์)":"Generate fixes",run:()=>runImprove(url)});
+  chips(m,cs);
+}
+function runConversion(url){return runAudit("/api/conversion-audit","conversion_score","ตรวจ Conversion","Conversion audit",url);}
+function runLocalSeo(url){return runAudit("/api/local-seo-audit","local_score","ตรวจ Local/GBP","Local SEO audit",url);}
+function runTech(url){return runAudit("/api/tech-audit","tech_score","ตรวจเทคนิค & ความปลอดภัย","Technical & Security audit",url);}
+
+// Map a skill id (from /api/skills) to its in-app runner — closes the loop:
+// paste a link → click a chip → it runs that skill.
+function runSkillById(id,url){
+  const map={
+    scan:()=>runScan(url),
+    improve:()=>runImprove(url),
+    conversion_audit:()=>runConversion(url),
+    local_seo_audit:()=>runLocalSeo(url),
+    tech_audit:()=>runTech(url),
+    line_oa_growth_kit:()=>runLineOaKit(url),
+    content_page:()=>runContent(url),
+    ai_bot_intelligence_loop:()=>runBotIntel(url),
+    answer_gap:()=>runGap(url),
+    social_visibility:()=>runSocial(cleanUrl(url),(typeof platformOf==="function"?platformOf(url):"website")),
+    proof_loop:()=>runProof(url)
+  };
+  const fn=map[id];
+  if(fn){
+    if(!url){const inp=$("input");if(inp){inp.focus();try{inp.scrollIntoView({behavior:"smooth",block:"center"});}catch(e){}}showToast(LANG==="th"?"วางลิงก์เว็บก่อน แล้วกดสกิลอีกครั้ง":"Paste a website link first, then click the skill.");return;}
+    fn();return;
+  }
+  // Skills that need a query / prior scan / special input → guide the user.
+  const inp=$("input");if(inp){inp.focus();try{inp.scrollIntoView({behavior:"smooth",block:"center"});}catch(e){}}
+  showToast(LANG==="th"?"พิมพ์คำสั่งหรือวางลิงก์ แล้วกดส่ง":"Type a command or paste a link, then send.");
 }
 
 function renderChecks(m,checks){
