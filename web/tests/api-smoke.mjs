@@ -27,6 +27,8 @@ import { getSkill, skillCapabilities, skillCreditCost } from "../functions/api/_
 import { onRequestPost as conversionAudit, analyzeConversion } from "../functions/api/conversion-audit.js";
 import { onRequestPost as localSeoAudit, analyzeLocalSeo } from "../functions/api/local-seo-audit.js";
 import { onRequestPost as techAudit, analyzeTech } from "../functions/api/tech-audit.js";
+import { toolDefinitions, executeTool, resolveToolId } from "../functions/api/_tools.js";
+import { onRequestPost as mcpPost } from "../functions/api/mcp.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1504,6 +1506,55 @@ async function testTechAuditSkillIsPricedAndPreviews() {
   assert.equal(/api[_-]?key|secret|bearer\s/i.test(JSON.stringify(data)), false, "preview must not leak secret-like fields");
 }
 await testTechAuditSkillIsPricedAndPreviews();
+
+async function testAgentHubToolContractAndMcp() {
+  // The tool contract is DERIVED from the skill registry: one tool per skill.
+  const defs = toolDefinitions();
+  assert.ok(defs.length >= 18, "every registry skill must surface as a tool");
+  const exec = defs.filter((t) => t._aimark.executable).map((t) => t.name);
+  const gated = defs.filter((t) => t._aimark.gated).map((t) => t.name);
+  // Read-only audits are executable; deploy/write/send skills are gated.
+  for (const id of ["scan", "tech_audit", "conversion_audit", "local_seo_audit", "social_visibility", "lead_scout"]) {
+    assert.ok(exec.includes(id), `${id} should be an executable read-only tool`);
+  }
+  for (const id of ["deploy_apply", "site_improvement", "line_oa_growth_kit", "export_package"]) {
+    assert.ok(gated.includes(id), `${id} must be gated behind owner approval`);
+  }
+  // Aliases resolve to real skill ids.
+  assert.equal(resolveToolId("scan_site"), "scan");
+  assert.equal(resolveToolId("security_audit"), "tech_audit");
+  assert.equal(resolveToolId("totally_unknown"), "");
+  // Every tool has a JSON Schema input with the right required fields.
+  const scanDef = defs.find((t) => t.name === "scan");
+  assert.equal(scanDef.inputSchema.type, "object");
+  assert.ok(scanDef.inputSchema.required.includes("url"));
+
+  const ctx = (body) => ({ request: new Request("https://aimark.pages.dev/api/test", { method: "POST" }), env: {}, _body: body });
+
+  // Approval-first: a gated tool never auto-runs from an external model.
+  const gatedRun = await executeTool("deploy_apply", { url: "https://x.example" }, ctx());
+  assert.equal(gatedRun.ok, false);
+  assert.equal(gatedRun.error, "approval_required");
+  // Unknown tool is rejected; missing required arg is caught before any dispatch.
+  assert.equal((await executeTool("nope", {}, ctx())).error, "unknown_tool");
+  assert.equal((await executeTool("scan", {}, ctx())).error, "missing_argument");
+
+  // MCP JSON-RPC surface: initialize, tools/list, and a gated tools/call.
+  const rpc = async (msg) => (await (await mcpPost({ request: new Request("https://aimark.pages.dev/api/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(msg) }), env: {} })).json());
+  const init = await rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
+  assert.equal(init.result.serverInfo.name, "aimark");
+  assert.equal(init.result.protocolVersion, "2025-06-18");
+  const list = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+  assert.ok(Array.isArray(list.result.tools) && list.result.tools.length >= 18);
+  const gatedCall = await rpc({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "deploy_apply", arguments: { url: "https://x.example" } } });
+  assert.equal(gatedCall.result.isError, true);
+  assert.match(gatedCall.result.content[0].text, /approval_required/);
+  const bad = await rpc({ jsonrpc: "2.0", id: 4, method: "bogus" });
+  assert.equal(bad.error.code, -32601);
+  // The contract must not leak secret-like fields.
+  assert.equal(/api[_-]?key|secret|bearer\s|client_secret/i.test(JSON.stringify(defs)), false);
+}
+await testAgentHubToolContractAndMcp();
 console.log("api-smoke: ok");
 
 async function testSkillRegistryIsSingleSourceOfTruth() {
