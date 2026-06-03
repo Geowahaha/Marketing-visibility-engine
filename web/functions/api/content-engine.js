@@ -100,15 +100,65 @@ Return ONLY JSON:
 {
  "title": str,
  "slug": str,
+ "page_type": "guide" | "service",   // guide = step-by-step educational; service = commercial offer page
  "meta_description": str (140-160 chars),
- "html": str,            // the article body as clean HTML: open with a 1-2 sentence DIRECT ANSWER (TL;DR), then H2/H3 sections, bullet/numbered lists where useful, a concrete proof/stat line (use a clearly-labeled [placeholder] if unknown), and a short FAQ section (3-5 Q&As). No <html>/<head> — body content only.
- "faq_jsonld": str,      // <script type="application/ld+json"> FAQPage matching the FAQ section
+ "html": str,            // body content only, no <html>/<head>. OPEN with a 1-2 sentence DIRECT ANSWER (TL;DR — that is what AI quotes). If page_type "guide": use numbered "Step 1..N" <h2> sections (AI extracts ordered steps); if "service": lead with what's included + who it's for, then specifics. Use lists + a concrete proof/stat line ([placeholder] if unknown). Do NOT include the FAQ in html (it is rendered from the faq field).
+ "author": { "name": str, "role": str },   // named author for E-E-A-T; use "[Owner name]" / "Licensed Accountant" placeholders if unknown
+ "faq": [ {"q": str, "a": str} ],          // 3-5 buyer FAQs; concise answer-first
  "internal_link_suggestions": [str],
  "word_count": int
 }
-Rules: factual, specific to the business; lead with the direct answer (that's what AI quotes); use real structure; do not invent fake awards/reviews/numbers — use [placeholders] the owner fills. Quality over length.`;
+Rules: factual, specific to the business; lead with the direct answer; real structure; do NOT invent awards/reviews/numbers — use [placeholders] the owner fills. Cover specific sub-questions for topical depth. Quality over length.`;
 
 function extractJson(text) { let t = String(text || "").replace(/```json/gi, "").replace(/```/g, "").trim(); const s = t.indexOf("{"), e = t.lastIndexOf("}"); if (s >= 0 && e > s) t = t.slice(s, e + 1); return JSON.parse(t); }
+
+/**
+ * Build the full Acclime-grade JSON-LD schema stack SERVER-SIDE (reliable valid
+ * JSON, not trusted to the LLM): BlogPosting OR Service + Person(author) +
+ * BreadcrumbList + FAQPage + Organization, with datePublished/dateModified.
+ */
+function buildSchemaStack(draft, { url, business, location }) {
+  const origin = (() => { try { return new URL(url).origin; } catch { return url; } })();
+  const now = new Date().toISOString();
+  const slug = String(draft.slug || "").replace(/^\/+|\/+$/g, "");
+  const pageUrl = slug ? `${origin}/${slug}/` : url;
+  const isService = String(draft.page_type || "guide") === "service";
+  const org = { "@type": "Organization", "name": business || "", "url": origin };
+  const author = draft.author && draft.author.name
+    ? { "@type": "Person", "name": draft.author.name, "jobTitle": draft.author.role || "" }
+    : { "@type": "Organization", "name": business || "" };
+  const graph = [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": origin + "/" },
+        { "@type": "ListItem", "position": 2, "name": draft.title || "", "item": pageUrl },
+      ],
+    },
+    isService
+      ? { "@type": "Service", "name": draft.title || "", "serviceType": draft.title || "", "provider": org, "areaServed": location || "Thailand", "url": pageUrl, "description": draft.meta_description || "" }
+      : { "@type": "BlogPosting", "headline": draft.title || "", "author": author, "publisher": org, "datePublished": now, "dateModified": now, "mainEntityOfPage": pageUrl, "description": draft.meta_description || "" },
+  ];
+  const faq = Array.isArray(draft.faq) ? draft.faq.filter((f) => f && f.q && f.a) : [];
+  if (faq.length) {
+    graph.push({
+      "@type": "FAQPage",
+      "mainEntity": faq.map((f) => ({ "@type": "Question", "name": f.q, "acceptedAnswer": { "@type": "Answer", "text": f.a } })),
+    });
+  }
+  const ld = { "@context": "https://schema.org", "@graph": graph };
+  return { jsonld: ld, script: `<script type="application/ld+json">${JSON.stringify(ld)}</script>`, page_url: pageUrl };
+}
+
+/** Render the FAQ array as an accessible HTML block (kept out of the LLM html). */
+function renderFaqHtml(faq, lang) {
+  const list = Array.isArray(faq) ? faq.filter((f) => f && f.q && f.a) : [];
+  if (!list.length) return "";
+  const heading = lang === "th" ? "คำถามที่พบบ่อย" : "Frequently asked questions";
+  return `<section class="faq"><h2>${heading}</h2>` +
+    list.map((f) => `<div class="faq-item"><h3>${f.q}</h3><p>${f.a}</p></div>`).join("") +
+    `</section>`;
+}
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -125,10 +175,20 @@ export async function onRequestPost(context) {
   // ---- Draft mode: one full publish-ready article (paid only) ----
   if (String(payload.mode || "") === "draft") {
     if (!isPaid) return json({ error: "Writing full pages is part of AI Mark Growth / Pro.", upgrade_required: true, checkout_url: "/api/checkout?product=growth" }, 402);
-    const ask = `Write the page for this business.\nLanguage: ${lang}\nBusiness URL: ${url}\nBusiness: ${payload.business || ctx.title}\nIndustry: ${payload.industry || ""}\nLocation: ${payload.location || ""}\nPage title: ${payload.title || ""}\nTarget question to answer: ${payload.target_question || payload.title || ""}\nBusiness context (from their site): ${ctx.text_sample || ""}`;
+    const pageType = String(payload.page_type || "").toLowerCase() === "service" ? "service" : "guide";
+    const ask = `Write the page for this business.\nLanguage: ${lang}\nBusiness URL: ${url}\nBusiness: ${payload.business || ctx.title}\nIndustry: ${payload.industry || ""}\nLocation: ${payload.location || ""}\nPage title: ${payload.title || ""}\npage_type: ${pageType}\nTarget question to answer: ${payload.target_question || payload.title || ""}\nBusiness context (from their site): ${ctx.text_sample || ""}`;
     const out = await callLLM(env, { system: DRAFT_SYSTEM, messages: [{ role: "user", content: ask }], maxTokens: 4000, temperature: 0.2 });
     if (!out.ok) return json({ error: "Draft generation failed.", detail: out.detail }, out.status || 502);
     let draft; try { draft = extractJson(out.text); } catch { return json({ error: "Writer did not return valid JSON.", raw: out.text.slice(0, 400) }, 502); }
+    if (!draft.page_type) draft.page_type = pageType;
+    // Build the full schema stack + FAQ HTML server-side (reliable), and merge the
+    // FAQ into the page body so it renders + matches the FAQPage JSON-LD.
+    const schema = buildSchemaStack(draft, { url, business: payload.business || ctx.title, location: payload.location });
+    const faqHtml = renderFaqHtml(draft.faq, lang);
+    draft.html = `${draft.html || ""}${faqHtml}`;
+    draft.schema_jsonld = schema.script;          // full stack (Acclime-grade)
+    draft.faq_jsonld = (() => { const f = schema.jsonld["@graph"].find((g) => g["@type"] === "FAQPage"); return f ? `<script type="application/ld+json">${JSON.stringify({ "@context": "https://schema.org", ...f })}</script>` : ""; })();
+    draft.page_url = schema.page_url;
     draft.url = url; draft.generated_at = new Date().toISOString();
     return json({ mode: "draft", ...draft });
   }
