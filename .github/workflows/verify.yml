@@ -41,3 +41,42 @@ jobs:
       - name: Run AI Mark verification gate (local, skip production smoke)
         working-directory: web
         run: npm run verify:local
+
+  # Auto-deploy to Cloudflare Pages once the gate is green — only on a real push
+  # to main (never on PRs). Requires two repo secrets:
+  #   CLOUDFLARE_API_TOKEN   — a token with "Cloudflare Pages: Edit" permission
+  #   CLOUDFLARE_ACCOUNT_ID  — the account id (already set)
+  # If the API token secret is absent the job is skipped, so merges never fail
+  # for lack of a token — deploy stays manual until the token is added.
+  deploy:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Check deploy credentials
+        id: creds
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$CF_TOKEN" ]; then echo "ready=true" >> "$GITHUB_OUTPUT";
+          else echo "ready=false" >> "$GITHUB_OUTPUT"; echo "::notice::CLOUDFLARE_API_TOKEN not set — skipping auto-deploy. Add the secret to enable deploy-from-CI."; fi
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.creds.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: pages deploy . --project-name=aimark --branch=main --commit-dirty=true

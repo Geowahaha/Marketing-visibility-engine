@@ -1555,7 +1555,6 @@ async function testAgentHubToolContractAndMcp() {
   assert.equal(/api[_-]?key|secret|bearer\s|client_secret/i.test(JSON.stringify(defs)), false);
 }
 await testAgentHubToolContractAndMcp();
-console.log("api-smoke: ok");
 
 async function testSkillRegistryIsSingleSourceOfTruth() {
   // Pricing is single-sourced: _credits.creditCost() must equal the registry
@@ -1581,3 +1580,5 @@ async function testSkillRegistryIsSingleSourceOfTruth() {
   assert.ok(Array.isArray(data.skills) && data.skills.length >= charged.length, "skills endpoint must list the registry");
   assert.equal(/api[_-]?key|secret|bearer|client_secret/i.test(JSON.stringify(data)), false, "skills endpoint must not leak secret-like fields");
 }
+await testSkillRegistryIsSingleSourceOfTruth();
+console.log("api-smoke: ok");
