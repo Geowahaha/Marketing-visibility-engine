@@ -1490,6 +1490,59 @@ function startCloudPolling() {
   setInterval(() => pollCloudJobsOnce().catch((err) => console.error(String(err))), 5000);
 }
 
+// ── Local agent detection + resident spawning (the "drag AI into the room") ──
+const KNOWN_AGENTS = [
+  { id: "claude", name: "Claude Code", command: "claude", provider: "claude" },
+  { id: "codex", name: "Codex / GPT", command: "codex", provider: "codex" },
+  { id: "gemini", name: "Gemini CLI", command: "gemini", provider: "gemini" },
+  { id: "cursor", name: "Cursor Agent", command: "cursor-agent", provider: "cursor" },
+  { id: "qwen", name: "Qwen Code", command: "qwen", provider: "qwen" },
+  { id: "ollama", name: "Ollama (local)", command: "ollama", provider: "ollama" },
+];
+
+function probeCommand(cmd) {
+  return new Promise((resolve) => {
+    const finder = process.platform === "win32" ? "where" : "which";
+    const child = spawn(finder, [cmd], { windowsHide: true });
+    let out = "";
+    const to = setTimeout(() => { try { child.kill(); } catch {} resolve({ available: false }); }, 4000);
+    child.stdout.on("data", (d) => (out += d.toString()));
+    child.on("error", () => { clearTimeout(to); resolve({ available: false }); });
+    child.on("close", (code) => { clearTimeout(to); resolve({ available: code === 0 && !!out.trim(), path: (out.trim().split(/\r?\n/)[0] || "") }); });
+  });
+}
+
+async function detectAgents() {
+  const out = [];
+  for (const a of KNOWN_AGENTS) {
+    const p = await probeCommand(a.command);
+    out.push({ ...a, available: !!p.available, resolved_path: p.path || "" });
+  }
+  return out;
+}
+
+const residentAgents = new Map(); // pid -> { pid, name, session_id, runner, started_at, child }
+
+function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base }) {
+  const script = path.join(__dirname, "aimark-resident-agent.mjs");
+  const childArgs = [
+    script,
+    "--name", String(name || "Agent").slice(0, 40),
+    "--runner", String(runner || "claude"),
+    "--runner-cmd", String(runner_cmd || runner || "claude"),
+  ];
+  // Token + session via env so they never appear in the process arg list.
+  const child = spawn(process.execPath, childArgs, {
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, AIMARK_SESSION_ID: String(session_id), AIMARK_SESSION_TOKEN: String(token), AIMARK_CLOUD_BASE: String(base || cloudBase) },
+  });
+  const rec = { pid: child.pid, name: String(name || "Agent"), session_id: String(session_id), runner: String(runner_cmd || runner), started_at: new Date().toISOString(), child };
+  residentAgents.set(child.pid, rec);
+  child.on("close", () => residentAgents.delete(child.pid));
+  return rec;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") {
@@ -1649,6 +1702,34 @@ const server = http.createServer(async (req, res) => {
         .then((raw) => JSON.parse(raw))
         .catch(() => null);
       return json(res, 200, { status: data ? "ok" : "empty", action: data });
+    }
+    // Detect which AI agents are installed on this machine (for "drag into room").
+    if (req.method === "GET" && url.pathname === "/agents/detect") {
+      return json(res, 200, { status: "ok", agents: await detectAgents() });
+    }
+    // List running resident agents.
+    if (req.method === "GET" && url.pathname === "/agents/residents") {
+      return json(res, 200, { status: "ok", residents: [...residentAgents.values()].map(({ child, ...r }) => r) });
+    }
+    // Spawn a resident agent into a live session (drag-to-room).
+    if (req.method === "POST" && url.pathname === "/agents/spawn-resident") {
+      const payload = await readBody(req);
+      const sid = String(payload.session_id || "").trim();
+      const token = String(payload.token || "").trim();
+      const runnerCmd = String(payload.runner_cmd || payload.runner || "").trim();
+      if (!sid || !token) return json(res, 400, { error: "session_id_and_token_required" });
+      if (!KNOWN_AGENTS.some((a) => a.command === runnerCmd)) return json(res, 400, { error: "runner_not_allowed", detail: runnerCmd });
+      const rec = spawnResidentAgent({ session_id: sid, token, runner: payload.runner || runnerCmd, runner_cmd: runnerCmd, name: payload.name, base: payload.base });
+      return json(res, 200, { status: "spawned", pid: rec.pid, name: rec.name, session_id: sid, runner: rec.runner });
+    }
+    // Stop a resident agent.
+    if (req.method === "POST" && url.pathname === "/agents/stop-resident") {
+      const payload = await readBody(req);
+      const rec = residentAgents.get(Number(payload.pid));
+      if (!rec) return json(res, 404, { error: "resident_not_found" });
+      try { rec.child.kill(); } catch {}
+      residentAgents.delete(rec.pid);
+      return json(res, 200, { status: "stopped", pid: rec.pid });
     }
     // Per-job reads so the browser shows the CURRENT job, never a stale global latest.
     const jobResultMatch = url.pathname.match(/^\/aimark\/jobs\/([^/]+)\/result$/);
