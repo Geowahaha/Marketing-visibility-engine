@@ -93,6 +93,21 @@ function defaultRunnerModel(provider) {
   return provider === "claude" ? "sonnet" : "";
 }
 
+// A Codex CLI signed in with a ChatGPT account rejects some model names
+// (observed: "gpt-5-codex is not supported when using Codex with a ChatGPT account").
+// Treat those as unsupported so the bridge degrades gracefully instead of failing the job.
+// Empty model = let Codex pick its own default, always allowed.
+function isModelSupportedByLocalCodex(model) {
+  const m = String(model || "").trim().toLowerCase();
+  if (!m) return true;
+  const unsupported = new Set(["gpt-5-codex"]);
+  for (const extra of String(process.env.AIMARK_CODEX_UNSUPPORTED_MODELS || "").split(",")) {
+    const t = extra.trim().toLowerCase();
+    if (t) unsupported.add(t);
+  }
+  return !unsupported.has(m);
+}
+
 function runnerDisplayName(config) {
   const provider = normalizeRunnerProvider(config?.provider) || inferRunnerProvider(config?.command);
   const product = provider === "claude" ? "Claude Code" : "Codex / GPT";
@@ -996,8 +1011,21 @@ function resolveRunnerConfig(job = {}) {
     normalizeRunnerProvider(prefCommand) ||
     normalizeRunnerProvider(runnerProvider) ||
     inferRunnerProvider(prefCommand || runnerCommand);
-  const command = prefCommand || (prefProvider ? defaultRunnerCommand(provider) : (runnerCommand || defaultRunnerCommand(provider)));
-  const model = String(pref.model || runnerModel || defaultRunnerModel(provider)).trim();
+  // pref.command always wins. Otherwise prefer the verified local command path when it
+  // matches the resolved provider — a job-level provider must NOT erase an absolute local
+  // runner path (e.g. job sends provider:"codex" and the local Codex is an absolute .exe).
+  // Only fall back to the bare default command when local has nothing for this provider.
+  const localProvider = normalizeRunnerProvider(runnerProvider) || inferRunnerProvider(runnerCommand);
+  const command =
+    prefCommand ||
+    (runnerCommand && localProvider === provider ? runnerCommand : defaultRunnerCommand(provider));
+  let model = String(pref.model || runnerModel || defaultRunnerModel(provider)).trim();
+  // Degrade an unsupported Codex model instead of failing: try the local default, else omit
+  // the model entirely so Codex chooses its own.
+  if (provider === "codex" && model && !isModelSupportedByLocalCodex(model)) {
+    const localModel = String(runnerModel || "").trim();
+    model = localModel && isModelSupportedByLocalCodex(localModel) ? localModel : "";
+  }
   const mode = String(pref.mode || runnerMode || "full-access").trim().toLowerCase();
   return {
     provider,
@@ -1621,6 +1649,60 @@ const server = http.createServer(async (req, res) => {
         .then((raw) => JSON.parse(raw))
         .catch(() => null);
       return json(res, 200, { status: data ? "ok" : "empty", action: data });
+    }
+    // Per-job reads so the browser shows the CURRENT job, never a stale global latest.
+    const jobResultMatch = url.pathname.match(/^\/aimark\/jobs\/([^/]+)\/result$/);
+    if (req.method === "GET" && jobResultMatch) {
+      const data = await fs.readFile(path.join(outboxDir, `${safeSlug(decodeURIComponent(jobResultMatch[1]))}.json`), "utf8")
+        .then((raw) => JSON.parse(raw))
+        .catch(() => null);
+      return json(res, 200, { status: data ? "ok" : "empty", result: data });
+    }
+    const jobProgressMatch = url.pathname.match(/^\/aimark\/jobs\/([^/]+)\/progress$/);
+    if (req.method === "GET" && jobProgressMatch) {
+      const data = await fs.readFile(path.join(outboxDir, `${safeSlug(decodeURIComponent(jobProgressMatch[1]))}.progress.json`), "utf8")
+        .then((raw) => JSON.parse(raw))
+        .catch(() => null);
+      return json(res, 200, { status: data ? "ok" : "empty", progress: data });
+    }
+    if (req.method === "GET" && url.pathname === "/aimark/jobs/current") {
+      const progress = await fs.readFile(path.join(outboxDir, "latest-progress.json"), "utf8")
+        .then((raw) => JSON.parse(raw))
+        .catch(() => null);
+      const result = await fs.readFile(path.join(outboxDir, "latest-result.json"), "utf8")
+        .then((raw) => JSON.parse(raw))
+        .catch(() => null);
+      return json(res, 200, {
+        status: "ok",
+        runner_active: runnerActive,
+        runner_queue_depth: runnerQueue.length,
+        current_job_id: progress?.job_id || (runnerActive ? result?.job_id : null) || null,
+        progress,
+        last_result: result,
+      });
+    }
+    // Friendly connector status at "/" so a browser or support agent can verify the
+    // connection without knowing endpoint paths (was a bare 404 before).
+    if (req.method === "GET" && url.pathname === "/") {
+      const statusRunner = resolveRunnerConfig();
+      const latest = await fs.readFile(path.join(outboxDir, "latest-result.json"), "utf8")
+        .then((raw) => JSON.parse(raw))
+        .catch(() => null);
+      return json(res, 200, {
+        service: "aimark-local-agent-bridge",
+        status: "ok",
+        cloud_connected: !!agentToken,
+        cloud_base: cloudBase,
+        runner_provider: statusRunner.provider,
+        runner_label: statusRunner.label,
+        runner_command: statusRunner.command,
+        runner_active: runnerActive,
+        runner_queue_depth: runnerQueue.length,
+        last_result_job_id: latest?.job_id || null,
+        last_result_status: latest?.status || null,
+        endpoints: ["/health", "/aimark/jobs/current", "/aimark/jobs/:id/result", "/aimark/jobs/:id/progress", "/aimark/result/latest"],
+        hint: "AI Mark local connector is running. Open AI Mark in the browser to connect this machine.",
+      });
     }
     return json(res, 404, { error: "not_found" });
   } catch (err) {

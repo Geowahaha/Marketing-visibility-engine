@@ -209,6 +209,19 @@ try {
   assert.equal(typeof health.data.browser_live_session_available, "boolean");
   assert.equal(health.data.browser_live_session_engine, "playwright");
 
+  // Friendly "/" connector status (was a bare 404 before).
+  const root = await fetchJson(`http://127.0.0.1:${bridgePort}/`);
+  assert.equal(root.status, 200);
+  assert.equal(root.data.service, "aimark-local-agent-bridge");
+  assert.equal(root.data.status, "ok");
+  assert.ok(Array.isArray(root.data.endpoints) && root.data.endpoints.includes("/aimark/jobs/current"));
+
+  // Current-job read so the UI never shows a stale global latest as the active job.
+  const current = await fetchJson(`http://127.0.0.1:${bridgePort}/aimark/jobs/current`);
+  assert.equal(current.status, 200);
+  assert.equal(typeof current.data.runner_active, "boolean");
+  assert.equal(typeof current.data.runner_queue_depth, "number");
+
   const snapshotOnly = await fetchJson(`http://127.0.0.1:${bridgePort}/aimark/ingest`, {
     method: "POST",
     headers: { "content-type": "application/json" },
