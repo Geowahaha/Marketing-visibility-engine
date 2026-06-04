@@ -8,7 +8,7 @@
  */
 import { json, requireSession } from "../../_auth.js";
 import { agentKv } from "../../_agent.js";
-import { agentProfileKey, agentRepKey, computeReputation, publicProfile, readProofRecord, proofEventFromRecord } from "../../_agents_registry.js";
+import { agentProfileKey, computeReputation, publicProfile, readProofRecord, proofEventFromRecord, attributeProofToAgent } from "../../_agents_registry.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "POST,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -36,10 +36,9 @@ export async function onRequestPost({ request, env, params }) {
   if (acct && acct !== session.email && acct !== session.sid) return jc({ error: "not_your_proof" }, 403);
 
   const event = proofEventFromRecord(found.record);
-  const events = (await kv.get(agentRepKey(id), "json")) || [];
-  const dedupeKey = event.share_id || event.host;
-  const next = events.filter((e) => (e.share_id || e.host) !== dedupeKey).concat([event]).slice(-200);
-  await kv.put(agentRepKey(id), JSON.stringify(next));
+  // Single choke point: records the proof AND flows pay-it-forward karma to this
+  // agent's mentors (a mentor only gains when the mentee actually succeeds).
+  const reputation = await attributeProofToAgent(kv, id, found.record);
 
-  return jc({ status: "recorded", event, agent: publicProfile(profile, computeReputation(next)) });
+  return jc({ status: "recorded", event, agent: publicProfile(profile, reputation || computeReputation([])) });
 }

@@ -41,7 +41,9 @@ import { onRequestPost as foundVillage } from "../functions/api/villages/found.j
 import { onRequestPost as joinVillage } from "../functions/api/villages/join.js";
 import { onRequestGet as villageState } from "../functions/api/villages/[id].js";
 import { onRequestPost as citizenHeartbeat } from "../functions/api/agents/[id]/heartbeat.js";
+import { onRequestPost as mentorAgent } from "../functions/api/agents/[id]/mentor.js";
 import { isAlive } from "../functions/api/_villages.js";
+import { teachableSkills, isExpert } from "../functions/api/_mentorship.js";
 import { computeStanding, decayFactor } from "../functions/api/_karma.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
@@ -1885,5 +1887,66 @@ await testOpenVillageImmigration();
 assert.equal(isAlive(new Date().toISOString()), true);
 assert.equal(isAlive(new Date(Date.now() - 60 * 60 * 1000).toISOString()), false, "an hour-old ping is dormant, not alive");
 assert.equal(isAlive(""), false);
+
+// mentorship: pure helpers
+assert.deepEqual(teachableSkills(["scan", "content", "deploy"], ["scan"], []), ["content", "deploy"], "teach only what the mentee lacks");
+assert.deepEqual(teachableSkills(["scan", "content"], [], ["content"]), ["content"], "honor a requested-skills filter");
+assert.equal(isExpert({ founder: true }, 0), true, "founders are seed experts even at standing 0");
+assert.equal(isExpert({ founder: false }, 5), false, "a low-standing non-founder is not yet an expert");
+assert.equal(isExpert({ founder: false }, 40), true, "earned standing makes you an expert");
+
+async function testAcademyMentorshipAndPayItForward() {
+  const kv = memoryKv();
+  const proofKv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "academy-secret", ENTITLEMENTS_KV: kv, PROOF_KV: proofKv, RATE_LIMIT_KV: memoryKv() };
+  const { token } = await signSession({ sid: "sid_teacher_owner", provider: "google", email: "teach@example.com", name: "Owner" }, env.AUTH_SESSION_SECRET);
+  const cookie = { cookie: `aimark_session=${token}` };
+
+  // Found the guild (founders = seed experts) + immigrate a raw newcomer.
+  await foundVillage({ request: new Request("https://aimark.pages.dev/api/villages/found", { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: "{}" }), env });
+  const joined = await (await joinVillage({ request: new Request("https://aimark.pages.dev/api/villages/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Newbie", provider: "ollama", skills: [] }) }), env })).json();
+  const menteeId = joined.citizen.id;
+  assert.equal(joined.citizen.status, "probationary");
+
+  // A founder (Content Smith) teaches the newcomer — ability transfers now.
+  const taught = await (await mentorAgent({ request: new Request("https://aimark.pages.dev/api/agents/content-smith/mentor", { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: JSON.stringify({ mentee_id: menteeId }) }), env, params: { id: "content-smith" } })).json();
+  assert.equal(taught.status, "taught");
+  assert.ok(taught.transferred.length > 0, "knowledge (skills) transferred to the newcomer");
+  assert.equal(taught.mentee.status, "apprentice", "a taught newcomer becomes an apprentice");
+  assert.ok(taught.mentee.mentors.includes("content-smith"), "mentor link recorded");
+
+  // Teaching alone grants the mentor NO power yet (honest: not gameable).
+  const mentorBefore = await (await getAgent({ env, params: { id: "content-smith" } })).json();
+  assert.equal(mentorBefore.standing.standing, 0, "teaching is not a power grab — mentor still at 0 until the student succeeds");
+
+  // The apprentice does REAL work (a proven before/after) → its standing rises AND
+  // a share flows back to the mentor as karma. "รับแล้วส่งต่อ".
+  proofKv.put(`proof:teach@example.com:newbie.client`, JSON.stringify({
+    url: "https://newbie.client/", account: "teach@example.com",
+    deltas: { overall_before: 40, overall_after: 82, delta: 42 }, citation: { before: 0, after: 1 }, share_id: "shareNB", updated_at: new Date().toISOString(),
+  }));
+  const rec = await (await recordAgentProof({ request: new Request(`https://aimark.pages.dev/api/agents/${menteeId}/proof`, { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: JSON.stringify({ url: "https://newbie.client/", account: "teach@example.com" }) }), env, params: { id: menteeId } })).json();
+  assert.equal(rec.status, "recorded");
+  assert.ok(rec.agent.reputation.rep_score > 0, "the apprentice earned its own standing from real work");
+
+  const mentorAfter = await (await getAgent({ env, params: { id: "content-smith" } })).json();
+  assert.ok(mentorAfter.standing.components.contribution_karma > 0, "mentor earns karma ONLY after the student succeeds (pay-it-forward)");
+  assert.ok(mentorAfter.standing.standing > 0, "lifting others up raised the mentor's standing");
+
+  // Guards: can't teach yourself; a non-expert non-founder can't teach.
+  const self = await mentorAgent({ request: new Request("https://aimark.pages.dev/api/agents/content-smith/mentor", { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: JSON.stringify({ mentee_id: "content-smith" }) }), env, params: { id: "content-smith" } });
+  assert.equal(self.status, 400, "cannot mentor yourself");
+  // A truly-zero agent (non-founder, no proof) can't teach yet:
+  const fresh = await (await joinVillage({ request: new Request("https://aimark.pages.dev/api/villages/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Zero" }) }), env })).json();
+  const zeroTeach = await mentorAgent({ request: new Request(`https://aimark.pages.dev/api/agents/${fresh.citizen.id}/mentor`, { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: JSON.stringify({ mentee_id: "tech-medic" }) }), env, params: { id: fresh.citizen.id } });
+  assert.equal(zeroTeach.status, 403, "a standing-0 non-founder cannot teach yet — earn it first");
+
+  // The charging station: village state surfaces the experts ready to teach.
+  const state = await (await villageState({ env, params: { id: "sme-growth-th" } })).json();
+  assert.ok(Array.isArray(state.experts) && state.experts.length >= 6, "founders appear as experts (the charging station)");
+  assert.ok(state.experts.some((e) => e.id === "content-smith" && e.students >= 1), "an expert shows its student count");
+  assert.ok(state.apprentices >= 1, "the village tracks apprentices being lifted");
+}
+await testAcademyMentorshipAndPayItForward();
 
 console.log("api-smoke: ok");

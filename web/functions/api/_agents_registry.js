@@ -96,6 +96,12 @@ export async function attributeProofToAgent(kv, agentId, record) {
   const dedupeKey = event.share_id || event.host;
   const next = events.filter((e) => (e.share_id || e.host) !== dedupeKey).concat([event]).slice(-200);
   await kv.put(agentRepKey(agentId), JSON.stringify(next));
+  // Pay-it-forward: a share of this proven improvement flows back to whoever
+  // taught this agent — power earned by lifting others up. Best-effort.
+  try {
+    const { flowKarmaToMentors } = await import("./_mentorship.js");
+    await flowKarmaToMentors(kv, profile, event);
+  } catch { /* never break the proof path on mentorship */ }
   return computeReputation(next);
 }
 
@@ -161,6 +167,8 @@ export function publicProfile(profile, reputation) {
     parents: Array.isArray(profile.parents) ? profile.parents : [],
     lineage: profile.lineage || profile.id,
     mutated_skills: Array.isArray(profile.mutated_skills) ? profile.mutated_skills : [],
+    mentors: Array.isArray(profile.mentors) ? profile.mentors : [],
+    students: Array.isArray(profile.students) ? profile.students : [],
     created_at: profile.created_at,
     reputation,
   };
