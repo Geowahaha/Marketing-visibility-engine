@@ -151,6 +151,8 @@ export function publicProfile(profile, reputation) {
     color: profile.color || "#5b9dff",
     bio: profile.bio || "",
     skills: Array.isArray(profile.skills) ? profile.skills : [],
+    community: profile.community || "",
+    founder: !!profile.founder,
     generation: Number(profile.generation) || 0,
     parents: Array.isArray(profile.parents) ? profile.parents : [],
     lineage: profile.lineage || profile.id,

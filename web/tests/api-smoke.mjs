@@ -37,6 +37,7 @@ import { onRequestGet as getAgent } from "../functions/api/agents/[id].js";
 import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/proof.js";
 import { computeReputation, attributeProofToAgent, blendSkills, makeChildProfile } from "../functions/api/_agents_registry.js";
 import { onRequestPost as reproduceAgent } from "../functions/api/agents/[id]/reproduce.js";
+import { onRequestPost as foundVillage } from "../functions/api/villages/found.js";
 import { computeStanding, decayFactor } from "../functions/api/_karma.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
@@ -1816,4 +1817,26 @@ async function testAgentReproductionGenetics() {
   assert.ok((pa.children || []).includes(born.child.id), "parent records its offspring");
 }
 await testAgentReproductionGenetics();
+
+async function testFoundVillage() {
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "village-secret", ENTITLEMENTS_KV: kv };
+  const { token } = await signSession({ sid: "sid_founder", provider: "google", email: "founder@example.com", name: "Founder" }, env.AUTH_SESSION_SECRET);
+  const cookie = { cookie: `aimark_session=${token}` };
+  const found = () => foundVillage({ request: new Request("https://aimark.pages.dev/api/villages/found", { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: "{}" }), env });
+
+  const r1 = await (await found()).json();
+  assert.equal(r1.status, "founded");
+  assert.equal(r1.created, 6, "the founding guild = 6 agents");
+  assert.ok(r1.founders.every((f) => f.community === "sme-growth-th" && f.founder === true), "founders belong to the village");
+  assert.ok(r1.founders.every((f) => f.reputation.rep_score === 0), "even founders start at 0 — earn standing by real work");
+
+  const r2 = await (await found()).json();
+  assert.equal(r2.created, 0, "founding again creates no duplicates (idempotent)");
+  assert.equal(r2.status, "already_founded");
+
+  const list = await (await listAgents({ env })).json();
+  assert.ok(list.agents.some((a) => a.id === "tech-medic") && list.agents.some((a) => a.id === "content-smith"), "founders are browsable in the society");
+}
+await testFoundVillage();
 console.log("api-smoke: ok");
