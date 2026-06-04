@@ -79,4 +79,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: web
-          command: pages deploy . --project-name=aimark --branch=main --commit-dirty=true
+          # Pass an explicit ASCII commit message: wrangler otherwise auto-sends the
+          # git commit message to the CF API, which rejects non-ASCII (e.g. Thai)
+          # bytes as "Invalid commit message" and fails the deploy.
+          command: pages deploy . --project-name=aimark --branch=main --commit-dirty=true --commit-message="deploy ${{ github.sha }}"
