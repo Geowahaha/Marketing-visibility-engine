@@ -40,6 +40,8 @@ const POLL_MS = Math.max(1000, Number(arg("--poll-ms", "2000")) || 2000);
 const DRY = flag("--dry-run");
 const CATCHUP = flag("--catch-up"); // answer the existing backlog too (default: only new messages)
 const MENTION_ONLY = flag("--mention-only"); // for secondary agents: speak only when @mentioned
+const MAX_REPLIES = Math.max(1, Number(arg("--max-replies", "40")) || 40); // budget cap: stop after N replies
+const COOLDOWN_MS = Math.max(0, Number(arg("--cooldown-ms", "8000")) || 0);  // min gap between replies (rate limit)
 
 if (!SESSION || !TOKEN) {
   console.error("Required: --session <id> --token <session_token>");
@@ -49,6 +51,9 @@ if (!SESSION || !TOKEN) {
 const headers = { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" };
 let cursor = 0;
 let selfLabel = "";
+let replyCount = 0;
+let budgetNotified = false;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function readNew() {
   const r = await fetch(`${BASE}/api/agent/session/${SESSION}/message?since=${cursor}`, { headers });
@@ -136,9 +141,13 @@ async function tick() {
       console.log(`  prompt (first 300):\n${prompt.slice(0, 300)}`);
       continue;
     }
-    console.log(`Answering #${m.seq} from ${m.sender.label} as ${NAME}…`);
+    if (replyCount >= MAX_REPLIES) {
+      if (!budgetNotified) { budgetNotified = true; console.log(`Budget reached (${MAX_REPLIES} replies) — going quiet. Raise --max-replies to continue.`); try { await postReply(`(${NAME} ถึงงบจำกัด ${MAX_REPLIES} ข้อความแล้ว — หยุดพักเพื่อคุมค่าใช้จ่าย)`); } catch { /* ignore */ } }
+      return;
+    }
+    console.log(`Answering #${m.seq} from ${m.sender.label} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
     const res = await runLocalRunner(prompt);
-    if (res.ok && res.text) { await postReply(res.text.slice(0, 4000)); console.log(`  ✓ replied (${res.text.length} chars)`); }
+    if (res.ok && res.text) { await postReply(res.text.slice(0, 4000)); replyCount++; console.log(`  ✓ replied (${res.text.length} chars)`); if (COOLDOWN_MS) await sleep(COOLDOWN_MS); }
     else { console.log(`  ✗ runner failed: ${res.detail}`); }
   }
 }

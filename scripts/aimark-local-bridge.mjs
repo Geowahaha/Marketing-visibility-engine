@@ -1523,14 +1523,16 @@ async function detectAgents() {
 
 const residentAgents = new Map(); // pid -> { pid, name, session_id, runner, started_at, child }
 
-function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base }) {
+function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base, mention_only, max_replies }) {
   const script = path.join(__dirname, "aimark-resident-agent.mjs");
   const childArgs = [
     script,
     "--name", String(name || "Agent").slice(0, 40),
     "--runner", String(runner || "claude"),
     "--runner-cmd", String(runner_cmd || runner || "claude"),
+    "--max-replies", String(Math.max(1, Math.min(500, Number(max_replies) || 40))),
   ];
+  if (mention_only) childArgs.push("--mention-only");
   // Token + session via env so they never appear in the process arg list.
   const child = spawn(process.execPath, childArgs, {
     windowsHide: true,
@@ -1719,7 +1721,7 @@ const server = http.createServer(async (req, res) => {
       const runnerCmd = String(payload.runner_cmd || payload.runner || "").trim();
       if (!sid || !token) return json(res, 400, { error: "session_id_and_token_required" });
       if (!KNOWN_AGENTS.some((a) => a.command === runnerCmd)) return json(res, 400, { error: "runner_not_allowed", detail: runnerCmd });
-      const rec = spawnResidentAgent({ session_id: sid, token, runner: payload.runner || runnerCmd, runner_cmd: runnerCmd, name: payload.name, base: payload.base });
+      const rec = spawnResidentAgent({ session_id: sid, token, runner: payload.runner || runnerCmd, runner_cmd: runnerCmd, name: payload.name, base: payload.base, mention_only: !!payload.mention_only, max_replies: payload.max_replies });
       return json(res, 200, { status: "spawned", pid: rec.pid, name: rec.name, session_id: sid, runner: rec.runner });
     }
     // Stop a resident agent.
