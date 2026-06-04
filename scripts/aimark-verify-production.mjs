@@ -140,10 +140,12 @@ const steps = [
   ["syntax: scan.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "scan.js")])],
   ["syntax: system-health.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "system-health.js")])],
   ["syntax: local bridge", () => run(process.execPath, ["--check", rel("scripts", "aimark-local-bridge.mjs")])],
+  ["syntax: resident agent", () => run(process.execPath, ["--check", rel("scripts", "aimark-resident-agent.mjs")])],
   ["syntax: downloadable bridge", () => run(process.execPath, ["--check", rel("web", "downloads", "aimark-local-bridge.mjs")])],
   ["syntax: index.html scripts", () => verifyIndexScripts()],
   ["api smoke", () => run("npm", ["run", "test:api"], { cwd: webRoot })],
   ["bridge e2e", () => run("npm", ["run", "test:bridge"], { cwd: webRoot })],
+  ["piano cognition", () => run(process.execPath, [rel("scripts", "piano", "test-piano.mjs")])],
   ["python audits", () => run("python", ["-m", "pytest", "-q"], { cwd: repoRoot })],
   ["npm audit high", () => run("npm", ["audit", "--audit-level=high"], { cwd: webRoot })],
 ];

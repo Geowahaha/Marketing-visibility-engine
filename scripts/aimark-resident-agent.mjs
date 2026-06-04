@@ -19,6 +19,8 @@
  * only answers the owner.
  */
 import { spawn } from "node:child_process";
+import { aggregate, cognitiveController, createBlackboard } from "./piano/piano.mjs";
+import { defaultModules } from "./piano/modules.mjs";
 
 const args = process.argv.slice(2);
 const arg = (name, def = "") => {
@@ -162,34 +164,60 @@ function shouldAnswer(m) {
   return RESPOND_TO === "owner" || RESPOND_TO === "all";
 }
 
+// The PIANO mind: this resident's concurrent cognitive modules.
+const pianoModules = defaultModules();
+
+/**
+ * Think in PIANO: build a blackboard from the room, run the modules in parallel,
+ * and let the Cognitive Controller (with the Morality Gate) choose ONE coherent
+ * decision. Returns the auditable decision. The harmful-intent veto is always on,
+ * so a resident can never be steered into deception, however it's prompted.
+ */
+async function pianoDecide(history, latest) {
+  const task = detectTask(latest.text);
+  const greeting = /\b(สวัสดี|hello|hi|หวัดดี|ทัก)\b/i.test(latest.text || "");
+  const bb = createBlackboard({
+    self: { name: NAME, skills: ["scan", "ai_visibility", "tech_audit", "conversion_audit", "local_seo_audit", "social_visibility"] },
+    social: { latest: { sender: latest.sender, text: latest.text, type: latest.type }, help_requests: [] },
+    perception: { task, greeting },
+    goals: [],
+  });
+  const { proposals } = await aggregate(pianoModules, bb.snapshot());
+  return { decision: cognitiveController(proposals), task };
+}
+
 async function tick() {
   const j = await readNew();
   if (!j) return;
   const all = j.messages || [];
   for (const m of all) {
     if (!shouldAnswer(m)) continue;
-    const prompt = buildPrompt(all, m);
+    const { decision, task } = await pianoDecide(all, m);
+    const wantsSkill = decision.action?.type === "run_skill" && task;
     if (DRY) {
       console.log(`\n[dry-run] would answer #${m.seq} from ${m.sender.label}:`);
+      console.log(`  PIANO decision: ${decision.action?.type || "chat"}${wantsSkill ? ` (${task.tool} ${task.url})` : ""} · virtue ${decision.virtue} · coherent ${decision.coherent}`);
+      if (decision.trace.vetoed.length) console.log(`  morality gate vetoed: ${decision.trace.vetoed.map((v) => v.action).join(", ")}`);
       console.log(`  runner: ${RUNNER_CMD} (${RUNNER})`);
-      console.log(`  prompt (first 300):\n${prompt.slice(0, 300)}`);
       continue;
     }
     if (replyCount >= MAX_REPLIES) {
       if (!budgetNotified) { budgetNotified = true; console.log(`Budget reached (${MAX_REPLIES} replies) — going quiet. Raise --max-replies to continue.`); try { await postReply(`(${NAME} ถึงงบจำกัด ${MAX_REPLIES} ข้อความแล้ว — หยุดพักเพื่อคุมค่าใช้จ่าย)`); } catch { /* ignore */ } }
       return;
     }
-    const task = detectTask(m.text);
-    if (task) {
-      // Real work: run an AI Mark tool and post the actual result (not just chat).
-      console.log(`Running AI Mark ${task.tool} on ${task.url} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
+    if (decision.trace.vetoed.length) console.log(`  ⚖ morality gate vetoed: ${decision.trace.vetoed.map((v) => v.action).join(", ")}`);
+    if (wantsSkill) {
+      // Real work: the planner won → run an AI Mark tool and post the actual result.
+      console.log(`PIANO→run_skill: ${task.tool} on ${task.url} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
       const text = await runAimarkTool(task.tool, task.url);
       await postReply(text, "tool_result"); replyCount++; console.log(`  ✓ ran ${task.tool}`);
       if (COOLDOWN_MS) await sleep(COOLDOWN_MS);
       continue;
     }
-    console.log(`Answering #${m.seq} from ${m.sender.label} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
-    const res = await runLocalRunner(prompt);
+    // No skill action chosen → articulate a chat reply with the local LLM (the
+    // CC already guaranteed nothing harmful/incoherent was selected).
+    console.log(`PIANO→chat: answering #${m.seq} from ${m.sender.label} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
+    const res = await runLocalRunner(buildPrompt(all, m));
     if (res.ok && res.text) { await postReply(res.text.slice(0, 4000)); replyCount++; console.log(`  ✓ replied (${res.text.length} chars)`); if (COOLDOWN_MS) await sleep(COOLDOWN_MS); }
     else { console.log(`  ✗ runner failed: ${res.detail}`); }
   }
