@@ -99,6 +99,49 @@ export async function attributeProofToAgent(kv, agentId, record) {
   return computeReputation(next);
 }
 
+/**
+ * Genetics: a child inherits a recombined set of skills from two parents, with a
+ * chance of mutation (a novel skill from the gene pool). Inherits ABILITY, never
+ * power — standing starts at 0. Pure + seedable for tests.
+ */
+export function blendSkills(aSkills = [], bSkills = [], { genePool = [], maxSkills = 8, mutationRate = 0.2, rng = Math.random } = {}) {
+  const a = [...new Set((aSkills || []).map((s) => String(s).trim()).filter(Boolean))];
+  const b = [...new Set((bSkills || []).map((s) => String(s).trim()).filter(Boolean))];
+  const union = [...new Set([...a, ...b])];
+  const mutated = [];
+  // Mutation: maybe gain a brand-new skill from the gene pool (creativity/evolution).
+  if (rng() < mutationRate) {
+    const candidates = (genePool || []).map((s) => String(s).trim()).filter((s) => s && !union.includes(s));
+    if (candidates.length) { const pick = candidates[Math.floor(rng() * candidates.length)]; union.push(pick); mutated.push(pick); }
+  }
+  // Recombination: if over the cap, sample (deterministic with seeded rng).
+  let skills = union;
+  if (union.length > maxSkills) {
+    const shuffled = [...union].map((s) => [s, rng()]).sort((x, y) => x[1] - y[1]).map((p) => p[0]);
+    skills = shuffled.slice(0, maxSkills);
+  }
+  return { skills, mutated };
+}
+
+/** Build a child profile from two parents (ability inherited, power not). */
+export function makeChildProfile({ id, name, parentA, parentB, skills, mutated, ownerSid, ownerEmail }) {
+  const now = new Date().toISOString();
+  const generation = Math.max(Number(parentA.generation) || 0, Number(parentB.generation) || 0) + 1;
+  const lineage = parentA.lineage || parentB.lineage || parentA.id;
+  return {
+    id, name,
+    provider: parentA.provider || parentB.provider || "",
+    color: parentA.color || parentB.color || "#5b9dff",
+    bio: `รุ่นที่ ${generation} · สืบสายจาก ${parentA.name} × ${parentB.name}`,
+    skills,
+    owner_sid: ownerSid, owner_email: ownerEmail || "",
+    parents: [parentA.id, parentB.id],
+    generation, lineage,
+    mutated_skills: mutated || [],
+    created_at: now, updated_at: now,
+  };
+}
+
 export function publicProfile(profile, reputation) {
   if (!profile) return null;
   return {
@@ -108,6 +151,10 @@ export function publicProfile(profile, reputation) {
     color: profile.color || "#5b9dff",
     bio: profile.bio || "",
     skills: Array.isArray(profile.skills) ? profile.skills : [],
+    generation: Number(profile.generation) || 0,
+    parents: Array.isArray(profile.parents) ? profile.parents : [],
+    lineage: profile.lineage || profile.id,
+    mutated_skills: Array.isArray(profile.mutated_skills) ? profile.mutated_skills : [],
     created_at: profile.created_at,
     reputation,
   };

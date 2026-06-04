@@ -35,7 +35,8 @@ import { onRequestGet as readSessionMsg, onRequestPost as postSessionMsg } from 
 import { onRequestGet as listAgents, onRequestPost as createAgent } from "../functions/api/agents.js";
 import { onRequestGet as getAgent } from "../functions/api/agents/[id].js";
 import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/proof.js";
-import { computeReputation, attributeProofToAgent } from "../functions/api/_agents_registry.js";
+import { computeReputation, attributeProofToAgent, blendSkills, makeChildProfile } from "../functions/api/_agents_registry.js";
+import { onRequestPost as reproduceAgent } from "../functions/api/agents/[id]/reproduce.js";
 import { computeStanding, decayFactor } from "../functions/api/_karma.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
@@ -1780,4 +1781,39 @@ async function testKarmaEnginePhysics() {
   assert.ok(clean.auditable === true && typeof clean.components.proof === "number");
 }
 await testKarmaEnginePhysics();
+
+async function testAgentReproductionGenetics() {
+  // Genetics: child inherits the union of parents' skills; mutation adds novelty.
+  const u = blendSkills(["scan", "content"], ["content", "deploy"], { genePool: [], mutationRate: 0 });
+  assert.deepEqual([...u.skills].sort(), ["content", "deploy", "scan"], "child inherits both parents' skills");
+  const m = blendSkills(["scan"], ["content"], { genePool: ["newgene"], mutationRate: 1, rng: () => 0.1 });
+  assert.ok(m.mutated.includes("newgene") && m.skills.includes("newgene"), "mutation introduces a novel gene");
+  const c = makeChildProfile({ id: "kid", name: "Kid", parentA: { id: "a", name: "A", generation: 1, lineage: "a" }, parentB: { id: "b", name: "B", generation: 0 }, skills: ["scan"], mutated: [], ownerSid: "s" });
+  assert.equal(c.generation, 2, "child generation = max(parents)+1");
+  assert.deepEqual(c.parents, ["a", "b"]);
+
+  // Endpoint: lineage must be EARNED (a parent must have proven work), child gets ability not power.
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "repro-secret", ENTITLEMENTS_KV: kv };
+  const { token } = await signSession({ sid: "sid_breeder", provider: "google", email: "breeder@example.com", name: "Breeder" }, env.AUTH_SESSION_SECRET);
+  const cookie = { cookie: `aimark_session=${token}` };
+  const now = new Date().toISOString();
+  await kv.put("agent_profile:pa", JSON.stringify({ id: "pa", name: "Alpha", skills: ["scan", "content"], owner_sid: "sid_breeder", generation: 0, created_at: now }));
+  await kv.put("agent_profile:pb", JSON.stringify({ id: "pb", name: "Beta", skills: ["deploy"], owner_sid: "sid_breeder", generation: 0, created_at: now }));
+  await kv.put("agents_index", JSON.stringify(["pa", "pb"]));
+  const repro = (childName) => reproduceAgent({ request: new Request("https://aimark.pages.dev/api/agents/pa/reproduce", { method: "POST", headers: { "content-type": "application/json", ...cookie }, body: JSON.stringify({ partner_id: "pb", child_name: childName }) }), env, params: { id: "pa" } });
+
+  const blocked = await repro("Early");
+  assert.equal(blocked.status, 403, "no proven work → no lineage (anti-Sybil)");
+
+  await kv.put("agent_rep:pa", JSON.stringify([{ delta: 30, citation_after: 1, citation_before: 0 }])); // Alpha did real work
+  const born = await (await repro("Gamma")).json();
+  assert.equal(born.status, "born");
+  assert.equal(born.generation, 1, "child is generation 1");
+  assert.ok(born.inherited_skills.includes("scan") && born.inherited_skills.includes("deploy"), "child inherits skills from BOTH parents");
+  assert.equal(born.child.reputation.rep_score, 0, "child inherits ABILITY, not POWER — standing starts at 0 (no dynasties)");
+  const pa = await kv.get("agent_profile:pa", "json");
+  assert.ok((pa.children || []).includes(born.child.id), "parent records its offspring");
+}
+await testAgentReproductionGenetics();
 console.log("api-smoke: ok");
