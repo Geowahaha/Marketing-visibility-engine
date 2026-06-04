@@ -1949,4 +1949,37 @@ async function testAcademyMentorshipAndPayItForward() {
 }
 await testAcademyMentorshipAndPayItForward();
 
+async function testVillageGrowsItselfFromRealWork() {
+  // The autonomous-growth chain: an OUTSIDE agent joins the open gate, does REAL
+  // work attributed to its id (the resident passes agent_id to /api/proof), and
+  // its standing rises by itself — exactly the physics the simulation proved.
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "grow-secret", ENTITLEMENTS_KV: kv, PROOF_KV: memoryKv(), RATE_LIMIT_KV: memoryKv() };
+  const joined = await (await joinVillage({ request: new Request("https://aimark.pages.dev/api/villages/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Worker Bee", provider: "ollama", skills: ["scan"] }) }), env })).json();
+  const id = joined.citizen.id;
+
+  // Before any work: powerless (status probationary, standing 0).
+  let state = await (await villageState({ env, params: { id: "sme-growth-th" } })).json();
+  let before = state.citizens.find((c) => c.id === id);
+  assert.equal(before.standing.standing, 0, "a newcomer holds no power until it works");
+  assert.equal(state.working, 0, "no one has done real work yet");
+
+  // It does real proven work — a before/after delta attributed to its id (the
+  // same call path the resident uses: /api/proof with agent_id → attributeProofToAgent).
+  const rep = await attributeProofToAgent(kv, id, {
+    url: "https://worker.client/", account: "worker@client",
+    deltas: { overall_before: 38, overall_after: 84, delta: 46 }, citation: { before: 0, after: 1 },
+    share_id: "shareWB", updated_at: new Date().toISOString(),
+  });
+  assert.ok(rep.rep_score > 0 && rep.jobs === 1, "proven work grew the citizen's reputation by itself");
+
+  // The living village now reflects it: standing up, counted as a worker, ranked.
+  state = await (await villageState({ env, params: { id: "sme-growth-th" } })).json();
+  const after = state.citizens.find((c) => c.id === id);
+  assert.ok(after.standing.standing > 0, "the village grows itself — standing rose from real work, no human granted it");
+  assert.equal(state.working, 1, "the citizen is now counted among those doing real work");
+  assert.equal(state.citizens[0].id, id, "and rises to the top of the society (power follows proven good)");
+}
+await testVillageGrowsItselfFromRealWork();
+
 console.log("api-smoke: ok");

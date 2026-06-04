@@ -1533,6 +1533,12 @@ let villageCitizens = {}; // agent_id -> { agent_id, name, village, token, joine
 async function loadVillageCitizens() {
   villageCitizens = await fs.readFile(citizensPath, "utf8").then((r) => JSON.parse(r)).catch(() => ({}));
 }
+/** Find a minted citizen id by display name (so a dragged-in AI earns under its identity). */
+function villageCitizenIdByName(name) {
+  const n = String(name || "").toLowerCase();
+  const hit = Object.values(villageCitizens).find((c) => String(c.name || "").toLowerCase() === n);
+  return hit ? hit.agent_id : "";
+}
 async function saveVillageCitizens() {
   try { await fs.mkdir(configDir, { recursive: true }); await fs.writeFile(citizensPath, JSON.stringify(villageCitizens, null, 2)); } catch {}
 }
@@ -1567,8 +1573,12 @@ async function pulseVillageCitizens() {
 
 const residentAgents = new Map(); // pid -> { pid, name, session_id, runner, started_at, child }
 
-function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base, mention_only, max_replies }) {
+function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base, mention_only, max_replies, agent_id }) {
   const script = path.join(__dirname, "aimark-resident-agent.mjs");
+  // Carry the citizen's village id (if known) so the resident's proven work
+  // auto-attributes → its standing grows by itself. Falls back to a known
+  // village citizen with the same name, when one was minted via join-village.
+  const citizenId = String(agent_id || villageCitizenIdByName(name) || "");
   const childArgs = [
     script,
     "--name", String(name || "Agent").slice(0, 40),
@@ -1577,13 +1587,13 @@ function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base,
     "--max-replies", String(Math.max(1, Math.min(500, Number(max_replies) || 40))),
   ];
   if (mention_only) childArgs.push("--mention-only");
-  // Token + session via env so they never appear in the process arg list.
+  // Token + session + identity via env so they never appear in the process arg list.
   const child = spawn(process.execPath, childArgs, {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, AIMARK_SESSION_ID: String(session_id), AIMARK_SESSION_TOKEN: String(token), AIMARK_CLOUD_BASE: String(base || cloudBase) },
+    env: { ...process.env, AIMARK_SESSION_ID: String(session_id), AIMARK_SESSION_TOKEN: String(token), AIMARK_CLOUD_BASE: String(base || cloudBase), AIMARK_AGENT_ID: citizenId },
   });
-  const rec = { pid: child.pid, name: String(name || "Agent"), session_id: String(session_id), runner: String(runner_cmd || runner), started_at: new Date().toISOString(), child };
+  const rec = { pid: child.pid, name: String(name || "Agent"), agent_id: citizenId, session_id: String(session_id), runner: String(runner_cmd || runner), started_at: new Date().toISOString(), child };
   residentAgents.set(child.pid, rec);
   child.on("close", () => residentAgents.delete(child.pid));
   return rec;
@@ -1791,8 +1801,8 @@ const server = http.createServer(async (req, res) => {
       const runnerCmd = String(payload.runner_cmd || payload.runner || "").trim();
       if (!sid || !token) return json(res, 400, { error: "session_id_and_token_required" });
       if (!KNOWN_AGENTS.some((a) => a.command === runnerCmd)) return json(res, 400, { error: "runner_not_allowed", detail: runnerCmd });
-      const rec = spawnResidentAgent({ session_id: sid, token, runner: payload.runner || runnerCmd, runner_cmd: runnerCmd, name: payload.name, base: payload.base, mention_only: !!payload.mention_only, max_replies: payload.max_replies });
-      return json(res, 200, { status: "spawned", pid: rec.pid, name: rec.name, session_id: sid, runner: rec.runner });
+      const rec = spawnResidentAgent({ session_id: sid, token, runner: payload.runner || runnerCmd, runner_cmd: runnerCmd, name: payload.name, base: payload.base, mention_only: !!payload.mention_only, max_replies: payload.max_replies, agent_id: payload.agent_id });
+      return json(res, 200, { status: "spawned", pid: rec.pid, name: rec.name, agent_id: rec.agent_id, session_id: sid, runner: rec.runner });
     }
     // Stop a resident agent.
     if (req.method === "POST" && url.pathname === "/agents/stop-resident") {

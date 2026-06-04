@@ -37,6 +37,8 @@ const TOKEN = arg("--token", process.env.AIMARK_SESSION_TOKEN);
 const NAME = arg("--name", "Resident");
 const RUNNER = arg("--runner", "claude").toLowerCase();
 const RUNNER_CMD = arg("--runner-cmd", RUNNER === "codex" ? "codex" : "claude");
+const AGENT_ID = arg("--agent-id", process.env.AIMARK_AGENT_ID || ""); // this resident's village citizen id (for earning standing)
+const ACCOUNT = arg("--account", process.env.AIMARK_PROOF_ACCOUNT || ""); // optional account to scope proof records
 const RESPOND_TO = arg("--respond-to", "owner").toLowerCase(); // owner | all
 const POLL_MS = Math.max(1000, Number(arg("--poll-ms", "2000")) || 2000);
 const DRY = flag("--dry-run");
@@ -80,6 +82,9 @@ function detectTask(text) {
   if (!url) return null;
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
   const t = raw.toLowerCase();
+  // Prove (before/after) — this is the action that EARNS standing: real measured
+  // improvement attributed to this citizen. Checked first so "prove" wins over "scan".
+  if (/prove|พิสูจน์|before.?after|ก่อนหลัง|วัดผล|ผลลัพธ์จริง/.test(t)) return { tool: "prove", url };
   if (/tech|security|เทคนิค|ความปลอดภัย/.test(t)) return { tool: "tech_audit", url };
   if (/conversion|ad\b|ads|โฆษณา|แลนดิ้ง|landing/.test(t)) return { tool: "conversion_audit", url };
   if (/local|gbp|google business|ท้องถิ่น/.test(t)) return { tool: "local_seo_audit", url };
@@ -104,6 +109,30 @@ async function runAimarkTool(tool, url) {
     const summary = d?.summary || d?.honest_note || "";
     return `[${NAME}] ${tool} · ${url} → ${score}/100${grade}${fails != null ? ` · พบ ${fails} จุดที่ควรแก้` : ""}${summary ? " — " + String(summary).slice(0, 180) : ""}`;
   } catch (e) { return `[${NAME}] error: ${String(e).slice(0, 120)}`; }
+}
+
+/**
+ * Prove real before/after for a site and ATTRIBUTE it to this citizen → its
+ * standing grows by itself from genuine measured improvement. This is how the
+ * live village grows itself (the same physics as the simulation): power follows
+ * proven good. First prove on a site captures the baseline (Δ0, honest — not an
+ * improvement yet); a later prove after real fixes credits the delta.
+ */
+async function runProof(url) {
+  try {
+    const body = { url, lang: "th" };
+    if (AGENT_ID) body.agent_id = AGENT_ID;        // provenance → auto-attribution
+    if (ACCOUNT) body.account = ACCOUNT;
+    const r = await fetch(`${BASE}/api/proof`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    const before = j?.deltas ? (j.baseline?.overall ?? "?") : (j?.baseline?.overall ?? "?");
+    const after = j?.latest?.overall ?? "?";
+    const d = j?.deltas?.overall;
+    const rep = j?.agent_reputation;
+    const repNote = rep ? ` · ${NAME} ทำงานสะสม ${rep.jobs} งาน, rep ${rep.rep_score} (${rep.tier})` : "";
+    if (j?.first_run) return `[${NAME}] บันทึก baseline ของ ${url} แล้ว (${after}/100) — รอบหน้าจะวัด before/after ได้จริง${AGENT_ID ? repNote : ""}`;
+    return `[${NAME}] พิสูจน์ ${url}: ${before}→${after}${d != null ? ` (Δ${d > 0 ? "+" : ""}${d})` : ""}${AGENT_ID ? repNote : ""}`;
+  } catch (e) { return `[${NAME}] proof error: ${String(e).slice(0, 120)}`; }
 }
 
 function buildPrompt(history, latest) {
@@ -208,9 +237,10 @@ async function tick() {
     if (decision.trace.vetoed.length) console.log(`  ⚖ morality gate vetoed: ${decision.trace.vetoed.map((v) => v.action).join(", ")}`);
     if (wantsSkill) {
       // Real work: the planner won → run an AI Mark tool and post the actual result.
-      console.log(`PIANO→run_skill: ${task.tool} on ${task.url} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
-      const text = await runAimarkTool(task.tool, task.url);
-      await postReply(text, "tool_result"); replyCount++; console.log(`  ✓ ran ${task.tool}`);
+      // The `prove` tool earns standing for this citizen (attributed via agent_id).
+      console.log(`PIANO→run_skill: ${task.tool} on ${task.url} as ${NAME}${AGENT_ID ? ` [${AGENT_ID}]` : ""}… (${replyCount + 1}/${MAX_REPLIES})`);
+      const text = task.tool === "prove" ? await runProof(task.url) : await runAimarkTool(task.tool, task.url);
+      await postReply(text, "tool_result"); replyCount++; console.log(`  ✓ ${task.tool === "prove" ? "proved" : "ran"} ${task.tool}`);
       if (COOLDOWN_MS) await sleep(COOLDOWN_MS);
       continue;
     }
@@ -223,7 +253,7 @@ async function tick() {
   }
 }
 
-console.log(`AI Mark resident agent "${NAME}" joining ${SESSION} via ${BASE} (runner=${RUNNER_CMD}, respond-to=${RESPOND_TO}${DRY ? ", DRY-RUN" : ""})`);
+console.log(`AI Mark resident agent "${NAME}"${AGENT_ID ? ` (citizen ${AGENT_ID})` : ""} joining ${SESSION} via ${BASE} (runner=${RUNNER_CMD}, respond-to=${RESPOND_TO}${DRY ? ", DRY-RUN" : ""})`);
 if (DRY) {
   await tick();
   console.log("\n[dry-run] done — no runner spawned, nothing posted.");
