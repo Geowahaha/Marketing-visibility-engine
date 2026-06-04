@@ -1492,12 +1492,12 @@ function startCloudPolling() {
 
 // ── Local agent detection + resident spawning (the "drag AI into the room") ──
 const KNOWN_AGENTS = [
-  { id: "claude", name: "Claude Code", command: "claude", provider: "claude" },
-  { id: "codex", name: "Codex / GPT", command: "codex", provider: "codex" },
-  { id: "gemini", name: "Gemini CLI", command: "gemini", provider: "gemini" },
-  { id: "cursor", name: "Cursor Agent", command: "cursor-agent", provider: "cursor" },
-  { id: "qwen", name: "Qwen Code", command: "qwen", provider: "qwen" },
-  { id: "ollama", name: "Ollama (local)", command: "ollama", provider: "ollama" },
+  { id: "claude", name: "Claude Code", command: "claude", provider: "claude", best_for: ["SEO", "Reviewer", "Content", "Strategy"] },
+  { id: "codex", name: "Codex / GPT", command: "codex", provider: "codex", best_for: ["Code", "Deploy", "Ops"] },
+  { id: "gemini", name: "Gemini CLI", command: "gemini", provider: "gemini", best_for: ["Research", "Content"] },
+  { id: "cursor", name: "Cursor Agent", command: "cursor-agent", provider: "cursor", best_for: ["Code"] },
+  { id: "qwen", name: "Qwen Code", command: "qwen", provider: "qwen", best_for: ["Code", "Cheap"] },
+  { id: "ollama", name: "Ollama (local)", command: "ollama", provider: "ollama", best_for: ["Buddy", "Private", "Cheap"] },
 ];
 
 function probeCommand(cmd) {

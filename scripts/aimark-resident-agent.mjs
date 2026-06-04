@@ -39,6 +39,7 @@ const RESPOND_TO = arg("--respond-to", "owner").toLowerCase(); // owner | all
 const POLL_MS = Math.max(1000, Number(arg("--poll-ms", "2000")) || 2000);
 const DRY = flag("--dry-run");
 const CATCHUP = flag("--catch-up"); // answer the existing backlog too (default: only new messages)
+const MENTION_ONLY = flag("--mention-only"); // for secondary agents: speak only when @mentioned
 
 if (!SESSION || !TOKEN) {
   console.error("Required: --session <id> --token <session_token>");
@@ -81,24 +82,45 @@ function buildPrompt(history, latest) {
 
 function runLocalRunner(prompt) {
   return new Promise((resolve) => {
-    const cmdArgs = RUNNER === "codex"
-      ? ["exec", prompt]
-      : ["-p", prompt, "--output-format", "text"];
-    const child = spawn(RUNNER_CMD, cmdArgs, { windowsHide: true });
+    // Prompt goes via STDIN, never argv → no shell-injection / quoting issues.
+    // shell:true on Windows so npm .cmd shims (claude/codex) resolve (Node 22 won't
+    // spawn a .cmd without it). RUNNER_CMD is whitelisted by the bridge.
+    const cmdArgs = RUNNER === "codex" ? ["exec"] : ["-p", "--output-format", "text"];
+    const child = spawn(RUNNER_CMD, cmdArgs, { windowsHide: true, shell: process.platform === "win32", stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "";
-    const to = setTimeout(() => { child.kill(); resolve({ ok: false, text: "", detail: "runner_timeout" }); }, 120000);
+    const to = setTimeout(() => { try { child.kill(); } catch {} resolve({ ok: false, text: "", detail: "runner_timeout" }); }, 120000);
     child.stdout.on("data", (d) => (out += d.toString()));
     child.stderr.on("data", (d) => (err += d.toString()));
     child.on("error", (e) => { clearTimeout(to); resolve({ ok: false, text: "", detail: String(e) }); });
     child.on("close", (code) => { clearTimeout(to); resolve({ ok: code === 0, text: out.trim(), detail: err.slice(0, 200) }); });
+    try { child.stdin.write(prompt); child.stdin.end(); } catch { /* ignore */ }
   });
 }
 
+function hasAnyMention(text) { return /@[\w฀-๿-]+/.test(text || ""); }
+function mentionsMe(text) {
+  const t = (text || "").toLowerCase();
+  if (t.includes("@all") || t.includes("@everyone")) return true;
+  const myNames = [NAME.toLowerCase(), (selfLabel || "").toLowerCase()].filter(Boolean);
+  return myNames.some((n) => n && t.includes("@" + n));
+}
+
+/**
+ * Turn-taking rules (loop-safe team room):
+ *  - never answer my own messages
+ *  - answer ONLY the human owner (never another agent) → no agent↔agent loops
+ *  - if the owner @mentions someone, only the mentioned agent answers
+ *  - --mention-only (secondary agents): speak ONLY when @mentioned
+ */
 function shouldAnswer(m) {
   if (!m || !m.sender) return false;
-  if (m.sender.label === selfLabel) return false;          // never answer self
-  if (RESPOND_TO === "owner" && m.sender.role !== "owner") return false;
-  return ["chat", "plan", "tool_request", "approval_request"].includes(m.type);
+  if (m.sender.label === selfLabel) return false;
+  if (m.sender.role !== "owner") return false;
+  if (!["chat", "plan", "tool_request", "approval_request"].includes(m.type)) return false;
+  const mentioned = hasAnyMention(m.text);
+  if (mentioned) return mentionsMe(m.text);
+  if (MENTION_ONLY) return false;            // un-mentioned + secondary agent → stay quiet
+  return RESPOND_TO === "owner" || RESPOND_TO === "all";
 }
 
 async function tick() {
