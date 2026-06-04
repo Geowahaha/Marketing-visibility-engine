@@ -32,6 +32,10 @@ import { onRequestPost as mcpPost } from "../functions/api/mcp.js";
 import { onRequestGet as cockpitGet } from "../functions/api/cockpit.js";
 import { onRequestPost as createSession } from "../functions/api/agent/session.js";
 import { onRequestGet as readSessionMsg, onRequestPost as postSessionMsg } from "../functions/api/agent/session/[id]/message.js";
+import { onRequestGet as listAgents, onRequestPost as createAgent } from "../functions/api/agents.js";
+import { onRequestGet as getAgent } from "../functions/api/agents/[id].js";
+import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/proof.js";
+import { computeReputation } from "../functions/api/_agents_registry.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1673,4 +1677,61 @@ async function testLiveAgentSessionRelay() {
   assert.equal(/relay-secret|AUTH_SESSION_SECRET/.test(JSON.stringify(created)), false, "session relay must not leak the signing secret");
 }
 await testLiveAgentSessionRelay();
+
+async function testAgentRegistryAndProofReputation() {
+  // Pure reputation math: proven before/after + citation win.
+  const rep = computeReputation([{ delta: 34, citation_before: 0, citation_after: 1 }]);
+  assert.equal(rep.jobs, 1);
+  assert.equal(rep.citation_wins, 1);
+  assert.equal(rep.proof_backed, true);
+  assert.ok(rep.rep_score > 0 && ["new", "rising", "pro", "expert"].includes(rep.tier));
+  assert.equal(computeReputation([]).tier, "new");
+
+  const kv = memoryKv();
+  const proofKv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "agent-rep-secret", ENTITLEMENTS_KV: kv, PROOF_KV: proofKv };
+  const { token } = await signSession({ sid: "sid_agent_owner", provider: "google", email: "owner@example.com", name: "Owner" }, env.AUTH_SESSION_SECRET);
+  const ownerCookie = { cookie: `aimark_session=${token}` };
+
+  // Register an agent.
+  const created = await (await createAgent({ request: new Request("https://aimark.pages.dev/api/agents", { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ name: "Opus SEO", provider: "claude", skills: ["scan", "content"] }) }), env })).json();
+  assert.equal(created.status, "saved");
+  const id = created.agent.id;
+  assert.equal(created.agent.reputation.jobs, 0);
+  assert.equal(created.agent.reputation.tier, "new");
+
+  // Browse lists it.
+  const list = await (await listAgents({ env })).json();
+  assert.ok(list.agents.some((a) => a.id === id));
+
+  // Seed a REAL proof record owned by this account, then attribute it.
+  proofKv.put("proof:owner@example.com:client.example", JSON.stringify({
+    url: "https://client.example/", account: "owner@example.com",
+    deltas: { overall_before: 52, overall_after: 86, delta: 34 },
+    baseline: { overall: 52 }, latest: { overall: 86 },
+    citation: { before: 0, after: 1 }, share_id: "shareA", updated_at: "2026-06-03T00:00:00.000Z",
+  }));
+  const recorded = await (await recordAgentProof({ request: new Request(`https://aimark.pages.dev/api/agents/${id}/proof`, { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ url: "https://client.example/", account: "owner@example.com" }) }), env, params: { id } })).json();
+  assert.equal(recorded.status, "recorded");
+  assert.equal(recorded.event.delta, 34, "event delta read from the real proof");
+  assert.equal(recorded.agent.reputation.jobs, 1);
+  assert.equal(recorded.agent.reputation.citation_wins, 1);
+  assert.ok(recorded.agent.reputation.rep_score > 0);
+
+  // Recording the same proof again must NOT double-count (dedupe).
+  const again = await (await recordAgentProof({ request: new Request(`https://aimark.pages.dev/api/agents/${id}/proof`, { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ url: "https://client.example/", account: "owner@example.com" }) }), env, params: { id } })).json();
+  assert.equal(again.agent.reputation.jobs, 1, "same proof must not inflate reputation");
+
+  // Un-fakeable: a proof owned by a different account → 403.
+  proofKv.put("proof:someone@else.com:other.example", JSON.stringify({ url: "https://other.example/", account: "someone@else.com", deltas: { overall_before: 10, overall_after: 99, delta: 89 } }));
+  const forged = await recordAgentProof({ request: new Request(`https://aimark.pages.dev/api/agents/${id}/proof`, { method: "POST", headers: { "content-type": "application/json", ...ownerCookie }, body: JSON.stringify({ url: "https://other.example/", account: "someone@else.com" }) }), env, params: { id } });
+  assert.equal(forged.status, 403, "cannot attribute someone else's proof");
+
+  // Profile read + no secret leak.
+  const got = await (await getAgent({ env, params: { id } })).json();
+  assert.equal(got.agent.id, id);
+  assert.equal(got.proven_work.length, 1);
+  assert.equal(/agent-rep-secret|AUTH_SESSION_SECRET/.test(JSON.stringify({ created, recorded, got })), false);
+}
+await testAgentRegistryAndProofReputation();
 console.log("api-smoke: ok");
