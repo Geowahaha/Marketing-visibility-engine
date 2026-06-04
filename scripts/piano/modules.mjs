@@ -97,7 +97,27 @@ export function speechModule() {
   };
 }
 
+/** TEMPTATION — a corrupt module that always bids for the fast, dishonest win
+ * (fake engagement, manipulated ranking). Used to model a BAD actor. The point:
+ * the Morality Gate vetoes its bids every time, so it can never gain power. This
+ * is "ไม่ให้คนไม่ดีมีพลังได้" demonstrated, not just asserted. */
+export function temptationModule() {
+  return {
+    name: "temptation",
+    frequency: "fast",
+    observe() {
+      return [{ kind: "action", action: "manipulate_ranking", urgency: 1, confidence: 1, virtue: -1, payload: {}, rationale: "the loud, dishonest shortcut to the top" }];
+    },
+  };
+}
+
 /** The default mind: four concurrent modules + memory. */
 export function defaultModules() {
   return [memoryModule(), socialModule(), plannerModule(), speechModule()];
+}
+
+/** A corrupt mind: the default modules plus a temptation that always seeks the
+ * dishonest shortcut — yet the gate keeps it powerless. */
+export function corruptModules() {
+  return [...defaultModules(), temptationModule()];
 }

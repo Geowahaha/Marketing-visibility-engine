@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { aggregate, moralityGate, cognitiveController, virtueOf, createBlackboard } from "./piano.mjs";
 import { defaultModules } from "./modules.mjs";
 import { PianoAgent } from "./agent.mjs";
+import { simulate } from "./village-sim.mjs";
 
 /* 1. Parallel aggregation: every module contributes; a throwing module is isolated. */
 async function testParallelAggregation() {
@@ -115,6 +116,18 @@ async function testFullAgentTick() {
   assert.equal(idle.decision.speech, null, "nothing worth saying → stays honestly silent");
 }
 
+/* 8. Civilization: a whole society of PIANO minds self-organizes toward good. */
+async function testCivilizationEmergence() {
+  for (const seed of [7, 3, 42]) {
+    const r = await simulate({ seed, steps: 40, population: 16 });
+    assert.equal(r.metrics.bad_executed, 0, `seed ${seed}: not a single harmful action ever executes (the gate holds at scale)`);
+    assert.ok(r.metrics.vetoed > 0, `seed ${seed}: corrupt bids were caught and vetoed`);
+    assert.ok(r.metrics.help > 0, `seed ${seed}: neighbours helped each other (the town shares)`);
+    assert.ok(r.metrics.work > 0, `seed ${seed}: real work got done`);
+    assert.ok(r.avg_good_standing > r.avg_bad_standing * 3, `seed ${seed}: good rises far above corrupt (${r.avg_good_standing} vs ${r.avg_bad_standing}) — power follows proven good, not noise`);
+  }
+}
+
 await testParallelAggregation();
 testMoralityVeto();
 testGoodBeatsLoudEvil();
@@ -122,4 +135,5 @@ testVirtueBoost();
 testCoherence();
 testVirtueInference();
 await testFullAgentTick();
+await testCivilizationEmergence();
 console.log("piano: ok");
