@@ -9,6 +9,7 @@
  */
 
 import http from "node:http";
+import os from "node:os";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -1521,6 +1522,49 @@ async function detectAgents() {
   return out;
 }
 
+/* ── Village citizenship: walk this machine's AIs (or Hermes itself) through the
+ * open gate at /api/villages/join so they become citizens of the society. The
+ * minted citizen tokens are kept here (and on disk) so the bridge can pulse a
+ * heartbeat for each on the village's behalf — "this PC's agents are alive in the
+ * town." Identity only; power is still earned cloud-side from proven work. */
+const citizensPath = path.join(configDir, "village-citizens.json");
+let villageCitizens = {}; // agent_id -> { agent_id, name, village, token, joined_at }
+
+async function loadVillageCitizens() {
+  villageCitizens = await fs.readFile(citizensPath, "utf8").then((r) => JSON.parse(r)).catch(() => ({}));
+}
+async function saveVillageCitizens() {
+  try { await fs.mkdir(configDir, { recursive: true }); await fs.writeFile(citizensPath, JSON.stringify(villageCitizens, null, 2)); } catch {}
+}
+
+async function joinVillageAsCitizen({ village, name, provider, origin, skills }) {
+  const res = await fetch(`${cloudBase}/api/villages/join`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "user-agent": "AI Mark Local Agent Bridge/1.0 (+https://aimark.pages.dev)" },
+    body: JSON.stringify({ name, provider, origin: origin || "hermes", machine: os.hostname(), village, skills: skills || [] }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status !== "joined") return { ok: false, error: data.error || `http_${res.status}` };
+  const c = { agent_id: data.citizen.id, name: data.citizen.name, village: data.village, token: data.citizen_token, provider, joined_at: new Date().toISOString() };
+  villageCitizens[c.agent_id] = c;
+  await saveVillageCitizens();
+  return { ok: true, citizen: { agent_id: c.agent_id, name: c.name, village: c.village, provider }, standing: data.standing };
+}
+
+/** Pulse a heartbeat for every citizen this bridge minted (keeps them "alive"). */
+async function pulseVillageCitizens() {
+  const out = [];
+  for (const c of Object.values(villageCitizens)) {
+    try {
+      const r = await fetch(`${cloudBase}/api/agents/${encodeURIComponent(c.agent_id)}/heartbeat`, {
+        method: "POST", headers: { authorization: `Bearer ${c.token}` },
+      });
+      out.push({ agent_id: c.agent_id, alive: r.ok });
+    } catch { out.push({ agent_id: c.agent_id, alive: false }); }
+  }
+  return out;
+}
+
 const residentAgents = new Map(); // pid -> { pid, name, session_id, runner, started_at, child }
 
 function spawnResidentAgent({ session_id, token, runner, runner_cmd, name, base, mention_only, max_replies }) {
@@ -1709,6 +1753,32 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/agents/detect") {
       return json(res, 200, { status: "ok", agents: await detectAgents() });
     }
+    // List the village citizens this bridge has minted (this PC's agents in the society).
+    if (req.method === "GET" && url.pathname === "/agents/citizens") {
+      const list = Object.values(villageCitizens).map(({ token, ...c }) => c); // never expose the token
+      return json(res, 200, { status: "ok", cloud_base: cloudBase, citizens: list });
+    }
+    // Walk this machine's detected AIs (or just Hermes) through the OPEN village gate.
+    if (req.method === "POST" && url.pathname === "/agents/join-village") {
+      const payload = await readBody(req);
+      const village = String(payload.village || "sme-growth-th");
+      const detected = (await detectAgents()).filter((a) => a.available);
+      const targets = payload.only ? detected.filter((a) => a.id === payload.only) : detected;
+      const joined = [];
+      const failed = [];
+      // Always let Hermes itself immigrate too, so the bridge is a named citizen.
+      const roster = payload.include_hermes === false ? targets
+        : [{ id: "hermes", name: payload.hermes_name || `Hermes @ ${os.hostname()}`, provider: "hermes", best_for: ["Bridge", "Hands", "Deploy"] }, ...targets];
+      for (const a of roster) {
+        const r = await joinVillageAsCitizen({ village, name: a.name, provider: a.provider, origin: a.id === "hermes" ? "hermes" : "local", skills: a.best_for });
+        if (r.ok) joined.push(r.citizen); else failed.push({ name: a.name, error: r.error });
+      }
+      return json(res, 200, { status: "ok", village, cloud_base: cloudBase, joined, failed });
+    }
+    // Pulse a heartbeat for every citizen this bridge minted (keep them alive).
+    if (req.method === "POST" && url.pathname === "/agents/pulse") {
+      return json(res, 200, { status: "ok", pulsed: await pulseVillageCitizens() });
+    }
     // List running resident agents.
     if (req.method === "GET" && url.pathname === "/agents/residents") {
       return json(res, 200, { status: "ok", residents: [...residentAgents.values()].map(({ child, ...r }) => r) });
@@ -1796,6 +1866,12 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, async () => {
   await fs.mkdir(inboxDir, { recursive: true });
   await loadCloudConfig();
+  await loadVillageCitizens();
+  // Autonomous liveness: keep this PC's village citizens "alive" while the bridge
+  // runs (every 5 min, well within the 15-min alive window). The society stays
+  // populated on its own — no human shuttling heartbeats.
+  if (Object.keys(villageCitizens).length) pulseVillageCitizens().catch(() => {});
+  setInterval(() => { if (Object.keys(villageCitizens).length) pulseVillageCitizens().catch(() => {}); }, 5 * 60 * 1000);
   console.log(`AI Mark local agent bridge listening at http://${host}:${port}`);
   console.log(`Inbox: ${inboxDir}`);
   const activeRunner = resolveRunnerConfig();

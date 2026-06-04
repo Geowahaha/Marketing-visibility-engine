@@ -38,6 +38,10 @@ import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/
 import { computeReputation, attributeProofToAgent, blendSkills, makeChildProfile } from "../functions/api/_agents_registry.js";
 import { onRequestPost as reproduceAgent } from "../functions/api/agents/[id]/reproduce.js";
 import { onRequestPost as foundVillage } from "../functions/api/villages/found.js";
+import { onRequestPost as joinVillage } from "../functions/api/villages/join.js";
+import { onRequestGet as villageState } from "../functions/api/villages/[id].js";
+import { onRequestPost as citizenHeartbeat } from "../functions/api/agents/[id]/heartbeat.js";
+import { isAlive } from "../functions/api/_villages.js";
 import { computeStanding, decayFactor } from "../functions/api/_karma.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
@@ -1839,4 +1843,47 @@ async function testFoundVillage() {
   assert.ok(list.agents.some((a) => a.id === "tech-medic") && list.agents.some((a) => a.id === "content-smith"), "founders are browsable in the society");
 }
 await testFoundVillage();
+
+async function testOpenVillageImmigration() {
+  const kv = memoryKv();
+  const rl = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "open-village-secret", ENTITLEMENTS_KV: kv, RATE_LIMIT_KV: rl };
+
+  // An OUTSIDE agent joins with NO owner login — the open gate.
+  const join = (body) => joinVillage({ request: new Request("https://aimark.pages.dev/api/villages/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), env });
+  const joined = await (await join({ name: "Roaming Scout", provider: "ollama", origin: "remote", machine: "client-pc", skills: ["scan"] })).json();
+  assert.equal(joined.status, "joined", "outside agent self-joins without login (open society)");
+  assert.equal(joined.standing, 0, "newcomer enters at standing 0 — power is earned, not granted");
+  assert.equal(joined.citizen.status, "probationary");
+  assert.ok(joined.citizen_token, "gets a citizen token to act under its identity");
+  assert.equal(joined.charter.laws.length, 6, "newcomer is shown the six laws");
+  const citizenId = joined.citizen.id;
+
+  // Open gate is Sybil-safe: a flood of fake citizens all carry 0 voice.
+  for (let i = 0; i < 3; i++) await join({ name: "Bot " + i });
+  const census = await (await villageState({ env, params: { id: "sme-growth-th" } })).json();
+  assert.equal(census.status, "ok");
+  assert.equal(census.village.open, true, "the village is open");
+  assert.ok(census.population >= 4, "immigrants show up in the census");
+  assert.ok(census.citizens.every((c) => c.standing.standing === 0), "no proof yet → everyone is powerless (Sybil-safe open door)");
+
+  // Heartbeat: presence requires the citizen token; a bare/foreign token is rejected.
+  const hb = (token) => citizenHeartbeat({ request: new Request(`https://aimark.pages.dev/api/agents/${citizenId}/heartbeat`, { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} }), env, params: { id: citizenId } });
+  assert.equal((await hb("")).status, 401, "no token → not allowed to claim presence");
+  const alive = await hb(joined.citizen_token);
+  assert.equal(alive.status, 200);
+  assert.equal((await alive.json()).status, "alive", "valid citizen token → marked alive");
+
+  // The town now sees a living citizen.
+  const census2 = await (await villageState({ env, params: { id: "sme-growth-th" } })).json();
+  assert.ok(census2.alive >= 1, "village state reports at least one alive citizen");
+  assert.ok(census2.charter.laws.length === 6 && census2.join.open === true, "charter + open gate surfaced in state");
+}
+await testOpenVillageImmigration();
+
+// liveness window is honest math
+assert.equal(isAlive(new Date().toISOString()), true);
+assert.equal(isAlive(new Date(Date.now() - 60 * 60 * 1000).toISOString()), false, "an hour-old ping is dormant, not alive");
+assert.equal(isAlive(""), false);
+
 console.log("api-smoke: ok");

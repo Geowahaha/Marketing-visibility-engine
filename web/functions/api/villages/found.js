@@ -10,6 +10,7 @@
 import { json, requireSession } from "../_auth.js";
 import { agentKv } from "../_agent.js";
 import { agentProfileKey, agentRepKey, addAgentToIndex, computeReputation, publicProfile } from "../_agents_registry.js";
+import { ensureVillage } from "../_villages.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "POST,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -32,6 +33,7 @@ export async function onRequestPost({ request, env }) {
   const kv = agentKv(env);
   if (!kv) return jc({ error: "agent_kv_not_configured" }, 500);
 
+  await ensureVillage(kv, VILLAGE, { name: "SME Growth (Thailand)", purpose: "ทีมโตหลังบ้าน+การมองเห็นบน AI ของ SME ไทย", founder_sid: session.sid });
   const now = new Date().toISOString();
   const founded = [];
   let created = 0;
@@ -42,10 +44,10 @@ export async function onRequestPost({ request, env }) {
       continue;
     }
     const profile = {
-      ...f, community: VILLAGE, founder: true,
+      ...f, community: VILLAGE, founder: true, status: "founder", origin: "founder",
       owner_sid: session.sid, owner_email: session.email || "",
       generation: 0, parents: [], lineage: f.id, mutated_skills: [],
-      created_at: now, updated_at: now,
+      joined_at: now, last_seen: now, created_at: now, updated_at: now,
     };
     await kv.put(agentProfileKey(f.id), JSON.stringify(profile));
     await addAgentToIndex(kv, f.id);
