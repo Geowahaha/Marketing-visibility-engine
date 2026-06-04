@@ -18,6 +18,7 @@
  */
 
 import { agentKv } from "./_agent.js";
+import { attributeProofToAgent } from "./_agents_registry.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -662,6 +663,13 @@ async function handlePost(context) {
   await store.put(key, JSON.stringify(record));
   await store.put(shareKey(shareId), JSON.stringify({ key, account, host: bareHost(url), updated_at: latest.at }));
 
+  // Auto-attribute this proof to the agent that did the work → its reputation
+  // grows by itself from real before/after results (best-effort; never blocks).
+  let agent_reputation = null;
+  if (payload.agent_id) {
+    try { agent_reputation = await attributeProofToAgent(agentKv(env), String(payload.agent_id), record); } catch { /* best-effort */ }
+  }
+
   return json({
     url, account, persisted: true,
     first_run: !prior,
@@ -669,6 +677,7 @@ async function handlePost(context) {
     share_id: shareId,
     proof_url: proofUrl,
     headline: lang === "th" ? report.headline_th : report.headline_en,
+    agent_reputation,
   });
 }
 

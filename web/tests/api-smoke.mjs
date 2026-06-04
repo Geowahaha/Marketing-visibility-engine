@@ -35,7 +35,7 @@ import { onRequestGet as readSessionMsg, onRequestPost as postSessionMsg } from 
 import { onRequestGet as listAgents, onRequestPost as createAgent } from "../functions/api/agents.js";
 import { onRequestGet as getAgent } from "../functions/api/agents/[id].js";
 import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/proof.js";
-import { computeReputation } from "../functions/api/_agents_registry.js";
+import { computeReputation, attributeProofToAgent } from "../functions/api/_agents_registry.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1732,6 +1732,11 @@ async function testAgentRegistryAndProofReputation() {
   assert.equal(got.agent.id, id);
   assert.equal(got.proven_work.length, 1);
   assert.equal(/agent-rep-secret|AUTH_SESSION_SECRET/.test(JSON.stringify({ created, recorded, got })), false);
+
+  // Auto-attribute helper (the hook proof.js calls when a proof is saved with agent_id).
+  const rep2 = await attributeProofToAgent(kv, id, { url: "https://h2.example/", account: "owner@example.com", deltas: { overall_before: 40, overall_after: 70, delta: 30 }, citation: { before: 0, after: 0 }, share_id: "shareB", updated_at: "2026-06-03T01:00:00.000Z" });
+  assert.equal(rep2.jobs, 2, "auto-attribute grows reputation with a second proven job");
+  assert.equal(await attributeProofToAgent(kv, "ghost-agent", { share_id: "x" }), null, "unknown agent → no-op");
 }
 await testAgentRegistryAndProofReputation();
 console.log("api-smoke: ok");

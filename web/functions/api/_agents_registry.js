@@ -84,6 +84,21 @@ export function proofEventFromRecord(rec) {
   };
 }
 
+/** Append a proof event to an agent's reputation (dedup-safe). Returns the new
+ * reputation, or null if the agent doesn't exist. Used by both the explicit
+ * endpoint and the automatic hook in proof.js. */
+export async function attributeProofToAgent(kv, agentId, record) {
+  if (!kv || !agentId || !record) return null;
+  const profile = await kv.get(agentProfileKey(agentId), "json");
+  if (!profile) return null;
+  const event = proofEventFromRecord(record);
+  const events = (await kv.get(agentRepKey(agentId), "json")) || [];
+  const dedupeKey = event.share_id || event.host;
+  const next = events.filter((e) => (e.share_id || e.host) !== dedupeKey).concat([event]).slice(-200);
+  await kv.put(agentRepKey(agentId), JSON.stringify(next));
+  return computeReputation(next);
+}
+
 export function publicProfile(profile, reputation) {
   if (!profile) return null;
   return {
