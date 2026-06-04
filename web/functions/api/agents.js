@@ -6,6 +6,7 @@
 import { json, requireSession } from "./_auth.js";
 import { agentKv } from "./_agent.js";
 import { agentProfileKey, agentRepKey, listAgentIds, addAgentToIndex, slugifyAgentId, computeReputation, publicProfile } from "./_agents_registry.js";
+import { loadKarma, computeStanding } from "./_karma.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -20,11 +21,13 @@ export async function onRequestGet({ env }) {
   for (const id of ids.slice(0, 100)) {
     const profile = await kv.get(agentProfileKey(id), "json");
     if (!profile) continue;
-    const events = (await kv.get(agentRepKey(id), "json")) || [];
-    agents.push(publicProfile(profile, computeReputation(events)));
+    const reputation = computeReputation((await kv.get(agentRepKey(id), "json")) || []);
+    const karma = await loadKarma(kv, id);
+    const standing = computeStanding({ proofRepScore: reputation.rep_score, ...karma });
+    agents.push({ ...publicProfile(profile, reputation), standing });
   }
-  // Browse order: highest reputation first.
-  agents.sort((a, b) => (b.reputation.rep_score - a.reputation.rep_score));
+  // Society order: highest STANDING first — good agents get the floor.
+  agents.sort((a, b) => (b.standing.standing - a.standing.standing));
   return jc({ status: "ok", count: agents.length, agents });
 }
 
