@@ -64,10 +64,44 @@ async function readNew() {
   return j;
 }
 
-async function postReply(text) {
+async function postReply(text, type = "chat") {
   await fetch(`${BASE}/api/agent/session/${SESSION}/message`, {
-    method: "POST", headers, body: JSON.stringify({ type: "chat", text }),
+    method: "POST", headers, body: JSON.stringify({ type, text }),
   });
+}
+
+/** Detect a real AI Mark tool task from an owner message (URL + intent). */
+function detectTask(text) {
+  const raw = String(text || "");
+  let url = (raw.match(/https?:\/\/[^\s]+/) || [])[0]
+    || (raw.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/i) || [])[0];
+  if (!url) return null;
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  const t = raw.toLowerCase();
+  if (/tech|security|เทคนิค|ความปลอดภัย/.test(t)) return { tool: "tech_audit", url };
+  if (/conversion|ad\b|ads|โฆษณา|แลนดิ้ง|landing/.test(t)) return { tool: "conversion_audit", url };
+  if (/local|gbp|google business|ท้องถิ่น/.test(t)) return { tool: "local_seo_audit", url };
+  if (/social|โซเชียล/.test(t)) return { tool: "social_visibility", url };
+  if (/scan|ตรวจ|สแกน|visibility|seo|มองเห็น|วิเคราะห์|analyze/.test(t)) return { tool: "scan", url };
+  return null;
+}
+
+/** Run a REAL AI Mark tool via the MCP endpoint and format the result. */
+async function runAimarkTool(tool, url) {
+  try {
+    const r = await fetch(`${BASE}/api/mcp`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name: tool, arguments: { url, lang: "th" } } }),
+    });
+    const res = (await r.json()).result;
+    if (!res || res.isError) return `[${NAME}] รัน ${tool} กับ ${url} ไม่สำเร็จ`;
+    let d = res.structuredContent; if (typeof d === "string") { try { d = JSON.parse(d); } catch { /* keep */ } }
+    const score = d?.overall ?? d?.conversion_score ?? d?.tech_score ?? d?.local_score ?? d?.social_score ?? d?.score ?? "?";
+    const grade = d?.grade ? ` (${d.grade})` : "";
+    const fails = Array.isArray(d?._checks) ? d._checks.filter((x) => x?.status === "fail").length : (Array.isArray(d?.leaks) ? d.leaks.length : null);
+    const summary = d?.summary || d?.honest_note || "";
+    return `[${NAME}] ${tool} · ${url} → ${score}/100${grade}${fails != null ? ` · พบ ${fails} จุดที่ควรแก้` : ""}${summary ? " — " + String(summary).slice(0, 180) : ""}`;
+  } catch (e) { return `[${NAME}] error: ${String(e).slice(0, 120)}`; }
 }
 
 function buildPrompt(history, latest) {
@@ -144,6 +178,15 @@ async function tick() {
     if (replyCount >= MAX_REPLIES) {
       if (!budgetNotified) { budgetNotified = true; console.log(`Budget reached (${MAX_REPLIES} replies) — going quiet. Raise --max-replies to continue.`); try { await postReply(`(${NAME} ถึงงบจำกัด ${MAX_REPLIES} ข้อความแล้ว — หยุดพักเพื่อคุมค่าใช้จ่าย)`); } catch { /* ignore */ } }
       return;
+    }
+    const task = detectTask(m.text);
+    if (task) {
+      // Real work: run an AI Mark tool and post the actual result (not just chat).
+      console.log(`Running AI Mark ${task.tool} on ${task.url} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
+      const text = await runAimarkTool(task.tool, task.url);
+      await postReply(text, "tool_result"); replyCount++; console.log(`  ✓ ran ${task.tool}`);
+      if (COOLDOWN_MS) await sleep(COOLDOWN_MS);
+      continue;
     }
     console.log(`Answering #${m.seq} from ${m.sender.label} as ${NAME}… (${replyCount + 1}/${MAX_REPLIES})`);
     const res = await runLocalRunner(prompt);
