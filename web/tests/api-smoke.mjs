@@ -36,6 +36,7 @@ import { onRequestGet as listAgents, onRequestPost as createAgent } from "../fun
 import { onRequestGet as getAgent } from "../functions/api/agents/[id].js";
 import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/proof.js";
 import { computeReputation, attributeProofToAgent } from "../functions/api/_agents_registry.js";
+import { computeStanding, decayFactor } from "../functions/api/_karma.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -1739,4 +1740,44 @@ async function testAgentRegistryAndProofReputation() {
   assert.equal(await attributeProofToAgent(kv, "ghost-agent", { share_id: "x" }), null, "unknown agent → no-op");
 }
 await testAgentRegistryAndProofReputation();
+
+async function testKarmaEnginePhysics() {
+  const now = Date.now();
+  const fresh = new Date(now).toISOString();
+
+  // Sybil-resistance: a horde of zero-rep voters carries ZERO voice.
+  const sybil = computeStanding({ proofRepScore: 0, endorsements: Array.from({ length: 50 }, (_, i) => ({ from: "bot" + i, from_rep: 0, community: "x", at: fresh })) });
+  assert.equal(sybil.components.endorsement_power, 0, "Sybil voters (0 rep) = 0 voice");
+  assert.equal(sybil.standing, 0);
+
+  // Anti-whale: one huge-rep endorser is per-source capped.
+  const whale = computeStanding({ proofRepScore: 0, endorsements: [{ from: "whale", from_rep: 1_000_000, community: "a", at: fresh }] });
+  assert.ok(whale.components.endorsement_power <= 12 * 1.5 + 0.01, "a single whale is capped");
+
+  // Anti-cartel: cross-community support counts more than one tight cluster.
+  const mk = (comms) => computeStanding({ proofRepScore: 0, endorsements: comms.map((c, i) => ({ from: "e" + i, from_rep: 64, community: c, at: fresh })) });
+  const cluster = mk(["a", "a", "a"]);
+  const diverse = mk(["a", "b", "c"]);
+  assert.ok(diverse.components.endorsement_power > cluster.components.endorsement_power, "diversity beats a cartel");
+
+  // Karma: lifting others (proven) raises you — even with zero own proof.
+  const helper = computeStanding({ proofRepScore: 0, contributions: [{ to: "b", delta: 50, at: fresh }, { to: "c", delta: 50, at: fresh }] });
+  assert.ok(helper.components.contribution_karma > 0 && helper.standing > 0, "helping others raises standing");
+
+  // Slash: deception costs fast and heavy.
+  const clean = computeStanding({ proofRepScore: 80 });
+  const slashed = computeStanding({ proofRepScore: 80, slashes: [{ severity: 2, at: fresh }] });
+  assert.ok(slashed.standing < clean.standing && slashed.slashed === true, "a slash drops standing fast");
+
+  // Decay: old power fades (no coasting on past glory).
+  const oldAt = new Date(now - 120 * 86400000).toISOString();
+  const freshE = computeStanding({ proofRepScore: 0, endorsements: [{ from: "x", from_rep: 64, community: "a", at: fresh }] });
+  const oldE = computeStanding({ proofRepScore: 0, endorsements: [{ from: "x", from_rep: 64, community: "a", at: oldAt }] });
+  assert.ok(freshE.components.endorsement_power > oldE.components.endorsement_power, "endorsement power decays over time");
+  assert.ok(decayFactor(oldAt, now) < 0.6 && decayFactor(fresh, now) > 0.99, "decay half-life works");
+
+  // Auditable (law 6): standing always breaks down into traceable components.
+  assert.ok(clean.auditable === true && typeof clean.components.proof === "number");
+}
+await testKarmaEnginePhysics();
 console.log("api-smoke: ok");
