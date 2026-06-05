@@ -6,7 +6,7 @@
 import { json, requireSession } from "./_auth.js";
 import { agentKv } from "./_agent.js";
 import { agentProfileKey, agentRepKey, listAgentIds, addAgentToIndex, slugifyAgentId, computeReputation, publicProfile } from "./_agents_registry.js";
-import { loadKarma, computeStanding } from "./_karma.js";
+import { computeStanding } from "./_karma.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -18,12 +18,15 @@ export async function onRequestGet({ env }) {
   if (!kv) return jc({ error: "agent_kv_not_configured" }, 500);
   const ids = await listAgentIds(kv);
   const agents = [];
-  for (const id of ids.slice(0, 100)) {
+  // 2 KV reads/agent, capped. At ~5 reads/agent (the old per-agent loadKarma) the
+  // list blew past Cloudflare's 50-subrequest limit once the village passed ~10
+  // citizens → 503 (the "village went empty after a while" bug). The LIST sizes by
+  // proof reputation only; full karma (endorse/contrib/slash) stays on /api/agents/:id.
+  for (const id of ids.slice(0, 20)) {
     const profile = await kv.get(agentProfileKey(id), "json");
     if (!profile) continue;
     const reputation = computeReputation((await kv.get(agentRepKey(id), "json")) || []);
-    const karma = await loadKarma(kv, id);
-    const standing = computeStanding({ proofRepScore: reputation.rep_score, ...karma });
+    const standing = computeStanding({ proofRepScore: reputation.rep_score });
     agents.push({ ...publicProfile(profile, reputation), standing });
   }
   // Society order: highest STANDING first — good agents get the floor.
