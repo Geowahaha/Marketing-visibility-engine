@@ -38,6 +38,8 @@ import { onRequestPost as recordAgentProof } from "../functions/api/agents/[id]/
 import { computeReputation, attributeProofToAgent, blendSkills, makeChildProfile } from "../functions/api/_agents_registry.js";
 import { onRequestPost as reproduceAgent } from "../functions/api/agents/[id]/reproduce.js";
 import { onRequestPost as foundVillage } from "../functions/api/villages/found.js";
+import { generateAgentReadinessBundle } from "../functions/api/_agent_readiness.js";
+import { onRequestPost as genReadiness } from "../functions/api/agent-readiness/generate.js";
 import { onRequestPost as joinVillage } from "../functions/api/villages/join.js";
 import { onRequestGet as villageState } from "../functions/api/villages/[id].js";
 import { onRequestPost as citizenHeartbeat } from "../functions/api/agents/[id]/heartbeat.js";
@@ -1981,5 +1983,29 @@ async function testVillageGrowsItselfFromRealWork() {
   assert.equal(state.citizens[0].id, id, "and rises to the top of the society (power follows proven good)");
 }
 await testVillageGrowsItselfFromRealWork();
+
+async function testAgentReadinessGenerator() {
+  const b = generateAgentReadinessBundle({ url: "https://www.Example.com/", name: "Example Co", description: "We do X.", contact_email: "hi@example.com", key_pages: [{ path: "/services", title: "Services", desc: "what we do" }] });
+  assert.equal(b.host, "example.com", "host normalised");
+  assert.equal(b.count, 7, "bundle has 7 deploy-ready files");
+  const byPath = Object.fromEntries(b.files.map((f) => [f.path, f.content]));
+  assert.ok(/^# Auth\.md\b/m.test(byPath["auth.md"]), "auth.md carries the required '# Auth.md' H1");
+  assert.ok(byPath["llms.txt"].includes("Example Co"), "llms.txt names the business");
+  assert.ok(/Content-Signal:/.test(byPath["robots.txt"]) && /GPTBot/.test(byPath["robots.txt"]) && /sitemap\.xml/.test(byPath["robots.txt"]), "robots.txt has Content-Signals + AI bot rules + sitemap");
+  const idx = JSON.parse(byPath[".well-known/agent-skills/index.json"]);
+  assert.ok(idx.$schema && Array.isArray(idx.skills) && idx.skills[0].name && idx.skills[0].description, "agent-skills index is valid JSON with $schema + skills");
+  const card = JSON.parse(byPath[".well-known/mcp/server-card.json"]);
+  assert.ok(card.name && card.description, "mcp server-card is valid JSON");
+  assert.equal(generateAgentReadinessBundle({}).error, "url_required", "url is required");
+
+  const env = { AUTH_SESSION_SECRET: "ar-secret" };
+  const noauth = await genReadiness({ request: new Request("https://aimark.pages.dev/api/agent-readiness/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: "x.com" }) }), env });
+  assert.equal(noauth.status, 401, "generator requires login (it's the paid deliverable)");
+  const { token } = await signSession({ sid: "sid_ar", provider: "google", email: "a@b.com", name: "A" }, env.AUTH_SESSION_SECRET);
+  const ok = await (await genReadiness({ request: new Request("https://aimark.pages.dev/api/agent-readiness/generate", { method: "POST", headers: { "content-type": "application/json", cookie: `aimark_session=${token}` }, body: JSON.stringify({ url: "shop.example.com", name: "Shop" }) }), env })).json();
+  assert.equal(ok.status, "generated");
+  assert.equal(ok.count, 7, "endpoint returns the 7-file bundle");
+}
+await testAgentReadinessGenerator();
 
 console.log("api-smoke: ok");
