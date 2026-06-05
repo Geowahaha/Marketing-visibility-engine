@@ -17,18 +17,17 @@ export async function onRequestGet({ env }) {
   const kv = agentKv(env);
   if (!kv) return jc({ error: "agent_kv_not_configured" }, 500);
   const ids = await listAgentIds(kv);
-  const agents = [];
-  // 2 KV reads/agent, capped. At ~5 reads/agent (the old per-agent loadKarma) the
-  // list blew past Cloudflare's 50-subrequest limit once the village passed ~10
-  // citizens → 503 (the "village went empty after a while" bug). The LIST sizes by
-  // proof reputation only; full karma (endorse/contrib/slash) stays on /api/agents/:id.
-  for (const id of ids.slice(0, 20)) {
+  // 2 KV reads/agent, capped, READ IN PARALLEL. At ~5 reads/agent (the old per-agent
+  // loadKarma) the list blew past Cloudflare's 50-subrequest limit once the village
+  // passed ~10 citizens → 503; and sequential reads made it ~4s (felt like "empty").
+  // The LIST sizes by proof reputation only; full karma stays on /api/agents/:id.
+  const hydrated = await Promise.all(ids.slice(0, 20).map(async (id) => {
     const profile = await kv.get(agentProfileKey(id), "json");
-    if (!profile) continue;
+    if (!profile) return null;
     const reputation = computeReputation((await kv.get(agentRepKey(id), "json")) || []);
-    const standing = computeStanding({ proofRepScore: reputation.rep_score });
-    agents.push({ ...publicProfile(profile, reputation), standing });
-  }
+    return { ...publicProfile(profile, reputation), standing: computeStanding({ proofRepScore: reputation.rep_score }) };
+  }));
+  const agents = hydrated.filter(Boolean);
   // Society order: highest STANDING first — good agents get the floor.
   agents.sort((a, b) => (b.standing.standing - a.standing.standing));
   return jc({ status: "ok", count: agents.length, agents });
