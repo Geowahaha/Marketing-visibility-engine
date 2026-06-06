@@ -90,7 +90,10 @@ function detectTask(text) {
   if (/local|gbp|google business|ท้องถิ่น/.test(t)) return { tool: "local_seo_audit", url };
   if (/social|โซเชียล/.test(t)) return { tool: "social_visibility", url };
   if (/scan|ตรวจ|สแกน|visibility|seo|มองเห็น|วิเคราะห์|analyze/.test(t)) return { tool: "scan", url };
-  return null;
+  // Names a site but no specific tool → PROVE it (the village-changing action): real
+  // before/after work attributed to this citizen. So any "<anything> <domain>" makes
+  // the resident DO real work + move the village, instead of chatting about the repo.
+  return { tool: "prove", url };
 }
 
 /** Run a REAL AI Mark tool via the MCP endpoint and format the result. */
