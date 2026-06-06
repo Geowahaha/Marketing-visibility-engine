@@ -1621,6 +1621,20 @@ async function pollAgentJobStatus(jobId,m=null,opts={}){
     const r=await fetch(`/api/agent/jobs/status?job_id=${encodeURIComponent(jobId)}`,{cache:"no-store"});
     const d=await r.json();
     if(!r.ok)return null;
+    // Cloud status lags the local runner. The bridge knows the live truth — pull its
+    // fresh progress so the panel shows "running · <stage>" the instant work starts,
+    // with no manual "Check progress" click. (Terminal states stay cloud-driven so the
+    // full result/markdown is ready when we stream it.)
+    try{
+      const lr=await fetch(`${BRIDGE_BASE}/aimark/jobs/${encodeURIComponent(jobId)}/progress`,bridgeRequestOptions({cache:"no-store"}));
+      if(lr.ok){
+        const lp=(await lr.json())?.progress;
+        if(lp&&lp.status){
+          if(lp.status==="running"&&["queued","delivered_to_bridge","",null,undefined].includes(d.status))d.status="running";
+          d.progress={...(d.progress||{}),...lp};
+        }
+      }
+    }catch(e){/* bridge unreachable → fall back to cloud-only status */}
     if(opts.panel)updateAgentJobProgressPanel(opts.panel,d);
     const progress=d.progress||{};
     const staleJobId=d.job_id||progress.job_id||jobId;
@@ -1682,7 +1696,7 @@ async function pollAgentJobStatus(jobId,m=null,opts={}){
 function startAgentJobPolling(jobId,m=null,panel=null){
   clearInterval(agentJobPollTimer);
   pollAgentJobStatus(jobId,m,{panel}).catch(()=>{});
-  agentJobPollTimer=setInterval(()=>pollAgentJobStatus(jobId,m,{panel}).catch(()=>{}),5000);
+  const tick=()=>pollAgentJobStatus(jobId,m,{panel}).catch(()=>{}); tick(); agentJobPollTimer=setInterval(tick,3000);
   setTimeout(async ()=>{
     if(agentJobPollTimer){
       clearInterval(agentJobPollTimer);
