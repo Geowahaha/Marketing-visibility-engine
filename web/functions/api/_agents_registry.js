@@ -96,13 +96,23 @@ export async function attributeProofToAgent(kv, agentId, record) {
   const dedupeKey = event.share_id || event.host;
   const next = events.filter((e) => (e.share_id || e.host) !== dedupeKey).concat([event]).slice(-200);
   await kv.put(agentRepKey(agentId), JSON.stringify(next));
+  const reputation = computeReputation(next);
+  // Denormalize reputation onto the profile so the village LIST needs only 1 KV
+  // read/agent (no per-agent rep read) → it scales past ~20 citizens without hitting
+  // Cloudflare's 50-subrequest cap. Reputation only ever changes here, so it stays
+  // accurate; the detail endpoint always recomputes from events as the source of truth.
+  try {
+    profile.rep = reputation;
+    profile.updated_at = new Date().toISOString();
+    await kv.put(agentProfileKey(agentId), JSON.stringify(profile));
+  } catch { /* best-effort; list falls back to a zero-state reputation */ }
   // Pay-it-forward: a share of this proven improvement flows back to whoever
   // taught this agent — power earned by lifting others up. Best-effort.
   try {
     const { flowKarmaToMentors } = await import("./_mentorship.js");
     await flowKarmaToMentors(kv, profile, event);
   } catch { /* never break the proof path on mentorship */ }
-  return computeReputation(next);
+  return reputation;
 }
 
 /**

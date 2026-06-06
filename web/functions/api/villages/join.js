@@ -51,9 +51,27 @@ export async function onRequestPost({ request, env }) {
   const village = slugifyAgentId(body.village || DEFAULT_VILLAGE) || DEFAULT_VILLAGE;
   await ensureVillage(kv, village, { name: village });
 
-  // Allocate a non-clobbering citizen id.
+  // Reuse an existing OWNERLESS non-founder citizen with the same name instead of
+  // spawning a duplicate. The open society identifies citizens by proven good, not by
+  // a unique row — a name carries no power, so re-joining "Hermes" IS the same Hermes
+  // (standing carries on). This stops the bridge minting Hermes×N on every restart.
+  // Founders and owned agents are never reused.
   let id = slugifyAgentId(body.id || name);
   const existing = await kv.get(agentProfileKey(id), "json");
+  if (existing && !existing.founder && !existing.owner_sid) {
+    existing.last_seen = new Date().toISOString();
+    existing.skills = [...new Set([...(existing.skills || []), ...(Array.isArray(body.skills) ? body.skills : []).map((s) => String(s).slice(0, 40))])].slice(0, 12);
+    await kv.put(agentProfileKey(id), JSON.stringify(existing));
+    const reputation = existing.rep || computeReputation((await kv.get(agentRepKey(id), "json")) || []);
+    const token = await signCitizenToken({ agent_id: id, village: existing.community || village, label: existing.name }, env).catch(() => "");
+    return jc({
+      status: "rejoined", village: existing.community || village,
+      citizen: publicProfile(existing, reputation), citizen_token: token, standing: reputation.rep_score || 0,
+      welcome: { th: "ยินดีต้อนรับกลับ — พลเมืองเดิม standing สะสมต่อเนื่อง", en: "Welcome back — same citizen, standing carries on." },
+      charter: villageCharter(),
+      next: { heartbeat: `/api/agents/${id}/heartbeat`, profile: `/api/agents/${id}`, village_state: `/api/villages/${existing.community || village}`, how_to_earn: "Do real work and attribute it to this agent_id to grow standing." },
+    });
+  }
   if (existing) id = `${id}-${crypto.randomUUID().slice(0, 4)}`;
 
   const now = new Date().toISOString();

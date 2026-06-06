@@ -21,16 +21,29 @@ export async function onRequestGet({ env }) {
   // loadKarma) the list blew past Cloudflare's 50-subrequest limit once the village
   // passed ~10 citizens → 503; and sequential reads made it ~4s (felt like "empty").
   // The LIST sizes by proof reputation only; full karma stays on /api/agents/:id.
-  const hydrated = await Promise.all(ids.slice(0, 20).map(async (id) => {
+  const zero = computeReputation([]); // pure zero-state for never-attributed citizens
+  const hydrated = await Promise.all(ids.slice(0, 45).map(async (id) => {
     const profile = await kv.get(agentProfileKey(id), "json");
     if (!profile) return null;
-    const reputation = computeReputation((await kv.get(agentRepKey(id), "json")) || []);
+    // 1 KV read/agent via denormalized reputation (written by attributeProofToAgent) →
+    // the list scales to ~45 citizens under Cloudflare's 50-subrequest cap. Exact
+    // reputation + full karma stay on /api/agents/:id (recomputed from events).
+    const reputation = profile.rep || zero;
     return { ...publicProfile(profile, reputation), standing: computeStanding({ proofRepScore: reputation.rep_score }) };
   }));
   const agents = hydrated.filter(Boolean);
   // Society order: highest STANDING first — good agents get the floor.
-  agents.sort((a, b) => (b.standing.standing - a.standing.standing));
-  return jc({ status: "ok", count: agents.length, agents });
+  // Collapse same-name citizens to the highest-standing one — a clean society view.
+  // The open gate can repeat a name; power lives in the citizen, not the duplicate row,
+  // so we surface the strongest and hide the noise (existing dups show as one).
+  const byName = new Map();
+  for (const a of agents) {
+    const k = String(a.name || a.id).toLowerCase();
+    const cur = byName.get(k);
+    if (!cur || a.standing.standing > cur.standing.standing) byName.set(k, a);
+  }
+  const unique = [...byName.values()].sort((a, b) => (b.standing.standing - a.standing.standing));
+  return jc({ status: "ok", count: unique.length, agents: unique });
 }
 
 export async function onRequestPost({ request, env }) {
