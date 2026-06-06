@@ -21,14 +21,14 @@ export async function onRequestGet({ env }) {
   // loadKarma) the list blew past Cloudflare's 50-subrequest limit once the village
   // passed ~10 citizens → 503; and sequential reads made it ~4s (felt like "empty").
   // The LIST sizes by proof reputation only; full karma stays on /api/agents/:id.
-  const zero = computeReputation([]); // pure zero-state for never-attributed citizens
-  const hydrated = await Promise.all(ids.slice(0, 45).map(async (id) => {
+  const hydrated = await Promise.all(ids.slice(0, 24).map(async (id) => {
     const profile = await kv.get(agentProfileKey(id), "json");
     if (!profile) return null;
-    // 1 KV read/agent via denormalized reputation (written by attributeProofToAgent) →
-    // the list scales to ~45 citizens under Cloudflare's 50-subrequest cap. Exact
-    // reputation + full karma stay on /api/agents/:id (recomputed from events).
-    const reputation = profile.rep || zero;
+    // Prefer denormalized reputation (profile.rep, written by attributeProofToAgent) =
+    // 1 KV read/agent; fall back to rep events for citizens that earned BEFORE the
+    // denorm so no standing is lost. Cap 24 keeps worst-case (2 reads/agent) under
+    // Cloudflare's 50-subrequest limit. Full karma + exact rep on /api/agents/:id.
+    const reputation = profile.rep || computeReputation((await kv.get(agentRepKey(id), "json")) || []);
     return { ...publicProfile(profile, reputation), standing: computeStanding({ proofRepScore: reputation.rep_score }) };
   }));
   const agents = hydrated.filter(Boolean);
