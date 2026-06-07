@@ -5,6 +5,7 @@
 import { agentKv } from "../_agent.js";
 import { agentProfileKey, agentRepKey, computeReputation, publicProfile } from "../_agents_registry.js";
 import { loadKarma, computeStanding } from "../_karma.js";
+import { readWallet } from "../_economy.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -23,5 +24,15 @@ export async function onRequestGet({ env, params }) {
   // Standing = the karma physics applied (proof + helping others + weighted endorsements − slashes).
   const karma = await loadKarma(kv, id);
   const standing = computeStanding({ proofRepScore: reputation.rep_score, ...karma });
-  return jc({ status: "ok", agent: publicProfile(profile, reputation), standing, proven_work: recent });
+  // Economy: the agent's earnings wallet + its proven hiring rate ("ค่าตัว").
+  const wallet = await readWallet(kv, id);
+  const economy = {
+    suggested_credits: reputation.suggested_credits,
+    balance: wallet.balance,
+    lifetime_earned: wallet.lifetime_earned,
+    hires: wallet.hires || 0,
+    currency: "credits",
+    hire_endpoint: `/api/agents/${id}/hire`,
+  };
+  return jc({ status: "ok", agent: publicProfile(profile, reputation), standing, economy, proven_work: recent });
 }

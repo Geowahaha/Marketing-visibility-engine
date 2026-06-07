@@ -47,6 +47,7 @@ export async function onRequestPost({ request, env }) {
       ...f, community: VILLAGE, founder: true, status: "founder", origin: "founder",
       owner_sid: session.sid, owner_email: session.email || "",
       generation: 0, parents: [], lineage: f.id, mutated_skills: [],
+      rep: computeReputation([]),  // denormalized so the society list reads it in 1 KV op
       joined_at: now, last_seen: now, created_at: now, updated_at: now,
     };
     await kv.put(agentProfileKey(f.id), JSON.stringify(profile));

@@ -17,18 +17,16 @@ export async function onRequestGet({ env }) {
   const kv = agentKv(env);
   if (!kv) return jc({ error: "agent_kv_not_configured" }, 500);
   const ids = await listAgentIds(kv);
-  // 2 KV reads/agent, capped, READ IN PARALLEL. At ~5 reads/agent (the old per-agent
-  // loadKarma) the list blew past Cloudflare's 50-subrequest limit once the village
-  // passed ~10 citizens → 503; and sequential reads made it ~4s (felt like "empty").
-  // The LIST sizes by proof reputation only; full karma stays on /api/agents/:id.
-  const hydrated = await Promise.all(ids.slice(0, 24).map(async (id) => {
+  // Exactly 1 KV read/agent, READ IN PARALLEL. Reputation is read from the
+  // denormalized `profile.rep` (written on create + by attributeProofToAgent +
+  // backfilled by /api/agents/migrate-rep). No per-agent rep-events read here, so
+  // worst case is 1 (index) + 45 = 46 subrequests — under Cloudflare's 50 cap.
+  // Any straggler still missing profile.rep shows a zero-state reputation until the
+  // migration backfills it (its exact rep + full karma are always on /api/agents/:id).
+  const hydrated = await Promise.all(ids.slice(0, 45).map(async (id) => {
     const profile = await kv.get(agentProfileKey(id), "json");
     if (!profile) return null;
-    // Prefer denormalized reputation (profile.rep, written by attributeProofToAgent) =
-    // 1 KV read/agent; fall back to rep events for citizens that earned BEFORE the
-    // denorm so no standing is lost. Cap 24 keeps worst-case (2 reads/agent) under
-    // Cloudflare's 50-subrequest limit. Full karma + exact rep on /api/agents/:id.
-    const reputation = profile.rep || computeReputation((await kv.get(agentRepKey(id), "json")) || []);
+    const reputation = profile.rep || computeReputation([]);
     return { ...publicProfile(profile, reputation), standing: computeStanding({ proofRepScore: reputation.rep_score }) };
   }));
   const agents = hydrated.filter(Boolean);
@@ -73,8 +71,11 @@ export async function onRequestPost({ request, env }) {
     created_at: existing?.created_at || now,
     updated_at: now,
   };
+  // Stamp denormalized reputation on create so the society list always reads it in
+  // 1 KV op (re-registering an own agent keeps any reputation already earned).
+  const events = (await kv.get(agentRepKey(id), "json")) || [];
+  profile.rep = computeReputation(events);
   await kv.put(agentProfileKey(id), JSON.stringify(profile));
   await addAgentToIndex(kv, id);
-  const events = (await kv.get(agentRepKey(id), "json")) || [];
-  return jc({ status: "saved", agent: publicProfile(profile, computeReputation(events)) });
+  return jc({ status: "saved", agent: publicProfile(profile, profile.rep) });
 }

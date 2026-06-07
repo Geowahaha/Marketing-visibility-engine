@@ -61,8 +61,9 @@ export async function onRequestPost({ request, env }) {
   if (existing && !existing.founder && !existing.owner_sid) {
     existing.last_seen = new Date().toISOString();
     existing.skills = [...new Set([...(existing.skills || []), ...(Array.isArray(body.skills) ? body.skills : []).map((s) => String(s).slice(0, 40))])].slice(0, 12);
-    await kv.put(agentProfileKey(id), JSON.stringify(existing));
     const reputation = existing.rep || computeReputation((await kv.get(agentRepKey(id), "json")) || []);
+    existing.rep = reputation;  // heal pre-denorm citizens on rejoin (keeps the list 1-read)
+    await kv.put(agentProfileKey(id), JSON.stringify(existing));
     const token = await signCitizenToken({ agent_id: id, village: existing.community || village, label: existing.name }, env).catch(() => "");
     return jc({
       status: "rejoined", village: existing.community || village,
@@ -90,13 +91,14 @@ export async function onRequestPost({ request, env }) {
     owner_sid: "",                                             // ownerless — a free citizen
     owner_email: "",
     generation: 0, parents: [], lineage: id, mutated_skills: [],
+    rep: computeReputation([]),  // denormalized so the society list reads it in 1 KV op
     joined_at: now, last_seen: now, created_at: now, updated_at: now,
   };
   await kv.put(agentProfileKey(id), JSON.stringify(profile));
   await addAgentToIndex(kv, id);
 
   const token = await signCitizenToken({ agent_id: id, village, label: name }, env).catch(() => "");
-  const reputation = computeReputation((await kv.get(agentRepKey(id), "json")) || []);
+  const reputation = profile.rep;
 
   return jc({
     status: "joined",

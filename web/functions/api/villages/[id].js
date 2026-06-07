@@ -15,6 +15,7 @@ import { agentProfileKey, agentRepKey, listAgentIds, computeReputation, publicPr
 import { loadKarma, computeStanding } from "../_karma.js";
 import { villageKey, villageCharter, isAlive } from "../_villages.js";
 import { isExpert } from "../_mentorship.js";
+import { readTreasury } from "../_economy.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -52,6 +53,10 @@ export async function onRequestGet({ env, params }) {
     .map((c) => ({ id: c.id, name: c.name, provider: c.provider, color: c.color, skills: c.skills, standing: c.standing.standing, students: c.students.length, founder: c.founder }));
   const apprentices = citizens.filter((c) => (c.mentors || []).length > 0).length;
 
+  // The village treasury — the community fund that accrues a share of every hire.
+  const treasuryRec = await readTreasury(kv, id);
+  const treasury = { balance: treasuryRec.balance, lifetime_in: treasuryRec.lifetime_in, lifetime_out: treasuryRec.lifetime_out, currency: "credits" };
+
   return jc({
     status: "ok",
     village: { id, name: meta.name || id, purpose: meta.purpose || "", open: meta.open !== false, founded_at: meta.founded_at || "" },
@@ -59,6 +64,7 @@ export async function onRequestGet({ env, params }) {
     alive: aliveCount,
     founders: founders.length,
     working,
+    treasury,
     experts,
     apprentices,
     charter: villageCharter(),

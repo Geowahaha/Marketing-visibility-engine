@@ -47,6 +47,9 @@ import { onRequestPost as mentorAgent } from "../functions/api/agents/[id]/mento
 import { isAlive } from "../functions/api/_villages.js";
 import { teachableSkills, isExpert } from "../functions/api/_mentorship.js";
 import { computeStanding, decayFactor } from "../functions/api/_karma.js";
+import { onRequestPost as hireAgent } from "../functions/api/agents/[id]/hire.js";
+import { onRequestPost as migrateRep } from "../functions/api/agents/migrate-rep.js";
+import { computeSplit, revenueShares } from "../functions/api/_economy.js";
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -2007,5 +2010,136 @@ async function testAgentReadinessGenerator() {
   assert.equal(ok.count, 7, "endpoint returns the 7-file bundle");
 }
 await testAgentReadinessGenerator();
+
+async function testEconomyHireCreatorRevenueAndTreasury() {
+  // Pure split math: exact conservation (the platform part absorbs rounding).
+  const shares = revenueShares({});
+  assert.equal(+(shares.creator + shares.treasury + shares.platform).toFixed(6), 1, "revenue shares sum to 1");
+  const s25 = computeSplit(25, shares);
+  assert.equal(s25.creator + s25.treasury + s25.platform, 25, "split conserves the total");
+  assert.deepEqual([s25.creator, s25.treasury, s25.platform], [17, 5, 3], "25 → 17/5/3");
+  const s100 = computeSplit(100, shares);
+  assert.deepEqual([s100.creator, s100.treasury, s100.platform], [70, 20, 10], "100 → 70/20/10");
+  assert.equal(computeSplit(7, shares).creator + computeSplit(7, shares).treasury + computeSplit(7, shares).platform, 7, "odd amount still conserves");
+  // Configurable shares can never over-allocate (creator + treasury capped at 1).
+  const greedy = revenueShares({ AIMARK_CREATOR_SHARE: "0.9", AIMARK_TREASURY_SHARE: "0.5" });
+  assert.ok(greedy.creator + greedy.treasury <= 1 && greedy.platform >= 0, "shares cannot exceed 100%");
+
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "econ-secret", ENTITLEMENTS_KV: kv, PROOF_KV: memoryKv() };
+
+  // The creator owns the founding guild (founders carry community sme-growth-th).
+  const creator = await signSession({ sid: "sid_creator", provider: "google", email: "creator@example.com", name: "Creator" }, env.AUTH_SESSION_SECRET);
+  const creatorCookie = { cookie: `aimark_session=${creator.token}` };
+  await foundVillage({ request: new Request("https://aimark.pages.dev/api/villages/found", { method: "POST", headers: { "content-type": "application/json", ...creatorCookie }, body: "{}" }), env });
+
+  // A different owner with a credit balance does the hiring.
+  const hirer = await signSession({ sid: "sid_hirer", provider: "google", email: "hirer@example.com", name: "Hirer" }, env.AUTH_SESSION_SECRET);
+  const hirerCookie = { cookie: `aimark_session=${hirer.token}` };
+  await kv.put("credits:email:hirer@example.com", JSON.stringify({ email: "hirer@example.com", balance: 1000 }));
+  const hire = (idem) => hireAgent({
+    request: new Request("https://aimark.pages.dev/api/agents/visibility-scout/hire", { method: "POST", headers: { "content-type": "application/json", ...hirerCookie }, body: JSON.stringify({ idempotency_key: idem, task: "scan my site" }) }),
+    env, params: { id: "visibility-scout" },
+  });
+
+  // visibility-scout: tier new → proven rate 25; split 17 creator / 5 treasury / 3 platform.
+  const r1 = await (await hire("hire-1")).json();
+  assert.equal(r1.status, "hired");
+  assert.equal(r1.price, 25, "price defaults to the agent's proven rate (new=25)");
+  assert.deepEqual([r1.split.creator, r1.split.treasury, r1.split.platform], [17, 5, 3]);
+  assert.equal(r1.creator_wallet_balance, 17, "creator wallet credited");
+  assert.equal(r1.treasury_balance, 5, "village treasury credited");
+  assert.equal(r1.hirer_balance, 975, "hirer charged the price");
+
+  // Wallet + treasury are visible on the read endpoints.
+  const detail = await (await getAgent({ env, params: { id: "visibility-scout" } })).json();
+  assert.equal(detail.economy.balance, 17);
+  assert.equal(detail.economy.lifetime_earned, 17);
+  assert.equal(detail.economy.suggested_credits, 25);
+  const vstate = await (await villageState({ env, params: { id: "sme-growth-th" } })).json();
+  assert.equal(vstate.treasury.balance, 5);
+  assert.equal(vstate.treasury.lifetime_in, 5);
+
+  // Standing must NOT move from being hired (money ≠ merit).
+  assert.equal(detail.standing.standing, 0, "hiring pays the wallet but never raises standing");
+
+  // Idempotent: a retry with the same key does not double-charge or double-credit.
+  const r1b = await (await hire("hire-1")).json();
+  assert.equal(r1b.idempotent_replay, true, "replay is idempotent");
+  const detail2 = await (await getAgent({ env, params: { id: "visibility-scout" } })).json();
+  assert.equal(detail2.economy.balance, 17, "wallet not double-credited on replay");
+
+  // A second distinct hire accrues again.
+  const r2 = await (await hire("hire-2")).json();
+  assert.equal(r2.creator_wallet_balance, 34);
+  assert.equal(r2.treasury_balance, 10);
+
+  // Self-hire is blocked (no laundering your own credits into your own agent).
+  await kv.put("credits:email:creator@example.com", JSON.stringify({ email: "creator@example.com", balance: 1000 }));
+  const selfHire = await hireAgent({ request: new Request("https://aimark.pages.dev/api/agents/visibility-scout/hire", { method: "POST", headers: { "content-type": "application/json", ...creatorCookie }, body: JSON.stringify({ idempotency_key: "self-1" }) }), env, params: { id: "visibility-scout" } });
+  assert.equal(selfHire.status, 400);
+  assert.equal((await selfHire.json()).error, "cannot_hire_own_agent");
+
+  // Insufficient credits → 402, and the wallet is unchanged.
+  const poor = await signSession({ sid: "sid_poor", provider: "google", email: "poor@example.com", name: "Poor" }, env.AUTH_SESSION_SECRET);
+  await kv.put("credits:email:poor@example.com", JSON.stringify({ email: "poor@example.com", balance: 5 }));
+  const broke = await hireAgent({ request: new Request("https://aimark.pages.dev/api/agents/visibility-scout/hire", { method: "POST", headers: { "content-type": "application/json", cookie: `aimark_session=${poor.token}` }, body: JSON.stringify({ idempotency_key: "poor-1" }) }), env, params: { id: "visibility-scout" } });
+  assert.equal(broke.status, 402);
+  const detail3 = await (await getAgent({ env, params: { id: "visibility-scout" } })).json();
+  assert.equal(detail3.economy.balance, 34, "a failed hire leaves the wallet unchanged");
+
+  // Login required (hiring spends credits).
+  const anon = await hireAgent({ request: new Request("https://aimark.pages.dev/api/agents/visibility-scout/hire", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), env, params: { id: "visibility-scout" } });
+  assert.equal(anon.status, 401);
+
+  // No secret leak.
+  assert.equal(/econ-secret|AUTH_SESSION_SECRET/.test(JSON.stringify({ r1, r2, detail, vstate })), false);
+}
+await testEconomyHireCreatorRevenueAndTreasury();
+
+async function testReputationMigrationAndCap() {
+  const kv = memoryKv();
+  const env = { AUTH_SESSION_SECRET: "mig-secret", ENTITLEMENTS_KV: kv, AIMARK_ADMIN_KEY: "admin-xyz" };
+
+  // 30 pre-denorm agents (no profile.rep). One has real proof events.
+  const ids = [];
+  for (let i = 0; i < 30; i++) {
+    const id = `mig-agent-${i}`;
+    ids.push(id);
+    await kv.put(`agent_profile:${id}`, JSON.stringify({ id, name: `Mig ${i}`, skills: [], community: "town", created_at: "x", updated_at: "x" }));
+  }
+  await kv.put("agents_index", JSON.stringify(ids));
+  await kv.put("agent_rep:mig-agent-0", JSON.stringify([{ delta: 30, citation_before: 0, citation_after: 1, host: "h.example" }]));
+
+  // Cap raised to 45 → all 30 listed (was 24). The list is now 1-read/agent, so the
+  // pre-denorm earner shows a zero-state reputation until the migration backfills it.
+  const before = await (await listAgents({ env })).json();
+  assert.equal(before.count, 30, "cap 24→45 lets all 30 agents list");
+  assert.equal(before.agents.find((a) => a.id === "mig-agent-0").reputation.rep_score, 0, "pre-denorm earner shows zero-state pre-migration");
+
+  // Admin-gated.
+  const noAuth = await migrateRep({ request: new Request("https://aimark.pages.dev/api/agents/migrate-rep", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), env });
+  assert.equal(noAuth.status, 403, "migration requires the admin key");
+
+  // Batched migration until done.
+  let cursor = 0, guard = 0, report;
+  do {
+    report = await (await migrateRep({ request: new Request("https://aimark.pages.dev/api/agents/migrate-rep", { method: "POST", headers: { "content-type": "application/json", "x-admin-key": "admin-xyz" }, body: JSON.stringify({ cursor, limit: 20 }) }), env })).json();
+    cursor = report.cursor;
+  } while (report.remaining > 0 && ++guard < 10);
+  assert.equal(report.remaining, 0, "migration completes across batches");
+  assert.equal(report.total, 30);
+
+  // After migration the earner shows real reputation straight from the 1-read list.
+  const after = await (await listAgents({ env })).json();
+  assert.ok(after.agents.find((a) => a.id === "mig-agent-0").reputation.rep_score > 0, "migrated earner now ranks by real reputation in the list");
+
+  // write-on-create: a freshly registered agent already carries profile.rep.
+  const owner = await signSession({ sid: "sid_woc", provider: "google", email: "woc@example.com", name: "WOC" }, env.AUTH_SESSION_SECRET);
+  await createAgent({ request: new Request("https://aimark.pages.dev/api/agents", { method: "POST", headers: { "content-type": "application/json", cookie: `aimark_session=${owner.token}` }, body: JSON.stringify({ name: "Fresh One" }) }), env });
+  const stored = await kv.get("agent_profile:fresh-one", "json");
+  assert.ok(stored && stored.rep && stored.rep.tier === "new", "registration stamps denormalized profile.rep");
+}
+await testReputationMigrationAndCap();
 
 console.log("api-smoke: ok");
