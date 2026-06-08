@@ -21,7 +21,8 @@
  *      PAID_EXPORT_SECRET / *_BYPASS_IPS (unlock).
  */
 
-import { paidStatus } from "./_auth.js";
+import { paidStatus, requireSession } from "./_auth.js";
+import { ensureOrgForSession, ensureSite, recordCitationSnapshot } from "./_db.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -227,6 +228,30 @@ export async function onRequestPost(context) {
     results,
     honest_note: "This is OBSERVED presence at probe time on the engines/queries tested — AI answers vary by user, location, and time. It is not a guaranteed or permanent ranking, and absence here does not mean the brand is never cited.",
   };
+
+  // Compound the Visibility Intelligence Dataset: capture this citation observation
+  // for the signed-in site owner (best-effort; never blocks the probe). Citation
+  // history CANNOT be backfilled — every observation persisted now is permanent
+  // dataset value (the moat: who AI cites, tracked over time).
+  try {
+    if (env.AGENT_DB && scored.length) {
+      const session = await requireSession(request, env);
+      if (session && session.email) {
+        const ctx = await ensureOrgForSession(env, session);
+        if (ctx) {
+          const siteId = await ensureSite(env, ctx.org_id, url);
+          if (siteId) {
+            let captured = 0;
+            for (const r of scored) {
+              await recordCitationSnapshot(env, { orgId: ctx.org_id, siteId, engine: r.engine, query: r.query, brandCited: r.via === "named_in_answer", domainCited: r.via === "cited_as_source", competitorsNamed: r.competitors_named || [] });
+              captured += 1;
+            }
+            out.captured = captured;
+          }
+        }
+      }
+    }
+  } catch { /* never break the probe on dataset capture */ }
 
   if (!status.paid) {
     out.preview = true;

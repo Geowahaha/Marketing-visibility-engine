@@ -58,7 +58,8 @@ import { onRequestGet as billingApi } from "../functions/api/billing.js";
 import { onRequestPost as monitoringRun } from "../functions/api/monitoring/run.js";
 import { onRequestGet as benchmarkApi } from "../functions/api/intelligence/benchmark.js";
 import { median, percentileRank, cohortStats } from "../functions/api/_intelligence.js";
-import { recordAudit } from "../functions/api/_db.js";
+import { recordAudit, listCitationSnapshots } from "../functions/api/_db.js";
+import { onRequestPost as citationProbe } from "../functions/api/citation-probe.js";
 import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
 import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
 
@@ -2457,5 +2458,48 @@ async function testVisibilityIntelligenceBenchmark() {
   assert.ok(cov.coverage.some((c) => c.industry === "accounting" && c.count === 3), "coverage reports the accounting cohort");
 }
 await testVisibilityIntelligenceBenchmark();
+
+async function testCitationHistoryCapturedToDataset() {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: citation capture skipped (node:sqlite >=22.5)"); return; }
+  const env = { AUTH_SESSION_SECRET: "cit-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv(), TAVILY_API_KEY: "x" };
+  const u = await signSession({ sid: "sid_cit", provider: "google", email: "c@cit.com", name: "C" }, env.AUTH_SESSION_SECRET);
+  const ck = { cookie: `aimark_session=${u.token}` };
+
+  // A logged-in owner runs a citation probe (tavily mocked to name the brand).
+  let out;
+  await withMockFetch(async (input) => {
+    const url = String(input?.url || input || "");
+    if (url.includes("tavily.com")) return new Response(JSON.stringify({ answer: "BrandCo is a top option for foundry services.", results: [{ url: "https://brandco.example.com", content: "BrandCo" }] }), { status: 200, headers: { "content-type": "application/json" } });
+    return response("{}");
+  }, async () => {
+    out = await (await citationProbe({ request: new Request("https://x/api/citation-probe", { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ url: "https://brandco.example.com", business: "BrandCo", buyer_queries: ["best foundry services"] }) }), env })).json();
+  });
+  assert.equal(out.live, true, "probe ran live (mocked tavily)");
+  assert.ok(out.captured >= 1, "the probe captures citation history into the dataset");
+
+  // It persisted to the citation_snapshots time-series for the owner (can't-backfill data).
+  const ls = await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: ck }), env })).json();
+  const site = ls.sites.find((s) => s.host === "brandco.example.com");
+  assert.ok(site, "a site row was created for the probed url (data capture)");
+  const snaps = await listCitationSnapshots(env, ls.org_id, site.id);
+  assert.ok(snaps.length >= 1 && snaps[0].engine === "tavily", "citation snapshot persisted with the engine");
+  assert.equal(snaps[0].brand_cited || snaps[0].domain_cited, true, "the observed citation is recorded");
+
+  // Anonymous probes return results but capture nothing (no tenant) — no orphan data.
+  let anonOut;
+  await withMockFetch(async (input) => {
+    const url = String(input?.url || input || "");
+    if (url.includes("tavily.com")) return new Response(JSON.stringify({ answer: "no mention here", results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    return response("{}");
+  }, async () => {
+    anonOut = await (await citationProbe({ request: new Request("https://x/api/citation-probe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: "https://anon-brand.example.com", buyer_queries: ["x"] }) }), env })).json();
+  });
+  assert.equal(anonOut.captured, undefined, "anonymous probe captures nothing (no tenant)");
+  const after = await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: ck }), env })).json();
+  assert.equal(after.sites.some((s) => s.host === "anon-brand.example.com"), false, "anonymous probe creates no site row");
+}
+await testCitationHistoryCapturedToDataset();
 
 console.log("api-smoke: ok");

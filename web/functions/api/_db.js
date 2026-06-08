@@ -253,6 +253,23 @@ export async function listAlerts(env, orgId, limit = 50) {
   return (r && r.results) || [];
 }
 
+/** Capture one AI-citation observation = the Visibility Intelligence time-series.
+ *  Can't be backfilled — every probe persisted now is permanent dataset value. */
+export async function recordCitationSnapshot(env, { orgId, siteId, engine, query, brandCited, domainCited, position = null, competitorsNamed = [] }) {
+  await ensureSchema(env);
+  const id = uid();
+  await db(env).prepare("INSERT INTO citation_snapshots (id, org_id, site_id, engine, query, brand_cited, domain_cited, position, competitors_named_json, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, orgId, siteId, String(engine || "").slice(0, 40), String(query || "").slice(0, 300), brandCited ? 1 : 0, domainCited ? 1 : 0, position == null ? null : Number(position), (competitorsNamed && competitorsNamed.length) ? JSON.stringify(competitorsNamed.slice(0, 10)) : null, now()).run();
+  return id;
+}
+
+export async function listCitationSnapshots(env, orgId, siteId, limit = 200) {
+  if (!dbReady(env)) return [];
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT engine, query, brand_cited, domain_cited, competitors_named_json, observed_at FROM citation_snapshots WHERE site_id = ? AND org_id = ? ORDER BY observed_at DESC LIMIT ?").bind(siteId, orgId, limit).all();
+  return ((r && r.results) || []).map((x) => ({ engine: x.engine, query: x.query, brand_cited: !!x.brand_cited, domain_cited: !!x.domain_cited, competitors_named: x.competitors_named_json ? (safeParse(x.competitors_named_json) || []) : [], observed_at: x.observed_at }));
+}
+
 export function publicSite(site) {
   if (!site) return null;
   return {
