@@ -270,6 +270,60 @@ export async function listCitationSnapshots(env, orgId, siteId, limit = 200) {
   return ((r && r.results) || []).map((x) => ({ engine: x.engine, query: x.query, brand_cited: !!x.brand_cited, domain_cited: !!x.domain_cited, competitors_named: x.competitors_named_json ? (safeParse(x.competitors_named_json) || []) : [], observed_at: x.observed_at }));
 }
 
+/** Audit-trail / behavioral event (also the substrate for outcome correlation). */
+export async function recordEvent(env, { orgId = null, actor = null, action, targetType = null, targetId = null, meta = null }) {
+  if (!dbReady(env) || !action) return null;
+  await ensureSchema(env);
+  const id = uid();
+  await db(env).prepare("INSERT INTO events (id, org_id, actor, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, orgId, actor ? String(actor).slice(0, 120) : null, String(action).slice(0, 60), targetType, targetId, meta ? JSON.stringify(meta) : null, now()).run();
+  return id;
+}
+
+/** Mark a recommendation APPLIED = the adoption signal, and snapshot the site's
+ *  score at that moment (an event) so the OUTCOME (next audit's delta) is
+ *  measurable later. Returns null if the rec isn't owned by the org. This is the
+ *  can't-backfill "did the customer act?" capture. */
+export async function markRecommendationApplied(env, orgId, recId, actor = "owner") {
+  if (!dbReady(env)) return null;
+  await ensureSchema(env);
+  const d = db(env);
+  const rec = await d.prepare("SELECT id, site_id, title, priority FROM recommendations WHERE id = ? AND org_id = ? LIMIT 1").bind(recId, orgId).first();
+  if (!rec) return null;
+  const site = await d.prepare("SELECT latest_score FROM sites WHERE id = ? AND org_id = ? LIMIT 1").bind(rec.site_id, orgId).first();
+  const scoreAtApply = (site && site.latest_score != null) ? Number(site.latest_score) : null;
+  const at = now();
+  await d.prepare("UPDATE recommendations SET status = 'applied', applied_at = ? WHERE id = ? AND org_id = ?").bind(at, recId, orgId).run();
+  await recordEvent(env, { orgId, actor, action: "recommendation_applied", targetType: "recommendation", targetId: recId, meta: { site_id: rec.site_id, score_at_apply: scoreAtApply, title: rec.title, priority: rec.priority } });
+  return { rec_id: recId, site_id: rec.site_id, status: "applied", applied_at: at, score_at_apply: scoreAtApply };
+}
+
+/** Correlate adoption -> outcome: for each applied recommendation on a site, the
+ *  score delta from when it was applied to the next audit. The "did the fix work?"
+ *  training data — aggregated across customers this becomes the revenue/success-
+ *  correlation moat ("applying FAQ schema correlates with +X AI visibility"). */
+export async function recommendationImpact(env, orgId, siteId) {
+  const empty = { applied: 0, measured: 0, avg_delta: null, items: [] };
+  if (!dbReady(env)) return empty;
+  await ensureSchema(env);
+  const d = db(env);
+  const applied = await d.prepare("SELECT id, title, applied_at FROM recommendations WHERE org_id = ? AND site_id = ? AND status = 'applied' AND applied_at IS NOT NULL ORDER BY applied_at DESC LIMIT 100").bind(orgId, siteId).all();
+  const rows = (applied && applied.results) || [];
+  const items = [];
+  let sum = 0, measured = 0;
+  for (const r of rows) {
+    const ev = await d.prepare("SELECT meta_json FROM events WHERE target_id = ? AND action = 'recommendation_applied' ORDER BY created_at DESC LIMIT 1").bind(r.id).first();
+    const meta = (ev && ev.meta_json) ? (safeParse(ev.meta_json) || {}) : {};
+    const scoreAtApply = meta.score_at_apply == null ? null : Number(meta.score_at_apply);
+    const next = await d.prepare("SELECT overall_score FROM audits WHERE site_id = ? AND org_id = ? AND created_at > ? AND overall_score IS NOT NULL ORDER BY created_at ASC LIMIT 1").bind(siteId, orgId, r.applied_at).first();
+    const outcome = (next && next.overall_score != null) ? Number(next.overall_score) : null;
+    const delta = (scoreAtApply != null && outcome != null) ? (outcome - scoreAtApply) : null;
+    if (delta != null) { sum += delta; measured += 1; }
+    items.push({ rec_id: r.id, title: r.title, applied_at: r.applied_at, score_at_apply: scoreAtApply, outcome_score: outcome, delta });
+  }
+  return { applied: rows.length, measured, avg_delta: measured ? +(sum / measured).toFixed(1) : null, items };
+}
+
 export function publicSite(site) {
   if (!site) return null;
   return {

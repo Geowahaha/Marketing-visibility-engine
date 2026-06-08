@@ -60,6 +60,8 @@ import { onRequestGet as benchmarkApi } from "../functions/api/intelligence/benc
 import { median, percentileRank, cohortStats } from "../functions/api/_intelligence.js";
 import { recordAudit, listCitationSnapshots } from "../functions/api/_db.js";
 import { onRequestPost as citationProbe } from "../functions/api/citation-probe.js";
+import { onRequestPost as markRecApplied } from "../functions/api/recommendations/[id]/applied.js";
+import { onRequestGet as impactApi } from "../functions/api/intelligence/impact.js";
 import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
 import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
 
@@ -2501,5 +2503,45 @@ async function testCitationHistoryCapturedToDataset() {
   assert.equal(after.sites.some((s) => s.host === "anon-brand.example.com"), false, "anonymous probe creates no site row");
 }
 await testCitationHistoryCapturedToDataset();
+
+async function testRecommendationAdoptionOutcomeCorrelation() {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: rec-impact skipped (node:sqlite >=22.5)"); return; }
+  const env = { AUTH_SESSION_SECRET: "rec-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv() };
+  const u = await signSession({ sid: "sid_rec", provider: "google", email: "r@rec.com", name: "R" }, env.AUTH_SESSION_SECRET);
+  const ck = { cookie: `aimark_session=${u.token}` };
+  const connected = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ url: "https://rec.example.com" }) }), env })).json();
+  const siteId = connected.site.id;
+  const orgId = (await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: ck }), env })).json()).org_id;
+
+  // Baseline audit (score 50) + a prioritized recommendation.
+  await recordAudit(env, { orgId, siteId, overall: 50 });
+  await recordRecommendations(env, { orgId, siteId, auditId: "aud1", recs: [{ priority: 1, title: "Add FAQ schema" }] });
+  const recId = (await listRecommendationsForAudit(env, orgId, "aud1"))[0].id;
+
+  // The customer marks it applied — adoption captured + score-at-apply snapshotted.
+  const applied = await (await markRecApplied({ request: new Request(`https://x/api/recommendations/${recId}/applied`, { method: "POST", headers: ck }), env, params: { id: recId } })).json();
+  assert.equal(applied.status, "applied");
+  assert.equal(applied.score_at_apply, 50, "score at the moment of adoption is captured");
+
+  // Later the site improves (score 72). The outcome is now measurable.
+  await new Promise((r) => setTimeout(r, 12)); // ensure the outcome audit is strictly after applied_at
+  await recordAudit(env, { orgId, siteId, overall: 72 });
+
+  const imp = await (await impactApi({ request: new Request(`https://x/api/intelligence/impact?site=${siteId}`, { headers: ck }), env })).json();
+  assert.equal(imp.impact.applied, 1, "one adopted recommendation");
+  assert.equal(imp.impact.measured, 1, "its outcome is measured against the next audit");
+  assert.equal(imp.impact.avg_delta, 22, "adoption correlated with +22 (50 -> 72) = the revenue-correlation data");
+  assert.equal(imp.impact.items[0].delta, 22);
+
+  // Auth + ownership.
+  const noauth = await markRecApplied({ request: new Request(`https://x/api/recommendations/${recId}/applied`, { method: "POST" }), env, params: { id: recId } });
+  assert.equal(noauth.status, 401, "applying requires login");
+  const o = await signSession({ sid: "sid_o", provider: "google", email: "o@other.com", name: "O" }, env.AUTH_SESSION_SECRET);
+  const foreign = await markRecApplied({ request: new Request(`https://x/api/recommendations/${recId}/applied`, { method: "POST", headers: { cookie: `aimark_session=${o.token}` } }), env, params: { id: recId } });
+  assert.equal(foreign.status, 404, "can't apply a recommendation you don't own (tenant-scoped)");
+}
+await testRecommendationAdoptionOutcomeCorrelation();
 
 console.log("api-smoke: ok");
