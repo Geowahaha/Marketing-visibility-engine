@@ -17,7 +17,8 @@
  */
 
 import { callLLM } from "./_llm.js";
-import { paidStatus } from "./_auth.js";
+import { paidStatus, requireSession } from "./_auth.js";
+import { ensureOrgForSession, ensureSite, recordCompetitor, recordCompetitorSnapshot, hostOf } from "./_db.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -160,5 +161,31 @@ export async function onRequestPost(context) {
   analysis.competitors_scanned = comps.filter((c) => c.ok).length;
   analysis.scan_errors = comps.filter((c) => !c.ok).map((c) => ({ url: c.url, error: c.error }));
   analysis.paid = true;
+
+  // Compound the dataset: capture the competitor positions over time for the
+  // signed-in site owner (best-effort; never blocks the comparison). Can't-backfill:
+  // who is beating you on AI visibility, tracked across months.
+  try {
+    if (env.AGENT_DB && target.ok && comps.some((c) => c.ok)) {
+      const session = await requireSession(request, env);
+      if (session && session.email) {
+        const ctx = await ensureOrgForSession(env, session);
+        if (ctx) {
+          const siteId = await ensureSite(env, ctx.org_id, url);
+          if (siteId) {
+            let captured = 0;
+            for (const c of comps) {
+              if (!c.ok) continue;
+              await recordCompetitor(env, { orgId: ctx.org_id, siteId, competitorUrl: c.url });
+              await recordCompetitorSnapshot(env, { orgId: ctx.org_id, siteId, competitorHost: hostOf(c.url), competitorScore: c.overall, targetScore: target.overall });
+              captured += 1;
+            }
+            analysis.captured = captured;
+          }
+        }
+      }
+    }
+  } catch { /* never break the comparison on dataset capture */ }
+
   return json(analysis);
 }

@@ -58,10 +58,11 @@ import { onRequestGet as billingApi } from "../functions/api/billing.js";
 import { onRequestPost as monitoringRun } from "../functions/api/monitoring/run.js";
 import { onRequestGet as benchmarkApi } from "../functions/api/intelligence/benchmark.js";
 import { median, percentileRank, cohortStats } from "../functions/api/_intelligence.js";
-import { recordAudit, listCitationSnapshots } from "../functions/api/_db.js";
+import { recordAudit, listCitationSnapshots, recordCompetitor, recordCompetitorSnapshot } from "../functions/api/_db.js";
 import { onRequestPost as citationProbe } from "../functions/api/citation-probe.js";
 import { onRequestPost as markRecApplied } from "../functions/api/recommendations/[id]/applied.js";
 import { onRequestGet as impactApi } from "../functions/api/intelligence/impact.js";
+import { onRequestGet as competitorsApi } from "../functions/api/intelligence/competitors.js";
 import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
 import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
 
@@ -2543,5 +2544,45 @@ async function testRecommendationAdoptionOutcomeCorrelation() {
   assert.equal(foreign.status, 404, "can't apply a recommendation you don't own (tenant-scoped)");
 }
 await testRecommendationAdoptionOutcomeCorrelation();
+
+async function testCompetitorTimeSeriesCapture() {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: competitor trend skipped (node:sqlite >=22.5)"); return; }
+  const env = { AUTH_SESSION_SECRET: "comp-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv() };
+  const u = await signSession({ sid: "sid_comp", provider: "google", email: "k@comp.com", name: "K" }, env.AUTH_SESSION_SECRET);
+  const ck = { cookie: `aimark_session=${u.token}` };
+  const connected = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ url: "https://me.example.com" }) }), env })).json();
+  const siteId = connected.site.id;
+  const orgId = (await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: ck }), env })).json()).org_id;
+
+  // Two observations over time for one rival (closing the gap) + one for another.
+  await recordCompetitor(env, { orgId, siteId, competitorUrl: "https://rival.example.com" });
+  await recordCompetitorSnapshot(env, { orgId, siteId, competitorHost: "rival.example.com", competitorScore: 80, targetScore: 60 });
+  await new Promise((r) => setTimeout(r, 12));
+  await recordCompetitorSnapshot(env, { orgId, siteId, competitorHost: "rival.example.com", competitorScore: 85, targetScore: 65 });
+  await recordCompetitorSnapshot(env, { orgId, siteId, competitorHost: "other.example.com", competitorScore: 50, targetScore: 65 });
+
+  const out = await (await competitorsApi({ request: new Request(`https://x/api/intelligence/competitors?site=${siteId}`, { headers: ck }), env })).json();
+  assert.equal(out.status, "ok");
+  assert.equal(out.competitors.length, 2, "two tracked competitors over time");
+  const rival = out.competitors.find((c) => c.host === "rival.example.com");
+  assert.ok(rival && rival.observations.length === 2, "rival has a two-point trend");
+  assert.equal(rival.latest.competitor_score, 85, "latest snapshot is newest-first");
+  assert.equal(rival.latest.gap, 20, "gap = competitor 85 - target 65");
+
+  // Registry dedups by host.
+  const id1 = await recordCompetitor(env, { orgId, siteId, competitorUrl: "https://rival.example.com/path" });
+  const id2 = await recordCompetitor(env, { orgId, siteId, competitorUrl: "https://rival.example.com" });
+  assert.equal(id1, id2, "competitor registry dedups by host");
+
+  // Auth + ownership.
+  const noauth = await competitorsApi({ request: new Request(`https://x/api/intelligence/competitors?site=${siteId}`), env });
+  assert.equal(noauth.status, 401, "competitor intelligence requires login");
+  const o = await signSession({ sid: "sid_co", provider: "google", email: "o2@other.com", name: "O" }, env.AUTH_SESSION_SECRET);
+  const foreign = await competitorsApi({ request: new Request(`https://x/api/intelligence/competitors?site=${siteId}`, { headers: { cookie: `aimark_session=${o.token}` } }), env });
+  assert.equal(foreign.status, 404, "can't read a site you don't own");
+}
+await testCompetitorTimeSeriesCapture();
 
 console.log("api-smoke: ok");

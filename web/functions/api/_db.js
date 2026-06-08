@@ -324,6 +324,50 @@ export async function recommendationImpact(env, orgId, siteId) {
   return { applied: rows.length, measured, avg_delta: measured ? +(sum / measured).toFixed(1) : null, items };
 }
 
+/** Register a tracked competitor for a site (dedup by host). */
+export async function recordCompetitor(env, { orgId, siteId, competitorUrl }) {
+  if (!dbReady(env)) return null;
+  await ensureSchema(env);
+  const d = db(env);
+  const host = hostOf(competitorUrl);
+  if (!host) return null;
+  const existing = await d.prepare("SELECT id FROM competitors WHERE org_id = ? AND site_id = ? AND competitor_host = ? LIMIT 1").bind(orgId, siteId, host).first();
+  if (existing && existing.id) return existing.id;
+  const id = uid();
+  await d.prepare("INSERT INTO competitors (id, org_id, site_id, competitor_url, competitor_host, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(id, orgId, siteId, String(competitorUrl).slice(0, 400), host, now()).run();
+  return id;
+}
+
+/** Capture one competitor-position observation = the competitor time-series.
+ *  Stored as an event keyed by site (target_id) so a single read reconstructs each
+ *  competitor's trend vs the customer. Can't-backfill: who's beating you, over time. */
+export async function recordCompetitorSnapshot(env, { orgId, siteId, competitorHost, competitorScore, targetScore }) {
+  const cs = competitorScore == null ? null : Number(competitorScore);
+  const ts = targetScore == null ? null : Number(targetScore);
+  return recordEvent(env, {
+    orgId, actor: "system", action: "competitor_snapshot", targetType: "competitor", targetId: siteId,
+    meta: { site_id: siteId, competitor_host: String(competitorHost || "").slice(0, 120), competitor_score: cs, target_score: ts, gap: (cs != null && ts != null) ? (cs - ts) : null },
+  });
+}
+
+/** Reconstruct each competitor's score trend vs the customer's, newest first. */
+export async function competitorTrend(env, orgId, siteId, limit = 300) {
+  if (!dbReady(env)) return { competitors: [] };
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT meta_json, created_at FROM events WHERE org_id = ? AND action = 'competitor_snapshot' AND target_id = ? ORDER BY created_at DESC LIMIT ?").bind(orgId, siteId, limit).all();
+  const byHost = new Map();
+  for (const row of (r && r.results) || []) {
+    const m = row.meta_json ? (safeParse(row.meta_json) || {}) : {};
+    const host = m.competitor_host;
+    if (!host) continue;
+    const obs = { competitor_score: m.competitor_score, target_score: m.target_score, gap: m.gap, at: row.created_at };
+    if (!byHost.has(host)) byHost.set(host, { host, latest: obs, observations: [obs] });
+    else byHost.get(host).observations.push(obs);
+  }
+  return { competitors: [...byHost.values()] };
+}
+
 export function publicSite(site) {
   if (!site) return null;
   return {
