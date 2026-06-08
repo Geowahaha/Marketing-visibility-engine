@@ -55,6 +55,7 @@ import { onRequestGet as getSiteApi } from "../functions/api/sites/[id].js";
 import { onRequestGet as alertsApi } from "../functions/api/alerts.js";
 import { onRequestPost as monitorSite } from "../functions/api/sites/[id]/monitor.js";
 import { onRequestGet as billingApi } from "../functions/api/billing.js";
+import { onRequestPost as monitoringRun } from "../functions/api/monitoring/run.js";
 import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
 import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
 
@@ -2352,5 +2353,49 @@ async function testRevenueEngineSubscriptionGatesMonitoring() {
   assert.equal(billAnon.status, 401, "billing requires login");
 }
 await testRevenueEngineSubscriptionGatesMonitoring();
+
+async function testMonitoringAutomationRunsAndReminds() {
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: monitoring run skipped (node:sqlite >=22.5)"); return; }
+  const env = { AUTH_SESSION_SECRET: "mon-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv(), ENTITLEMENTS_KV: memoryKv(), AIMARK_CRON_KEY: "cron-xyz" };
+  const u = await signSession({ sid: "sid_mon", provider: "google", email: "owner@mon.com", name: "Owner" }, env.AUTH_SESSION_SECRET);
+  const ck = { cookie: `aimark_session=${u.token}` };
+  const connected = await (await connectSite({ request: new Request("https://aimark.pages.dev/api/sites", { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ url: "https://mon.example.com" }) }), env })).json();
+  const sid = connected.site.id;
+  await recordSubscription(env, "owner@mon.com", { plan: "growth_monitor", status: "active" });
+  await monitorSite({ request: new Request(`https://aimark.pages.dev/api/sites/${sid}/monitor`, { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ enabled: true, frequency: "daily" }) }), env, params: { id: sid } });
+
+  // Gate: a cron key is required.
+  const noKey = await monitoringRun({ request: new Request("https://aimark.pages.dev/api/monitoring/run", { method: "POST" }), env });
+  assert.equal(noKey.status, 403, "monitoring run requires the cron key");
+
+  // A due monitored site is re-audited automatically (continuous value = anti-churn).
+  let out;
+  await withMockFetch(async (input) => {
+    const url = String(input?.url || input || "");
+    if (url.includes("pagespeedonline")) return new Response(JSON.stringify({ error: { message: "no key" } }), { status: 429, headers: { "content-type": "application/json" } });
+    if (url.endsWith("/robots.txt")) return response("User-agent: *\nAllow: /");
+    if (url.endsWith("/sitemap.xml")) return response("<urlset><url><loc>https://mon.example.com/</loc></url></urlset>");
+    if (url.endsWith("/llms.txt")) return response("# Mon");
+    return response(htmlPage());
+  }, async () => {
+    out = await (await monitoringRun({ request: new Request("https://aimark.pages.dev/api/monitoring/run", { method: "POST", headers: { "x-cron-key": "cron-xyz" } }), env })).json();
+  });
+  assert.equal(out.status, "ok");
+  assert.ok(out.audited >= 1, "a due monitored site is re-audited automatically");
+  const detail = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${sid}`, { headers: ck }), env, params: { id: sid } })).json();
+  assert.ok(detail.audits.length >= 1, "scheduled re-audit persisted an audit row (continuous monitoring is real)");
+
+  // Renewal protection: a lapsed plan pauses monitoring + raises a reminder (drives the 2nd cycle).
+  await cancelSubscription(env, "owner@mon.com");
+  const out2 = await (await monitoringRun({ request: new Request("https://aimark.pages.dev/api/monitoring/run", { method: "POST", headers: { "x-cron-key": "cron-xyz" } }), env })).json();
+  assert.ok(out2.paused_expired >= 1 && out2.reminders >= 1, "a lapsed plan pauses monitoring + raises a renewal reminder");
+  const detail2 = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${sid}`, { headers: ck }), env, params: { id: sid } })).json();
+  assert.equal(detail2.site.monitoring_enabled, false, "monitoring is paused when the plan lapses (stop giving away the paid value)");
+  const alerts = await (await alertsApi({ request: new Request("https://aimark.pages.dev/api/alerts", { headers: ck }), env })).json();
+  assert.ok(alerts.alerts.some((a) => a.type === "renewal_reminder"), "renewal reminder raised (the 'pay again' nudge)");
+}
+await testMonitoringAutomationRunsAndReminds();
 
 console.log("api-smoke: ok");

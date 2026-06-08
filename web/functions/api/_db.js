@@ -105,6 +105,14 @@ export async function ensureOrgForSession(env, session) {
   return { org_id: orgId, user_id: userId };
 }
 
+/** The owner email of an org (so the monitoring run can act under their identity). */
+export async function getOrgOwnerEmail(env, orgId) {
+  if (!dbReady(env) || !orgId) return null;
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT u.email AS email FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.org_id = ? AND m.role = 'owner' ORDER BY m.created_at LIMIT 1").bind(orgId).first();
+  return (r && r.email) || null;
+}
+
 export async function ensureDefaultProject(env, orgId) {
   await ensureSchema(env);
   const d = db(env);
