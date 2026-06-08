@@ -2218,6 +2218,41 @@ async function runHermesAnalytics(text,url=""){
 }
 
 /* ---------- scan ---------- */
+// Conversion bridge: turn a free scan into the "money leak -> start monitoring" ask
+// (the recurring-revenue path). Reuses the live Growth Monitor subscription checkout.
+function moneyLeakLine(data){
+  const cats=data._category_scores||{};
+  let worst=null,worstV=101;
+  Object.keys(cats).forEach(k=>{const v=cats[k]|0;if(v<worstV){worstV=v;worst=k;}});
+  const w=String(worst||"");
+  if(LANG==="th"){
+    if(/ai search|geo|aeo/i.test(w)) return "เมื่อลูกค้าถาม ChatGPT/Gemini เกี่ยวกับธุรกิจแบบคุณ เว็บคุณยังไม่ถูกอ้างอิง = เสียลูกค้าที่ถาม AI ก่อน";
+    if(/crawler|bot/i.test(w)) return "บอท AI ยังอ่านเว็บคุณได้ไม่เต็มที่ = AI มองไม่เห็นคุณ ทั้งที่จ่ายค่าโฆษณาไปแล้ว";
+    if(/social/i.test(w)) return "โซเชียล/แชร์ของคุณยังไม่ถูกตั้งค่าให้ถูกหยิบไปแสดง = แทรฟฟิกที่ควรได้หลุดมือ";
+    return "ทุกสัปดาห์ที่ปล่อยไว้ การมองเห็นบน AI อาจตกลงเงียบ ๆ โดยไม่รู้ตัว";
+  }
+  if(/ai search|geo|aeo/i.test(w)) return "When buyers ask ChatGPT/Gemini about businesses like yours, you're not cited — you lose the customers who ask AI first.";
+  if(/crawler|bot/i.test(w)) return "AI bots can't fully read your site — so AI can't see you, even after you paid for ads.";
+  if(/social/i.test(w)) return "Your social sharing isn't set up to be picked up — traffic you should get slips away.";
+  return "Every week you wait, your AI visibility can quietly slip without you knowing.";
+}
+function monitorCtaHtml(data){
+  const leak=moneyLeakLine(data);
+  return `<div style="margin:14px 0;padding:14px 16px;border:1px solid rgba(91,157,255,.45);border-radius:12px;background:rgba(91,157,255,.07)">`
+    +`<div style="font-weight:800;margin-bottom:4px">${LANG==="th"?"จุดรั่วของรายได้":"Your money leak"}</div>`
+    +`<div class="muted" style="margin-bottom:12px">${esc(leak)}</div>`
+    +`<button onclick="subscribeMonitor()" style="background:#5b9dff;color:#fff;border:0;padding:11px 18px;border-radius:9px;font-weight:800;cursor:pointer">${LANG==="th"?"เริ่มเฝ้าดู + แก้ให้ · ฿490/เดือน":"Start monitoring + fixes · $15/mo"}</button>`
+    +`<a href="/dashboard" target="_blank" rel="noopener" class="muted" style="margin-left:14px;text-decoration:underline">${LANG==="th"?"เปิดแดชบอร์ด":"Open dashboard"}</a>`
+    +`<div class="muted" style="margin-top:9px;font-size:12px">${LANG==="th"?"AI Mark เฝ้าดูการมองเห็นบน AI ของคุณทุกสัปดาห์ เตือนทันทีเมื่อคะแนนตก และแก้ให้ — ยกเลิกเมื่อไรก็ได้":"AI Mark watches your AI visibility weekly, alerts the moment it drops, and fixes it — cancel anytime."}</div>`
+    +`</div>`;
+}
+async function subscribeMonitor(){
+  try{
+    const {status,data}=await api("/api/checkout",{product:"growth_monitor",method:"card"});
+    if(status===200&&data&&data.checkout_url){window.open(data.checkout_url,"_blank");return;}
+  }catch(e){}
+  window.open("/dashboard","_blank");
+}
 async function runScan(url,prompt=""){
   const m=agentMsg();const st=m.status(t("think"));
   const agentFirst=shouldUseAgentFirst();
@@ -2262,6 +2297,7 @@ async function runScan(url,prompt=""){
     fh+=`</table>`;
     m.html(fh);
   }
+  m.html(monitorCtaHtml(data));
   chips(m,[
     {label:LANG==="th"?"แก้ให้เลย (สร้างไฟล์)":"Generate all fixes",run:()=>runImprove(url)},
     {label:LANG==="th"?"LINE OA Growth Kit":"LINE OA Growth Kit",run:()=>runLineOaKit(url)},
