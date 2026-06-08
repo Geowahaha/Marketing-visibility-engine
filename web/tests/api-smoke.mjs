@@ -56,6 +56,9 @@ import { onRequestGet as alertsApi } from "../functions/api/alerts.js";
 import { onRequestPost as monitorSite } from "../functions/api/sites/[id]/monitor.js";
 import { onRequestGet as billingApi } from "../functions/api/billing.js";
 import { onRequestPost as monitoringRun } from "../functions/api/monitoring/run.js";
+import { onRequestGet as benchmarkApi } from "../functions/api/intelligence/benchmark.js";
+import { median, percentileRank, cohortStats } from "../functions/api/_intelligence.js";
+import { recordAudit } from "../functions/api/_db.js";
 import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
 import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
 
@@ -2397,5 +2400,62 @@ async function testMonitoringAutomationRunsAndReminds() {
   assert.ok(alerts.alerts.some((a) => a.type === "renewal_reminder"), "renewal reminder raised (the 'pay again' nudge)");
 }
 await testMonitoringAutomationRunsAndReminds();
+
+async function testVisibilityIntelligenceBenchmark() {
+  // Pure stats (the data-moat math).
+  assert.equal(median([10, 20, 30]), 20);
+  assert.equal(median([10, 20, 30, 40]), 25);
+  assert.equal(percentileRank(40, [40, 70, 90]), 0, "the weakest reads 0 = bottom");
+  assert.equal(percentileRank(90, [40, 70, 90]), 67, "outperforms 2 of 3 = 67%");
+  const st = cohortStats([40, 60, 80]);
+  assert.equal(st.count, 3); assert.equal(st.avg, 60); assert.equal(st.median, 60);
+
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: intelligence runtime skipped (node:sqlite >=22.5); stats covered"); return; }
+  const env = { AUTH_SESSION_SECRET: "intel-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv() };
+
+  // Tenant A: one accounting site at 40.
+  const a = await signSession({ sid: "sid_ia", provider: "google", email: "a@intel.com", name: "A" }, env.AUTH_SESSION_SECRET);
+  const ca = { cookie: `aimark_session=${a.token}` };
+  const sA = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...ca }, body: JSON.stringify({ url: "https://acc-a.example.com", industry: "accounting" }) }), env })).json();
+  const orgA = (await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: ca }), env })).json()).org_id;
+  await recordAudit(env, { orgId: orgA, siteId: sA.site.id, overall: 40 });
+
+  // Tenant B: two accounting sites (70, 90) + one retail site (50, different cohort).
+  const b = await signSession({ sid: "sid_ib", provider: "google", email: "b@intel.com", name: "B" }, env.AUTH_SESSION_SECRET);
+  const cb = { cookie: `aimark_session=${b.token}` };
+  const orgB = (await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: cb }), env })).json()).org_id;
+  const sB1 = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...cb }, body: JSON.stringify({ url: "https://acc-b1.example.com", industry: "accounting" }) }), env })).json();
+  const sB2 = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...cb }, body: JSON.stringify({ url: "https://acc-b2.example.com", industry: "accounting" }) }), env })).json();
+  const sBR = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...cb }, body: JSON.stringify({ url: "https://shop-b.example.com", industry: "retail" }) }), env })).json();
+  await recordAudit(env, { orgId: orgB, siteId: sB1.site.id, overall: 70 });
+  await recordAudit(env, { orgId: orgB, siteId: sB2.site.id, overall: 90 });
+  await recordAudit(env, { orgId: orgB, siteId: sBR.site.id, overall: 50 });
+
+  // Tenant A benchmarks its site against the CROSS-TENANT accounting cohort [40,70,90].
+  const r = await (await benchmarkApi({ request: new Request(`https://x/api/intelligence/benchmark?site=${sA.site.id}`, { headers: ca }), env })).json();
+  assert.equal(r.benchmark.available, true);
+  assert.equal(r.benchmark.industry, "accounting");
+  assert.equal(r.benchmark.cohort.count, 3, "cohort spans tenants (A+B accounting), excludes the retail site");
+  assert.equal(r.benchmark.cohort.avg, 67);
+  assert.equal(r.benchmark.your_score, 40);
+  assert.equal(r.benchmark.your_percentile, 0, "bottom of its industry = the motivated buyer");
+  assert.equal(r.benchmark.position, "bottom");
+  assert.equal(r.benchmark.gap_to_avg, 27);
+  // Privacy: the moat is the aggregate — no other tenant's identity leaks.
+  assert.equal(/acc-b1|acc-b2|shop-b|b@intel/.test(JSON.stringify(r)), false, "benchmark never exposes other tenants' identities");
+
+  // Auth + ownership.
+  const noauth = await benchmarkApi({ request: new Request(`https://x/api/intelligence/benchmark?site=${sA.site.id}`), env });
+  assert.equal(noauth.status, 401, "intelligence requires login");
+  const foreign = await benchmarkApi({ request: new Request(`https://x/api/intelligence/benchmark?site=${sB1.site.id}`, { headers: ca }), env });
+  assert.equal(foreign.status, 404, "can't benchmark a site you don't own");
+
+  // Dataset coverage (no ?site) — proves the moat compounds by industry.
+  const cov = await (await benchmarkApi({ request: new Request("https://x/api/intelligence/benchmark", { headers: ca }), env })).json();
+  assert.ok(cov.coverage.some((c) => c.industry === "accounting" && c.count === 3), "coverage reports the accounting cohort");
+}
+await testVisibilityIntelligenceBenchmark();
 
 console.log("api-smoke: ok");
