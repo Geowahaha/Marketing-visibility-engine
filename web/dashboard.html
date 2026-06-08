@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Mark — Visibility Dashboard</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131823; --panel2:#1a2030; --line:#232b3d;
+    --ink:#e8edf6; --mut:#93a0b8; --acc:#4f8cff; --good:#27c08a; --warn:#f0a92f; --bad:#e85d4f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;background:var(--bg);color:var(--ink)}
+  a{color:var(--acc);text-decoration:none}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,14,20,.9);backdrop-filter:blur(8px)}
+  .brand{font-weight:700;letter-spacing:.2px}
+  .brand small{color:var(--mut);font-weight:500;margin-left:8px}
+  .row{display:flex;gap:8px;align-items:center}
+  button,.btn{background:var(--acc);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  button:disabled{opacity:.5;cursor:default}
+  main{max-width:1080px;margin:0 auto;padding:22px}
+  input{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 12px;font:inherit;min-width:260px}
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .kpi{font-size:34px;font-weight:800}
+  .mut{color:var(--mut)}
+  .sub{font-size:13px;color:var(--mut)}
+  table{width:100%;border-collapse:collapse;margin-top:6px}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);font-size:14px}
+  th{color:var(--mut);font-weight:600}
+  tr.clk{cursor:pointer}
+  tr.clk:hover{background:var(--panel2)}
+  .pill{display:inline-block;min-width:34px;text-align:center;padding:3px 9px;border-radius:999px;font-weight:700;font-size:13px}
+  .empty{padding:28px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:14px}
+  .section-title{font-weight:700;margin:24px 0 8px}
+  .spark{display:block}
+  .hide{display:none}
+  .note{font-size:12px;color:var(--mut);margin-top:8px}
+  .flash{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">AI Mark <small id="tagline">Visibility Intelligence</small></div>
+  <div class="row">
+    <button class="ghost" id="langBtn">ไทย</button>
+    <span id="who" class="sub"></span>
+    <button id="authBtn" class="ghost">Sign in</button>
+  </div>
+</header>
+<main>
+  <div id="flash" class="flash hide"></div>
+
+  <div class="row" style="gap:8px;flex-wrap:wrap">
+    <input id="siteUrl" placeholder="https://your-site.com" autocomplete="off">
+    <button id="connectBtn" data-i="connect">Connect site</button>
+    <button class="ghost" id="auditBtn" data-i="audit">Run audit</button>
+  </div>
+  <div class="note" id="connHint">Sign in to track a site over time. A scan without sign-in stays one-off.</div>
+
+  <div id="overview" class="hide">
+    <div class="section-title" data-i="portfolio">Your sites</div>
+    <div class="grid cards" id="kpis"></div>
+    <div class="card" style="margin-top:14px">
+      <table><thead><tr>
+        <th data-i="site">Site</th><th data-i="score">Visibility</th><th data-i="audits">Audits</th><th data-i="last">Last audit</th>
+      </tr></thead><tbody id="siteRows"></tbody></table>
+      <div id="sitesEmpty" class="empty hide" data-i="noSites">No sites yet. Connect one above to start tracking AI visibility.</div>
+    </div>
+  </div>
+
+  <div id="detail" class="hide">
+    <div class="row" style="justify-content:space-between;margin-top:18px">
+      <div class="section-title" id="detailHost" style="margin:0"></div>
+      <button class="ghost" id="backBtn" data-i="back">Back</button>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div><div class="sub" data-i="trendLbl">Visibility Score trend</div><div class="kpi" id="curScore">—</div><div class="sub" id="deltaLbl"></div></div>
+        <svg id="spark" class="spark" width="420" height="90" viewBox="0 0 420 90" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="sub" data-i="history">Audit history</div>
+      <table><thead><tr><th data-i="when">When</th><th data-i="score">Visibility</th><th data-i="trigger">Trigger</th></tr></thead>
+      <tbody id="auditRows"></tbody></table>
+    </div>
+  </div>
+
+  <div id="signedOut" class="empty" data-i="signedOut">Sign in with Google to see your visibility platform.</div>
+</main>
+
+<script>
+const I18N = {
+  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off."},
+  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว"}
+};
+let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
+let AUTHED = false;
+const $ = (s)=>document.querySelector(s);
+const scoreColor = (n)=> n==null?"var(--mut)": n>=80?"var(--good)": n>=55?"var(--warn)":"var(--bad)";
+function applyLang(){
+  const t=I18N[LANG];
+  document.querySelectorAll("[data-i]").forEach(el=>{ const k=el.getAttribute("data-i"); if(t[k]!=null) el.textContent=t[k]; });
+  $("#langBtn").textContent = LANG==="th"?"EN":"ไทย";
+  $("#authBtn").textContent = AUTHED ? t.signout : t.signin;
+  document.documentElement.lang = LANG;
+}
+function flash(msg){ const f=$("#flash"); f.textContent=msg; f.classList.remove("hide"); setTimeout(()=>f.classList.add("hide"),4200); }
+async function api(path,opts){ const r= await fetch(path,Object.assign({credentials:"include",headers:{"content-type":"application/json"}},opts||{})); let d=null; try{d=await r.json();}catch(e){} return {status:r.status,data:d}; }
+
+async function refreshAuth(){
+  const {status,data}= await api("/api/auth/me");
+  AUTHED = status===200 && data && (data.authenticated!==false) && (data.user||data.email);
+  $("#who").textContent = AUTHED ? (data.user?.email||data.email||"") : "";
+  $("#signedOut").classList.toggle("hide",AUTHED);
+  $("#overview").classList.toggle("hide",!AUTHED);
+  if(!AUTHED) $("#detail").classList.add("hide");
+  applyLang();
+  if(AUTHED) loadSites();
+}
+async function loadSites(){
+  const {status,data}= await api("/api/sites");
+  if(status!==200||!data||!Array.isArray(data.sites)) return;
+  const sites=data.sites;
+  $("#sitesEmpty").classList.toggle("hide",sites.length>0);
+  // KPI cards
+  const avg = sites.filter(s=>s.latest_score!=null).reduce((a,s,_,arr)=>a+s.latest_score/arr.length,0);
+  const tracked = sites.length;
+  const totalAudits = sites.reduce((a,s)=>a+(Number(s.audits_count)||0),0);
+  $("#kpis").innerHTML =
+    card(LANG==="th"?"คะแนนเฉลี่ย":"Avg visibility", sites.some(s=>s.latest_score!=null)?Math.round(avg):"—", scoreColor(Math.round(avg)))
+    + card(LANG==="th"?"เว็บที่ติดตาม":"Sites tracked", tracked)
+    + card(LANG==="th"?"สแกนทั้งหมด":"Total audits", totalAudits);
+  $("#siteRows").innerHTML = sites.map(s=>`<tr class="clk" data-id="${s.id}">
+    <td>${esc(s.host)}</td>
+    <td><span class="pill" style="background:${scoreColor(s.latest_score)};color:#06120d">${s.latest_score==null?"—":s.latest_score}</span></td>
+    <td>${s.audits_count==null?0:s.audits_count}</td>
+    <td class="mut">${s.last_audit_at?fmt(s.last_audit_at):"—"}</td></tr>`).join("");
+  document.querySelectorAll("#siteRows tr.clk").forEach(tr=>tr.onclick=()=>openSite(tr.getAttribute("data-id")));
+}
+function card(label,val,color){ return `<div class="card"><div class="sub">${esc(label)}</div><div class="kpi" style="color:${color||'var(--ink)'}">${val}</div></div>`; }
+async function openSite(id){
+  const {status,data}= await api("/api/sites/"+encodeURIComponent(id));
+  if(status!==200||!data) { flash("Could not load site"); return; }
+  $("#overview").classList.add("hide"); $("#detail").classList.remove("hide");
+  $("#detailHost").textContent = data.site.host;
+  $("#curScore").textContent = data.site.latest_score==null?"—":data.site.latest_score;
+  $("#curScore").style.color = scoreColor(data.site.latest_score);
+  const d=data.delta||0; $("#deltaLbl").textContent = d? (d>0?`+${d}`:`${d}`)+ (LANG==="th"?" จากครั้งแรก":" since first audit"):"";
+  drawSpark(data.trend||[]);
+  $("#auditRows").innerHTML = (data.audits||[]).map(a=>`<tr><td class="mut">${fmt(a.created_at)}</td>
+    <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score==null?"—":a.overall_score}</span></td>
+    <td class="mut">${esc(a.trigger||"manual")}</td></tr>`).join("") || `<tr><td colspan="3" class="mut">—</td></tr>`;
+}
+function drawSpark(trend){
+  const svg=$("#spark"); const pts=trend.filter(p=>p.score!=null);
+  if(pts.length<2){ svg.innerHTML=`<text x="10" y="50" fill="#93a0b8" font-size="13">${LANG==="th"?"ต้องสแกนอย่างน้อย 2 ครั้งเพื่อดูแนวโน้ม":"Two audits needed to chart a trend"}</text>`; return; }
+  const W=420,H=90,pad=8; const xs=(i)=>pad+i*(W-2*pad)/(pts.length-1); const ys=(v)=>H-pad-(v/100)*(H-2*pad);
+  const d=pts.map((p,i)=>`${i?"L":"M"}${xs(i).toFixed(1)},${ys(p.score).toFixed(1)}`).join(" ");
+  svg.innerHTML=`<path d="${d}" fill="none" stroke="var(--acc)" stroke-width="2.5"/>`+pts.map((p,i)=>`<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.score).toFixed(1)}" r="3" fill="var(--acc)"/>`).join("");
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+function fmt(iso){ try{ const d=new Date(iso); return d.toLocaleDateString(LANG==="th"?"th-TH":"en-GB",{year:"2-digit",month:"short",day:"numeric"}); }catch(e){return iso;} }
+
+$("#langBtn").onclick=()=>{ LANG=LANG==="th"?"en":"th"; localStorage.setItem("aimark_lang",LANG); applyLang(); if(AUTHED) loadSites(); };
+$("#authBtn").onclick=()=>{ if(AUTHED){ location.href="/api/auth/logout"; } else { location.href="/api/auth/start/google?next=/dashboard.html"; } };
+$("#backBtn").onclick=()=>{ $("#detail").classList.add("hide"); $("#overview").classList.remove("hide"); };
+$("#connectBtn").onclick=async()=>{
+  const url=$("#siteUrl").value.trim(); if(!url){ flash(LANG==="th"?"ใส่ URL ก่อน":"Enter a URL first"); return; }
+  if(!AUTHED){ flash(LANG==="th"?"เข้าสู่ระบบเพื่อบันทึกเว็บไซต์":"Sign in to save a site"); return; }
+  const {status,data}= await api("/api/sites",{method:"POST",body:JSON.stringify({url})});
+  if(status===200&&data&&data.status==="connected"){ flash((LANG==="th"?"เพิ่มแล้ว: ":"Connected: ")+data.site.host); loadSites(); }
+  else flash((data&&data.error)||"Could not connect site");
+};
+$("#auditBtn").onclick=async()=>{
+  const url=$("#siteUrl").value.trim(); if(!url){ flash(LANG==="th"?"ใส่ URL ก่อน":"Enter a URL first"); return; }
+  const btn=$("#auditBtn"); btn.disabled=true; const old=btn.textContent; btn.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
+  const {status,data}= await api("/api/scan",{method:"POST",body:JSON.stringify({url,lang:LANG})});
+  btn.disabled=false; btn.textContent=old;
+  if(status===200&&data){ flash((LANG==="th"?"คะแนน ":"Score ")+ (data.overall!=null?data.overall:"?") + (data.grade?` (${data.grade})`:"")); if(AUTHED) loadSites(); }
+  else flash((data&&data.error)||"Scan failed");
+};
+
+applyLang();
+refreshAuth();
+</script>
+</body>
+</html>

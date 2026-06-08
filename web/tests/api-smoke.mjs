@@ -53,12 +53,12 @@ import { computeSplit, revenueShares } from "../functions/api/_economy.js";
 import { onRequestGet as listSitesApi, onRequestPost as connectSite } from "../functions/api/sites.js";
 import { onRequestGet as getSiteApi } from "../functions/api/sites/[id].js";
 import { SCHEMA_STATEMENTS } from "../functions/api/_db.js";
-import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 
 // In-process D1-compatible mock (over node:sqlite) so the relational platform
-// layer is tested with real SQL, not a fake.
-function d1Mock() {
+// layer is tested with real SQL, not a fake. node:sqlite needs Node >=22.5, so it
+// is loaded dynamically and the runtime portion skips gracefully on older Node.
+function makeD1Mock(DatabaseSync) {
   const sqlite = new DatabaseSync(":memory:");
   const wrap = (sql, args) => ({
     run() { const info = sqlite.prepare(sql).run(...args); return { success: true, meta: { changes: info.changes, last_row_id: info.lastInsertRowid } }; },
@@ -2173,7 +2173,12 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
   assert.deepEqual(runtimeTables, tablesFrom(fileSql), "runtime schema must match the migration file");
   assert.equal(runtimeTables.length, 14, "platform core = 14 tables");
 
-  const env = { AUTH_SESSION_SECRET: "plat-secret", AGENT_DB: d1Mock(), RATE_LIMIT_KV: memoryKv() };
+  // The runtime portion needs node:sqlite (Node >=22.5). Skip gracefully if absent.
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: platform runtime test skipped (node:sqlite needs Node >=22.5); schema drift guard still ran"); return; }
+
+  const env = { AUTH_SESSION_SECRET: "plat-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv() };
   const a = await signSession({ sid: "sid_pa", provider: "google", email: "a@org.com", name: "A" }, env.AUTH_SESSION_SECRET);
   const cookieA = { cookie: `aimark_session=${a.token}` };
 
