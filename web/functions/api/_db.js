@@ -172,7 +172,7 @@ export async function recordAudit(env, { orgId, siteId, kind = "visibility", ove
   const score = (overall == null || Number.isNaN(Number(overall))) ? null : Math.round(Number(overall));
   await d.prepare("INSERT INTO audits (id, org_id, site_id, kind, status, overall_score, scores_json, facts_json, engine_version, trigger, created_at) VALUES (?, ?, ?, ?, 'complete', ?, ?, ?, ?, ?, ?)")
     .bind(id, orgId, siteId, kind, score, scores ? JSON.stringify(scores) : null, facts ? JSON.stringify(facts) : null, engineVersion || null, trigger, now()).run();
-  await d.prepare("UPDATE sites SET latest_score = ?, updated_at = ? WHERE id = ?").bind(score, now(), siteId).run();
+  await d.prepare("UPDATE sites SET latest_score = ?, updated_at = ? WHERE id = ? AND org_id = ?").bind(score, now(), siteId, orgId).run();
   return id;
 }
 
@@ -312,7 +312,7 @@ export async function recommendationImpact(env, orgId, siteId) {
   const items = [];
   let sum = 0, measured = 0;
   for (const r of rows) {
-    const ev = await d.prepare("SELECT meta_json FROM events WHERE target_id = ? AND action = 'recommendation_applied' ORDER BY created_at DESC LIMIT 1").bind(r.id).first();
+    const ev = await d.prepare("SELECT meta_json FROM events WHERE target_id = ? AND action = 'recommendation_applied' AND org_id = ? ORDER BY created_at DESC LIMIT 1").bind(r.id, orgId).first();
     const meta = (ev && ev.meta_json) ? (safeParse(ev.meta_json) || {}) : {};
     const scoreAtApply = meta.score_at_apply == null ? null : Number(meta.score_at_apply);
     const next = await d.prepare("SELECT overall_score FROM audits WHERE site_id = ? AND org_id = ? AND created_at > ? AND overall_score IS NOT NULL ORDER BY created_at ASC LIMIT 1").bind(siteId, orgId, r.applied_at).first();
