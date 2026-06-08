@@ -195,3 +195,22 @@ CREATE TABLE IF NOT EXISTS events (
   created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_org_time ON events(org_id, created_at);
+
+-- ── Human Outcome Stream (the business results customers pay for) ──────────
+-- leads / calls / LINE adds / quotations / sales / revenue. The bridge from
+-- visibility scores to revenue, and the most valuable stream in the dataset:
+-- it makes "what generated revenue?" answerable.
+CREATE TABLE IF NOT EXISTS outcomes (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL REFERENCES organizations(id),
+  site_id     TEXT NOT NULL REFERENCES sites(id),
+  type        TEXT NOT NULL,                     -- lead | line_add | phone_call | contact_form | quotation | meeting | sale | revenue
+  value_cents INTEGER NOT NULL DEFAULT 0,        -- monetary value in satang (THB) where applicable
+  currency    TEXT NOT NULL DEFAULT 'thb',
+  note        TEXT,
+  source      TEXT NOT NULL DEFAULT 'manual',    -- manual | line | webform | api | ...
+  occurred_at TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_outcomes_site_time ON outcomes(site_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_outcomes_org ON outcomes(org_id);

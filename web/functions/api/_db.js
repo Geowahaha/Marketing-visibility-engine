@@ -67,6 +67,12 @@ export const SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_alerts_org_unread ON alerts(org_id, read_at)`,
   `CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, org_id TEXT, actor TEXT, action TEXT NOT NULL, target_type TEXT, target_id TEXT, meta_json TEXT, created_at TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_events_org_time ON events(org_id, created_at)`,
+  // Human Outcome Stream — the business results customers actually pay for
+  // (leads/calls/LINE adds/quotations/sales/revenue). The bridge from visibility
+  // scores to revenue, and the most valuable stream in the dataset.
+  `CREATE TABLE IF NOT EXISTS outcomes (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, site_id TEXT NOT NULL, type TEXT NOT NULL, value_cents INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'thb', note TEXT, source TEXT NOT NULL DEFAULT 'manual', occurred_at TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_outcomes_site_time ON outcomes(site_id, occurred_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_outcomes_org ON outcomes(org_id)`,
 ];
 
 const _ensured = new WeakSet();
@@ -366,6 +372,67 @@ export async function competitorTrend(env, orgId, siteId, limit = 300) {
     else byHost.get(host).observations.push(obs);
   }
   return { competitors: [...byHost.values()] };
+}
+
+/* ── Human Outcome Stream: leads / sales / revenue — what customers actually buy ── */
+export const OUTCOME_TYPES = ["lead", "line_add", "phone_call", "contact_form", "quotation", "meeting", "sale", "revenue"];
+const LEAD_SET = new Set(["lead", "line_add", "phone_call", "contact_form", "quotation", "meeting"]);
+const SALE_SET = new Set(["sale", "revenue"]);
+
+/** Record one business outcome (can't-backfill — the revenue truth, captured at the moment). */
+export async function recordOutcome(env, { orgId, siteId, type, valueCents = 0, currency = "thb", note = "", source = "manual", occurredAt }) {
+  if (!dbReady(env)) return null;
+  await ensureSchema(env);
+  const t = String(type || "").toLowerCase().trim();
+  if (!t) return null;
+  const id = uid();
+  const at = occurredAt || now();
+  const cents = Math.max(0, Math.round(Number(valueCents) || 0));
+  await db(env).prepare("INSERT INTO outcomes (id, org_id, site_id, type, value_cents, currency, note, source, occurred_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, orgId, siteId, t.slice(0, 40), cents, String(currency).slice(0, 8), String(note || "").slice(0, 300), String(source || "manual").slice(0, 40), at, now()).run();
+  return { id, type: t, value_cents: cents, occurred_at: at };
+}
+
+export async function listOutcomes(env, orgId, siteId, limit = 1000) {
+  if (!dbReady(env)) return [];
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT id, type, value_cents, currency, note, source, occurred_at FROM outcomes WHERE org_id = ? AND site_id = ? ORDER BY occurred_at DESC LIMIT ?").bind(orgId, siteId, limit).all();
+  return (r && r.results) || [];
+}
+
+export function summarizeOutcomes(rows = []) {
+  let leads = 0, sales = 0, revenue_cents = 0;
+  for (const o of rows) {
+    const t = String(o.type || "").toLowerCase();
+    if (LEAD_SET.has(t)) leads += 1;
+    if (SALE_SET.has(t)) { sales += 1; revenue_cents += Math.max(0, Number(o.value_cents) || 0); }
+  }
+  return { count: rows.length, leads, sales, revenue_cents, revenue: +(revenue_cents / 100).toFixed(2) };
+}
+
+export async function outcomeSummary(env, orgId, siteId) {
+  return summarizeOutcomes(await listOutcomes(env, orgId, siteId));
+}
+
+/** "What generated revenue?" — attribute outcomes to each applied recommendation by
+ *  time window (outcomes after a rec was applied, before the next was). Honest
+ *  time-ordered CORRELATION, not claimed causation. The crown-jewel Growth read:
+ *  FAQ Schema -> +6 leads -> +2 sales -> ฿84,000. */
+export async function revenueAttribution(env, orgId, siteId) {
+  if (!dbReady(env)) return { applied: 0, totals: summarizeOutcomes([]), items: [] };
+  await ensureSchema(env);
+  const d = db(env);
+  const recsRes = await d.prepare("SELECT id, title, applied_at FROM recommendations WHERE org_id = ? AND site_id = ? AND status = 'applied' AND applied_at IS NOT NULL ORDER BY applied_at ASC LIMIT 100").bind(orgId, siteId).all();
+  const recs = (recsRes && recsRes.results) || [];
+  const outcomes = await listOutcomes(env, orgId, siteId, 1000);
+  const items = recs.map((rec, i) => {
+    const start = rec.applied_at;
+    const end = (i + 1 < recs.length) ? recs[i + 1].applied_at : null;
+    const win = outcomes.filter((o) => o.occurred_at >= start && (end == null || o.occurred_at < end));
+    const s = summarizeOutcomes(win);
+    return { rec_id: rec.id, title: rec.title, applied_at: rec.applied_at, leads: s.leads, sales: s.sales, revenue: s.revenue, outcomes: s.count };
+  }).sort((a, b) => (b.revenue - a.revenue) || (b.leads - a.leads));
+  return { applied: recs.length, totals: summarizeOutcomes(outcomes), items };
 }
 
 export function publicSite(site) {

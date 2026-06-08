@@ -58,11 +58,13 @@ import { onRequestGet as billingApi } from "../functions/api/billing.js";
 import { onRequestPost as monitoringRun } from "../functions/api/monitoring/run.js";
 import { onRequestGet as benchmarkApi } from "../functions/api/intelligence/benchmark.js";
 import { median, percentileRank, cohortStats } from "../functions/api/_intelligence.js";
-import { recordAudit, listCitationSnapshots, recordCompetitor, recordCompetitorSnapshot } from "../functions/api/_db.js";
+import { recordAudit, listCitationSnapshots, recordCompetitor, recordCompetitorSnapshot, summarizeOutcomes } from "../functions/api/_db.js";
 import { onRequestPost as citationProbe } from "../functions/api/citation-probe.js";
 import { onRequestPost as markRecApplied } from "../functions/api/recommendations/[id]/applied.js";
 import { onRequestGet as impactApi } from "../functions/api/intelligence/impact.js";
 import { onRequestGet as competitorsApi } from "../functions/api/intelligence/competitors.js";
+import { onRequestPost as outcomeApi } from "../functions/api/sites/[id]/outcome.js";
+import { onRequestGet as revenueApi } from "../functions/api/intelligence/revenue.js";
 import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
 import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
 
@@ -2191,7 +2193,7 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
   const runtimeTables = tablesFrom(SCHEMA_STATEMENTS.join("\n"));
   const fileSql = readFileSync(new URL("../migrations/0001_platform_core.sql", import.meta.url), "utf8");
   assert.deepEqual(runtimeTables, tablesFrom(fileSql), "runtime schema must match the migration file");
-  assert.equal(runtimeTables.length, 14, "platform core = 14 tables");
+  assert.equal(runtimeTables.length, 15, "platform core = 15 tables (incl. outcomes)");
 
   // The runtime portion needs node:sqlite (Node >=22.5). Skip gracefully if absent.
   let DatabaseSync;
@@ -2584,5 +2586,58 @@ async function testCompetitorTimeSeriesCapture() {
   assert.equal(foreign.status, 404, "can't read a site you don't own");
 }
 await testCompetitorTimeSeriesCapture();
+
+async function testHumanOutcomeStreamAndRevenueAttribution() {
+  // Pure: leads vs sales vs revenue (the money math).
+  const s = summarizeOutcomes([{ type: "lead" }, { type: "line_add" }, { type: "sale", value_cents: 8400000 }, { type: "sale", value_cents: 200000 }]);
+  assert.equal(s.leads, 2); assert.equal(s.sales, 2); assert.equal(s.revenue, 86000);
+
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: outcome stream skipped (node:sqlite >=22.5); money math covered"); return; }
+  const env = { AUTH_SESSION_SECRET: "out-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv() };
+  const u = await signSession({ sid: "sid_out", provider: "google", email: "o@out.com", name: "O" }, env.AUTH_SESSION_SECRET);
+  const ck = { cookie: `aimark_session=${u.token}` };
+  const connected = await (await connectSite({ request: new Request("https://x/api/sites", { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ url: "https://shop.example.com" }) }), env })).json();
+  const siteId = connected.site.id;
+  const orgId = (await (await listSitesApi({ request: new Request("https://x/api/sites", { headers: ck }), env })).json()).org_id;
+
+  // Apply a recommendation, then real business outcomes follow it.
+  await recordRecommendations(env, { orgId, siteId, auditId: "a1", recs: [{ priority: 1, title: "Add FAQ schema" }] });
+  const recId = (await listRecommendationsForAudit(env, orgId, "a1"))[0].id;
+  await (await markRecApplied({ request: new Request(`https://x/api/recommendations/${recId}/applied`, { method: "POST", headers: ck }), env, params: { id: recId } })).json();
+  await new Promise((r) => setTimeout(r, 12)); // outcomes occur strictly after the fix
+
+  const logOutcome = (b) => outcomeApi({ request: new Request(`https://x/api/sites/${siteId}/outcome`, { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify(b) }), env, params: { id: siteId } });
+  await (await logOutcome({ type: "line_add" })).json();
+  await (await logOutcome({ type: "lead" })).json();
+  const saleRes = await (await logOutcome({ type: "sale", value: 84000 })).json();
+  assert.equal(saleRes.status, "recorded");
+  assert.equal(saleRes.summary.sales, 1);
+  assert.equal(saleRes.summary.leads, 2, "line_add + lead both count as leads");
+  assert.equal(saleRes.summary.revenue, 84000);
+
+  // Invalid type rejected (clean dataset).
+  const bad = await logOutcome({ type: "nonsense" });
+  assert.equal(bad.status, 400);
+
+  // "What generated revenue?" — attributes the outcomes to the applied FAQ rec.
+  const rev = await (await revenueApi({ request: new Request(`https://x/api/intelligence/revenue?site=${siteId}`, { headers: ck }), env })).json();
+  assert.equal(rev.summary.revenue, 84000, "site revenue total");
+  assert.equal(rev.attribution.applied, 1);
+  const faq = rev.attribution.items.find((it) => it.title === "Add FAQ schema");
+  assert.ok(faq, "the FAQ fix appears in attribution");
+  assert.equal(faq.leads, 2, "leads after the fix attributed to it");
+  assert.equal(faq.sales, 1);
+  assert.equal(faq.revenue, 84000, "FAQ schema -> ฿84,000 (the directive's example, now real + queryable)");
+
+  // Auth + ownership.
+  const noauth = await outcomeApi({ request: new Request(`https://x/api/sites/${siteId}/outcome`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "lead" }) }), env, params: { id: siteId } });
+  assert.equal(noauth.status, 401, "logging an outcome requires login");
+  const o2 = await signSession({ sid: "sid_o2", provider: "google", email: "x2@other.com", name: "X" }, env.AUTH_SESSION_SECRET);
+  const foreign = await revenueApi({ request: new Request(`https://x/api/intelligence/revenue?site=${siteId}`, { headers: { cookie: `aimark_session=${o2.token}` } }), env });
+  assert.equal(foreign.status, 404, "can't read another tenant's revenue");
+}
+await testHumanOutcomeStreamAndRevenueAttribution();
 
 console.log("api-smoke: ok");
