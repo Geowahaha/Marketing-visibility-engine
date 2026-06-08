@@ -113,6 +113,14 @@
       <div id="intelBody"></div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div class="sub" data-i="whyWin">Why competitors win</div>
+      <div class="row" style="gap:8px;margin:8px 0;flex-wrap:wrap">
+        <input id="compUrl" placeholder="competitor URL (e.g. acclime.com)" style="min-width:240px"/>
+        <button id="analyzeCompBtn" data-i="analyze">Analyze</button>
+      </div>
+      <div id="whyWinBody"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sub" data-i="history">Audit history</div>
       <table><thead><tr><th data-i="when">When</th><th data-i="score">Visibility</th><th data-i="trigger">Trigger</th></tr></thead>
       <tbody id="auditRows"></tbody></table>
@@ -124,12 +132,12 @@
 
 <script>
 const I18N = {
-  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice.",intel:"Visibility Intelligence",growth:"What generated revenue",logOutcome:"Log outcome"},
-  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",intel:"ข้อมูลเชิงลึกการมองเห็น",growth:"อะไรสร้างรายได้",logOutcome:"บันทึกผลลัพธ์"}
+  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice.",intel:"Visibility Intelligence",growth:"What generated revenue",logOutcome:"Log outcome",whyWin:"Why competitors win",analyze:"Analyze"},
+  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",intel:"ข้อมูลเชิงลึกการมองเห็น",growth:"อะไรสร้างรายได้",logOutcome:"บันทึกผลลัพธ์",whyWin:"ทำไมคู่แข่งชนะ",analyze:"วิเคราะห์"}
 };
 let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
 let AUTHED = false;
-let curSiteId=null, curMonitoring=false;
+let curSiteId=null, curSiteHost=null, curMonitoring=false;
 const $ = (s)=>document.querySelector(s);
 const scoreColor = (n)=> n==null?"var(--mut)": n>=80?"var(--good)": n>=55?"var(--warn)":"var(--bad)";
 function applyLang(){
@@ -204,7 +212,7 @@ function updateMonitorBtn(){
 async function openSite(id){
   const {status,data}= await api("/api/sites/"+encodeURIComponent(id));
   if(status!==200||!data) { flash("Could not load site"); return; }
-  curSiteId=id; curMonitoring=!!data.site.monitoring_enabled; updateMonitorBtn();
+  curSiteId=id; curSiteHost=data.site.host; curMonitoring=!!data.site.monitoring_enabled; updateMonitorBtn();
   $("#overview").classList.add("hide"); $("#detail").classList.remove("hide");
   $("#detailHost").textContent = data.site.host;
   $("#curScore").textContent = data.site.latest_score==null?"—":data.site.latest_score;
@@ -243,6 +251,29 @@ async function loadRevenue(id){
     html+=`<div class="sub" style="margin-top:8px">${LANG==="th"?"บันทึกลีด/ยอดขายเมื่อเกิดขึ้น แล้วระบบจะบอกว่าการแก้ไขไหนสร้างรายได้":"Log leads/sales as they happen — AIMark shows which fixes drove the revenue."}</div>`;
   }
   el.innerHTML=html;
+}
+// P2 "Why competitors win" — surface the existing gap analysis: scoreboard + the
+// specific gaps + the fixes that close them. The sales-conversion insight.
+async function analyzeCompetitor(){
+  if(!curSiteHost) return;
+  const comp=$("#compUrl").value.trim();
+  if(!comp){ flash(LANG==="th"?"ใส่ URL คู่แข่ง":"Enter a competitor URL"); return; }
+  const el=$("#whyWinBody");
+  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังสแกนและวิเคราะห์ช่องว่าง… (อาจใช้เวลาสักครู่)":"Scanning + analyzing the gap… (this can take a moment)"}</div>`;
+  const {status,data}=await api("/api/competitor",{method:"POST",body:JSON.stringify({url:"https://"+curSiteHost,competitors:[comp]})});
+  if(status!==200||!data){ el.innerHTML=`<div class="sub">${esc((data&&data.error)||"Could not analyze")}</div>`; return; }
+  const sb=(data.scoreboard||[]);
+  let html="";
+  if(sb.length){ html+=`<table><tbody>`+sb.map(s=>`<tr><td>${esc(String(s.url||"").replace(/^https?:\/\//,"").replace(/\/$/,""))}</td><td class="mut">${s.role==="target"?(LANG==="th"?"คุณ":"You"):(LANG==="th"?"คู่แข่ง":"Competitor")}</td><td style="text-align:right"><span class="pill" style="background:${scoreColor(s.overall)};color:#06120d">${s.overall==null?"—":s.overall}</span></td></tr>`).join("")+`</tbody></table>`; }
+  if(data.preview){
+    html+=`<div class="sub" style="margin-top:10px">${LANG==="th"?"ปลดล็อกการวิเคราะห์ช่องว่าง + วิธีแก้ ด้วยแผน Growth Monitor":"Unlock the full gap analysis + the fixes with Growth Monitor"}</div><button id="whyWinUpgrade" style="margin-top:8px">Upgrade</button>`;
+    el.innerHTML=html; const ub=$("#whyWinUpgrade"); if(ub) ub.onclick=()=>subscribe("card"); return;
+  }
+  const gaps=(data.gaps||[]).filter(g=>(g.gap||0)>0).sort((a,b)=>(b.gap||0)-(a.gap||0));
+  if(gaps.length){ html+=`<div class="sub" style="margin-top:12px">${LANG==="th"?"ทำไมคู่แข่งชนะ":"Why they win"}</div>`+gaps.slice(0,5).map(g=>`<div style="margin:8px 0"><b>${esc(g.category)}</b> <span class="mut">(+${g.gap})</span><div class="sub">${esc(g.why_it_matters||"")}</div></div>`).join(""); }
+  const fixes=(data.fixes_that_close_the_gap||[]).slice().sort((a,b)=>(a.priority||9)-(b.priority||9));
+  if(fixes.length){ html+=`<div class="sub" style="margin-top:12px">${LANG==="th"?"สิ่งที่ต้องทำเพื่อแซง":"What to do to win"}</div><table><tbody>`+fixes.slice(0,5).map(f=>`<tr><td><b>${esc(f.action||"")}</b>${f.expected_effect?`<div class="sub">${esc(f.expected_effect)}</div>`:""}</td><td class="mut" style="text-align:right">${esc(f.effort||"")}</td></tr>`).join("")+`</tbody></table>`; }
+  el.innerHTML=html||`<div class="sub">—</div>`;
 }
 async function logOutcome(){
   if(!curSiteId) return;
@@ -294,6 +325,7 @@ $("#langBtn").onclick=()=>{ LANG=LANG==="th"?"en":"th"; localStorage.setItem("ai
 $("#authBtn").onclick=()=>{ if(AUTHED){ location.href="/api/auth/logout"; } else { location.href="/api/auth/start/google?next=/dashboard.html"; } };
 $("#backBtn").onclick=()=>{ $("#detail").classList.add("hide"); $("#overview").classList.remove("hide"); };
 $("#logOutcomeBtn").onclick=logOutcome;
+$("#analyzeCompBtn").onclick=analyzeCompetitor;
 $("#monitorBtn").onclick=async()=>{
   if(!curSiteId) return;
   const {status,data}= await api("/api/sites/"+encodeURIComponent(curSiteId)+"/monitor",{method:"POST",body:JSON.stringify({enabled:!curMonitoring})});
