@@ -92,6 +92,10 @@
       <div id="recsEmpty" class="empty hide" data-i="noRecs">No open recommendations — nice.</div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div class="sub" data-i="intel">Visibility Intelligence</div>
+      <div id="intelBody"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sub" data-i="history">Audit history</div>
       <table><thead><tr><th data-i="when">When</th><th data-i="score">Visibility</th><th data-i="trigger">Trigger</th></tr></thead>
       <tbody id="auditRows"></tbody></table>
@@ -103,8 +107,8 @@
 
 <script>
 const I18N = {
-  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice."},
-  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม"}
+  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice.",intel:"Visibility Intelligence"},
+  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",intel:"ข้อมูลเชิงลึกการมองเห็น"}
 };
 let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
 let AUTHED = false;
@@ -199,6 +203,35 @@ async function openSite(id){
   $("#auditRows").innerHTML = (data.audits||[]).map(a=>`<tr><td class="mut">${fmt(a.created_at)}</td>
     <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score==null?"—":a.overall_score}</span></td>
     <td class="mut">${esc(a.trigger||"manual")}</td></tr>`).join("") || `<tr><td colspan="3" class="mut">—</td></tr>`;
+  loadIntelligence(id);
+}
+// Surface the live Visibility Intelligence (benchmark / applied-fix impact / competitor
+// threat) so the customer SEES the value — the conversion + retention hook.
+async function loadIntelligence(id){
+  const el=$("#intelBody"); if(!el) return;
+  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังวิเคราะห์…":"Analyzing…"}</div>`;
+  const q=encodeURIComponent(id);
+  const [bench,imp,comp]=await Promise.all([api("/api/intelligence/benchmark?site="+q),api("/api/intelligence/impact?site="+q),api("/api/intelligence/competitors?site="+q)]);
+  const row=(color,big,text)=>`<div style="display:flex;gap:8px;align-items:center;margin:8px 0"><span class="pill" style="background:${color};color:#06120d;min-width:34px;text-align:center">${big}</span><span>${text}</span></div>`;
+  const out=[];
+  const b=bench.data&&bench.data.benchmark;
+  if(b&&b.available&&b.cohort&&b.cohort.count>=1&&b.your_percentile!=null){
+    const col=b.position==="bottom"?"var(--bad)":b.position==="top"?"var(--good)":"var(--warn)";
+    out.push(row(col,b.your_percentile+"%",LANG==="th"?`คุณนำหน้า ${b.your_percentile}% ของอุตสาหกรรม "${esc(b.industry)}" (เทียบ ${b.cohort.count} เว็บ)`:`You outperform ${b.your_percentile}% of "${esc(b.industry)}" (vs ${b.cohort.count} sites)`));
+    if(b.gap_to_avg>0) out.push(`<div class="sub">${LANG==="th"?`ต่ำกว่าค่าเฉลี่ยอุตสาหกรรม ${b.gap_to_avg} คะแนน`:`${b.gap_to_avg} below the industry average`}</div>`);
+  }
+  const im=imp.data&&imp.data.impact;
+  if(im&&im.measured>0&&im.avg_delta!=null){
+    const up=im.avg_delta>=0;
+    out.push(row(up?"var(--good)":"var(--bad)",(up?"+":"")+im.avg_delta,LANG==="th"?`สิ่งที่คุณแก้ขยับคะแนนเฉลี่ย ${up?"+":""}${im.avg_delta} (วัดแล้ว ${im.measured} รายการ)`:`Your applied fixes moved you ${up?"+":""}${im.avg_delta} on average (${im.measured} measured)`));
+  }
+  const cs=((comp.data&&comp.data.competitors)||[]).filter(c=>c.latest);
+  if(cs.length){
+    const t=cs.slice().sort((a,b)=>(b.latest.competitor_score||0)-(a.latest.competitor_score||0))[0];
+    const ahead=(t.latest.gap||0)>0;
+    out.push(row(ahead?"var(--bad)":"var(--mut)",ahead?"!":"OK",LANG==="th"?`คู่แข่งเด่น ${esc(t.host)} ${ahead?`นำคุณ ${t.latest.gap} คะแนน`:"ยังตามหลังคุณ"}`:`Top competitor ${esc(t.host)} ${ahead?`is ${t.latest.gap} ahead`:"is behind you"}`));
+  }
+  el.innerHTML = out.length? out.join("") : `<div class="sub">${LANG==="th"?"ยังไม่มีข้อมูลเชิงลึก — ตั้งค่าอุตสาหกรรมของเว็บ, สแกนซ้ำ, หรือเทียบคู่แข่งเพื่อปลดล็อก":"No intelligence yet — set the site's industry, re-scan, or run a competitor comparison to unlock"}</div>`;
 }
 function drawSpark(trend){
   const svg=$("#spark"); const pts=trend.filter(p=>p.score!=null);
