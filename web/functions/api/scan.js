@@ -20,7 +20,9 @@
 
 import { callLLM } from "./_llm.js";
 import { requireSession } from "./_auth.js";
-import { dbReady, ensureOrgForSession, ensureSite, recordAudit, recordFindings } from "./_db.js";
+import { dbReady, ensureOrgForSession, ensureSite, recordAudit, recordFindings, recordRecommendations } from "./_db.js";
+
+const SEVERITY_PRIORITY = { critical: 1, high: 2, medium: 3, low: 4, info: 5 };
 
 /**
  * Platform Phase 1: persist a relational audit row for SIGNED-IN users so the
@@ -42,10 +44,14 @@ async function persistScanAudit(context, url, det) {
       overall: det.overall, scores: det.categories,
       engineVersion: "det-rubric-v1", trigger: "manual",
     });
-    const findings = (det.checks || [])
-      .filter((c) => String(c.status || "").toLowerCase() === "fail")
-      .map((c) => ({ category: c.category, severity: c.severity || "medium", code: c.check, title: c.check, detail: c.detail || "" }));
+    const fails = (det.checks || []).filter((c) => String(c.status || "").toLowerCase() === "fail");
+    const findings = fails.map((c) => ({ category: c.category, severity: c.severity || "medium", code: c.check, title: c.check, detail: c.detail || "" }));
     await recordFindings(env, { orgId: ctx.org_id, siteId, auditId, findings });
+    // Actionable Intelligence: prioritized recommendations (critical/high first).
+    const recs = fails
+      .map((c) => ({ priority: SEVERITY_PRIORITY[String(c.severity || "medium").toLowerCase()] || 3, title: c.check, action: c.fix || "", impact: c.detail || "", effort: "low" }))
+      .sort((a, b) => a.priority - b.priority).slice(0, 30);
+    await recordRecommendations(env, { orgId: ctx.org_id, siteId, auditId, recs });
   } catch { /* best-effort; the scan must never fail because of persistence */ }
 }
 

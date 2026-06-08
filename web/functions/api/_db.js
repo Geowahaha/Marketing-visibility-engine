@@ -188,6 +188,28 @@ export async function listAudits(env, orgId, siteId, limit = 60) {
   return ((r && r.results) || []).map((a) => ({ id: a.id, kind: a.kind, overall_score: a.overall_score, scores: a.scores_json ? safeParse(a.scores_json) : null, trigger: a.trigger, created_at: a.created_at }));
 }
 
+/** Persist prioritized recommendations (Actionable Intelligence) for one audit. */
+export async function recordRecommendations(env, { orgId, siteId, auditId, recs = [] }) {
+  if (!Array.isArray(recs) || !recs.length) return 0;
+  await ensureSchema(env);
+  const d = db(env);
+  let n = 0;
+  for (const r of recs.slice(0, 30)) {
+    await d.prepare("INSERT INTO recommendations (id, org_id, site_id, audit_id, priority, title, action, impact, effort, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'suggested', ?)")
+      .bind(uid(), orgId, siteId, auditId || null, Math.max(1, Math.min(5, Number(r.priority) || 3)), String(r.title || "improve").slice(0, 200), String(r.action || "").slice(0, 300), String(r.impact || "").slice(0, 300), String(r.effort || "medium").slice(0, 20), now()).run();
+    n += 1;
+  }
+  return n;
+}
+
+/** The current action list = the most recent audit's recommendations, priority-first. */
+export async function listRecommendationsForAudit(env, orgId, auditId) {
+  if (!dbReady(env) || !auditId) return [];
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT id, priority, title, action, impact, effort, status, created_at FROM recommendations WHERE org_id = ? AND audit_id = ? ORDER BY priority, created_at").bind(orgId, auditId).all();
+  return (r && r.results) || [];
+}
+
 export function publicSite(site) {
   if (!site) return null;
   return {

@@ -52,7 +52,7 @@ import { onRequestPost as migrateRep } from "../functions/api/agents/migrate-rep
 import { computeSplit, revenueShares } from "../functions/api/_economy.js";
 import { onRequestGet as listSitesApi, onRequestPost as connectSite } from "../functions/api/sites.js";
 import { onRequestGet as getSiteApi } from "../functions/api/sites/[id].js";
-import { SCHEMA_STATEMENTS } from "../functions/api/_db.js";
+import { SCHEMA_STATEMENTS, recordRecommendations, listRecommendationsForAudit } from "../functions/api/_db.js";
 import { readFileSync } from "node:fs";
 
 // In-process D1-compatible mock (over node:sqlite) so the relational platform
@@ -2218,6 +2218,14 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
     assert.ok(Array.isArray(detail.audits) && detail.audits.length >= 1, "audit history returned");
     assert.equal(detail.audits[0].overall_score, Math.round(scan.overall));
     assert.ok(Array.isArray(detail.trend), "trend series present for charting");
+    assert.ok(Array.isArray(detail.recommendations), "recommendations (action list) present in site detail");
+
+    // Actionable Intelligence: the recommendations layer persists + orders by priority.
+    const orgId = (await (await listSitesApi({ request: new Request("https://aimark.pages.dev/api/sites", { headers: cookieA }), env })).json()).org_id;
+    await recordRecommendations(env, { orgId, siteId, auditId: "audit-x", recs: [{ priority: 3, title: "medium thing" }, { priority: 1, title: "do first" }] });
+    const recs = await listRecommendationsForAudit(env, orgId, "audit-x");
+    assert.equal(recs.length, 2, "recommendations persisted");
+    assert.equal(recs[0].title, "do first", "recommendations ordered by priority (1 first)");
 
     // A second scan appends to the time-series (continuous tracking).
     await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", deterministic_only: true }) }), env });

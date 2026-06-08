@@ -5,7 +5,7 @@
  * site is not in the caller's org → no cross-tenant leakage).
  */
 import { requireSession } from "../_auth.js";
-import { dbReady, ensureOrgForSession, getSite, listAudits, publicSite } from "../_db.js";
+import { dbReady, ensureOrgForSession, getSite, listAudits, listRecommendationsForAudit, publicSite } from "../_db.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -31,11 +31,15 @@ export async function onRequestGet({ request, env, params }) {
     .reverse();
   const first = trend[0] && trend[0].score;
   const last = trend.length ? trend[trend.length - 1].score : null;
+  // Action list = the most recent audit's prioritized recommendations.
+  const latestAuditId = audits[0] && audits[0].id;
+  const recommendations = latestAuditId ? await listRecommendationsForAudit(env, ctx.org_id, latestAuditId) : [];
   return jc({
     status: "ok",
     site: publicSite(site),
     audits,
     trend,
     delta: (first != null && last != null) ? last - first : 0,
+    recommendations,
   });
 }

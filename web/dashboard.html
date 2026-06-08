@@ -84,6 +84,11 @@
       </div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div class="sub" data-i="doFirst">Do these first</div>
+      <table><tbody id="recRows"></tbody></table>
+      <div id="recsEmpty" class="empty hide" data-i="noRecs">No open recommendations — nice.</div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sub" data-i="history">Audit history</div>
       <table><thead><tr><th data-i="when">When</th><th data-i="score">Visibility</th><th data-i="trigger">Trigger</th></tr></thead>
       <tbody id="auditRows"></tbody></table>
@@ -95,8 +100,8 @@
 
 <script>
 const I18N = {
-  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off."},
-  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว"}
+  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice."},
+  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม"}
 };
 let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
 let AUTHED = false;
@@ -152,6 +157,12 @@ async function openSite(id){
   $("#curScore").style.color = scoreColor(data.site.latest_score);
   const d=data.delta||0; $("#deltaLbl").textContent = d? (d>0?`+${d}`:`${d}`)+ (LANG==="th"?" จากครั้งแรก":" since first audit"):"";
   drawSpark(data.trend||[]);
+  const recs=(data.recommendations||[]);
+  $("#recsEmpty").classList.toggle("hide",recs.length>0);
+  const pri=(p)=> p<=1?"var(--bad)":p<=2?"var(--warn)":"var(--mut)";
+  $("#recRows").innerHTML = recs.map(r=>`<tr><td style="width:30px"><span class="pill" style="background:${pri(r.priority)};color:#06120d">${r.priority}</span></td>
+    <td><b>${esc(r.title)}</b>${r.impact?`<div class="sub">${esc(r.impact)}</div>`:""}</td>
+    <td class="mut" style="text-align:right">${esc(r.effort||"")}</td></tr>`).join("");
   $("#auditRows").innerHTML = (data.audits||[]).map(a=>`<tr><td class="mut">${fmt(a.created_at)}</td>
     <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score==null?"—":a.overall_score}</span></td>
     <td class="mut">${esc(a.trigger||"manual")}</td></tr>`).join("") || `<tr><td colspan="3" class="mut">—</td></tr>`;
