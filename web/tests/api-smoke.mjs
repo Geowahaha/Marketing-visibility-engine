@@ -52,6 +52,8 @@ import { onRequestPost as migrateRep } from "../functions/api/agents/migrate-rep
 import { computeSplit, revenueShares } from "../functions/api/_economy.js";
 import { onRequestGet as listSitesApi, onRequestPost as connectSite } from "../functions/api/sites.js";
 import { onRequestGet as getSiteApi } from "../functions/api/sites/[id].js";
+import { onRequestGet as alertsApi } from "../functions/api/alerts.js";
+import { onRequestPost as monitorSite } from "../functions/api/sites/[id]/monitor.js";
 import { SCHEMA_STATEMENTS, recordRecommendations, listRecommendationsForAudit } from "../functions/api/_db.js";
 import { readFileSync } from "node:fs";
 
@@ -2192,13 +2194,14 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
   assert.equal(connected.site.host, "shop.example.com");
   const siteId = connected.site.id;
 
+  let pageMode = "good";
   await withMockFetch(async (input) => {
     const u = String(input?.url || input || "");
     if (u.includes("pagespeedonline")) return new Response(JSON.stringify({ error: { message: "no key" } }), { status: 429, headers: { "content-type": "application/json" } });
-    if (u.endsWith("/robots.txt")) return response("User-agent: *\nAllow: /");
-    if (u.endsWith("/sitemap.xml")) return response("<urlset><url><loc>https://shop.example.com/</loc></url></urlset>");
-    if (u.endsWith("/llms.txt")) return response("# Shop");
-    return response(htmlPage());
+    if (u.endsWith("/robots.txt")) return pageMode === "good" ? response("User-agent: *\nAllow: /") : response("User-agent: *\nDisallow: /");
+    if (u.endsWith("/sitemap.xml")) return pageMode === "good" ? response("<urlset><url><loc>https://shop.example.com/</loc></url></urlset>") : response("", 404);
+    if (u.endsWith("/llms.txt")) return pageMode === "good" ? response("# Shop") : response("", 404);
+    return pageMode === "good" ? response(htmlPage()) : response("<!doctype html><html><head><title></title></head><body><p>thin</p></body></html>");
   }, async () => {
     // Run an audit (deterministic_only avoids the LLM). The dual-write persists it.
     const scanRes = await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", deterministic_only: true }) }), env });
@@ -2227,10 +2230,24 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
     assert.equal(recs.length, 2, "recommendations persisted");
     assert.equal(recs[0].title, "do first", "recommendations ordered by priority (1 first)");
 
-    // A second scan appends to the time-series (continuous tracking).
-    await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", deterministic_only: true }) }), env });
+    // A second scan (degraded page) appends to the time-series AND must fire a
+    // score-drop alert — the continuous-monitoring value (Recurring Revenue).
+    pageMode = "bad";
+    const scan2 = await (await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", deterministic_only: true }) }), env })).json();
+    assert.ok(scan2.overall < scan.overall, "the degraded page scores lower (so a drop is detectable)");
     const detail2 = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}`, { headers: cookieA }), env, params: { id: siteId } })).json();
     assert.equal(detail2.audits.length, 2, "repeat scans accrue history (same site, no duplicate site row)");
+
+    // Alert engine fired on the drop.
+    const alerts = await (await alertsApi({ request: new Request("https://aimark.pages.dev/api/alerts", { headers: cookieA }), env })).json();
+    assert.ok(alerts.count >= 1 && alerts.alerts.some((a) => a.type === "score_drop"), "a score drop raises an alert");
+
+    // Monitoring toggle (the recurring-revenue switch).
+    const mon = await (await monitorSite({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}/monitor`, { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ enabled: true, frequency: "daily" }) }), env, params: { id: siteId } })).json();
+    assert.equal(mon.monitoring_enabled, true, "monitoring can be enabled");
+    const detail3 = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}`, { headers: cookieA }), env, params: { id: siteId } })).json();
+    assert.equal(detail3.site.monitoring_enabled, true, "monitoring flag persisted on the site");
+    pageMode = "good";
 
     // Anonymous scans stay ephemeral — they must NOT persist to any tenant.
     await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: "https://anon.example.com", deterministic_only: true }) }), env });

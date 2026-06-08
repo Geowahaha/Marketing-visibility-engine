@@ -210,6 +210,41 @@ export async function listRecommendationsForAudit(env, orgId, auditId) {
   return (r && r.results) || [];
 }
 
+/** Toggle continuous monitoring for a site (the recurring-revenue switch). */
+export async function setMonitoring(env, orgId, siteId, enabled, frequency) {
+  await ensureSchema(env);
+  const d = db(env);
+  const site = await d.prepare("SELECT id FROM sites WHERE id = ? AND org_id = ?").bind(siteId, orgId).first();
+  if (!site) return null;
+  await d.prepare("UPDATE sites SET monitoring_enabled = ?, monitor_frequency = ?, updated_at = ? WHERE id = ? AND org_id = ?")
+    .bind(enabled ? 1 : 0, String(frequency || "weekly").slice(0, 16), now(), siteId, orgId).run();
+  return await getSite(env, orgId, siteId);
+}
+
+/** Sites due for a scheduled re-audit (drives the monitoring Worker/cron). */
+export async function listMonitoredSites(env) {
+  if (!dbReady(env)) return [];
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT id, org_id, host, url, latest_score, monitor_frequency FROM sites WHERE monitoring_enabled = 1 ORDER BY updated_at LIMIT 500").all();
+  return (r && r.results) || [];
+}
+
+/** Record an alert (the reason customers come back = the recurring-revenue heartbeat). */
+export async function recordAlert(env, { orgId, siteId, type, severity = "info", message }) {
+  await ensureSchema(env);
+  const id = uid();
+  await db(env).prepare("INSERT INTO alerts (id, org_id, site_id, type, severity, message, delivered_channels, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, orgId, siteId || null, String(type || "info").slice(0, 40), String(severity).slice(0, 20), String(message || "").slice(0, 300), "", now()).run();
+  return id;
+}
+
+export async function listAlerts(env, orgId, limit = 50) {
+  if (!dbReady(env)) return [];
+  await ensureSchema(env);
+  const r = await db(env).prepare("SELECT id, site_id, type, severity, message, created_at, read_at FROM alerts WHERE org_id = ? ORDER BY created_at DESC LIMIT ?").bind(orgId, limit).all();
+  return (r && r.results) || [];
+}
+
 export function publicSite(site) {
   if (!site) return null;
   return {

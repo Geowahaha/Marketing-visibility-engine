@@ -20,7 +20,7 @@
 
 import { callLLM } from "./_llm.js";
 import { requireSession } from "./_auth.js";
-import { dbReady, ensureOrgForSession, ensureSite, recordAudit, recordFindings, recordRecommendations } from "./_db.js";
+import { dbReady, ensureOrgForSession, ensureSite, getSite, recordAudit, recordFindings, recordRecommendations, recordAlert } from "./_db.js";
 
 const SEVERITY_PRIORITY = { critical: 1, high: 2, medium: 3, low: 4, info: 5 };
 
@@ -39,11 +39,21 @@ async function persistScanAudit(context, url, det) {
     if (!ctx) return;
     const siteId = await ensureSite(env, ctx.org_id, url);
     if (!siteId) return;
+    // Capture the prior score BEFORE recording the new audit (alert engine input).
+    const prevSite = await getSite(env, ctx.org_id, siteId);
+    const prevScore = (prevSite && prevSite.latest_score != null) ? Number(prevSite.latest_score) : null;
     const auditId = await recordAudit(env, {
       orgId: ctx.org_id, siteId, kind: "visibility",
       overall: det.overall, scores: det.categories,
-      engineVersion: "det-rubric-v1", trigger: "manual",
+      engineVersion: "det-rubric-v1", trigger: context._monitor ? "scheduled" : "manual",
     });
+    // Alert engine: a real score drop is the reason customers come back (recurring value).
+    const newScore = (det.overall == null) ? null : Math.round(det.overall);
+    const dropThreshold = Number(env.AIMARK_ALERT_DROP_THRESHOLD || 5);
+    if (prevScore != null && newScore != null && (prevScore - newScore) >= dropThreshold) {
+      const drop = prevScore - newScore;
+      await recordAlert(env, { orgId: ctx.org_id, siteId, type: "score_drop", severity: drop >= 15 ? "high" : "medium", message: `Visibility dropped ${drop} pts (${prevScore} to ${newScore}) on ${hostOf(url)}` });
+    }
     const fails = (det.checks || []).filter((c) => String(c.status || "").toLowerCase() === "fail");
     const findings = fails.map((c) => ({ category: c.category, severity: c.severity || "medium", code: c.check, title: c.check, detail: c.detail || "" }));
     await recordFindings(env, { orgId: ctx.org_id, siteId, auditId, findings });

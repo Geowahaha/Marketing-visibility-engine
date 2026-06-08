@@ -62,6 +62,7 @@
   <div class="note" id="connHint">Sign in to track a site over time. A scan without sign-in stays one-off.</div>
 
   <div id="overview" class="hide">
+    <div id="alertsBar" class="flash hide"></div>
     <div class="section-title" data-i="portfolio">Your sites</div>
     <div class="grid cards" id="kpis"></div>
     <div class="card" style="margin-top:14px">
@@ -75,7 +76,7 @@
   <div id="detail" class="hide">
     <div class="row" style="justify-content:space-between;margin-top:18px">
       <div class="section-title" id="detailHost" style="margin:0"></div>
-      <button class="ghost" id="backBtn" data-i="back">Back</button>
+      <div class="row"><button class="ghost" id="monitorBtn">Monitor</button><button class="ghost" id="backBtn" data-i="back">Back</button></div>
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;align-items:flex-end">
@@ -105,6 +106,7 @@ const I18N = {
 };
 let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
 let AUTHED = false;
+let curSiteId=null, curMonitoring=false;
 const $ = (s)=>document.querySelector(s);
 const scoreColor = (n)=> n==null?"var(--mut)": n>=80?"var(--good)": n>=55?"var(--warn)":"var(--bad)";
 function applyLang(){
@@ -125,7 +127,15 @@ async function refreshAuth(){
   $("#overview").classList.toggle("hide",!AUTHED);
   if(!AUTHED) $("#detail").classList.add("hide");
   applyLang();
-  if(AUTHED) loadSites();
+  if(AUTHED){ loadSites(); loadAlerts(); }
+}
+async function loadAlerts(){
+  const {status,data}= await api("/api/alerts");
+  const bar=$("#alertsBar");
+  if(status!==200||!data||!data.alerts||!data.alerts.length){ bar.classList.add("hide"); return; }
+  const latest=data.alerts[0];
+  bar.textContent=(LANG==="th"?`มีการแจ้งเตือน ${data.count} รายการ — `:`${data.count} alert(s) — `)+latest.message;
+  bar.classList.remove("hide");
 }
 async function loadSites(){
   const {status,data}= await api("/api/sites");
@@ -148,9 +158,15 @@ async function loadSites(){
   document.querySelectorAll("#siteRows tr.clk").forEach(tr=>tr.onclick=()=>openSite(tr.getAttribute("data-id")));
 }
 function card(label,val,color){ return `<div class="card"><div class="sub">${esc(label)}</div><div class="kpi" style="color:${color||'var(--ink)'}">${val}</div></div>`; }
+function updateMonitorBtn(){
+  const b=$("#monitorBtn");
+  b.textContent = curMonitoring ? (LANG==="th"?"กำลังเฝ้าดู":"Monitoring on") : (LANG==="th"?"เปิดเฝ้าดู":"Enable monitoring");
+  b.style.borderColor = curMonitoring?"var(--good)":"var(--line)";
+}
 async function openSite(id){
   const {status,data}= await api("/api/sites/"+encodeURIComponent(id));
   if(status!==200||!data) { flash("Could not load site"); return; }
+  curSiteId=id; curMonitoring=!!data.site.monitoring_enabled; updateMonitorBtn();
   $("#overview").classList.add("hide"); $("#detail").classList.remove("hide");
   $("#detailHost").textContent = data.site.host;
   $("#curScore").textContent = data.site.latest_score==null?"—":data.site.latest_score;
@@ -180,6 +196,12 @@ function fmt(iso){ try{ const d=new Date(iso); return d.toLocaleDateString(LANG=
 $("#langBtn").onclick=()=>{ LANG=LANG==="th"?"en":"th"; localStorage.setItem("aimark_lang",LANG); applyLang(); if(AUTHED) loadSites(); };
 $("#authBtn").onclick=()=>{ if(AUTHED){ location.href="/api/auth/logout"; } else { location.href="/api/auth/start/google?next=/dashboard.html"; } };
 $("#backBtn").onclick=()=>{ $("#detail").classList.add("hide"); $("#overview").classList.remove("hide"); };
+$("#monitorBtn").onclick=async()=>{
+  if(!curSiteId) return;
+  const {status,data}= await api("/api/sites/"+encodeURIComponent(curSiteId)+"/monitor",{method:"POST",body:JSON.stringify({enabled:!curMonitoring})});
+  if(status===200&&data){ curMonitoring=!!data.monitoring_enabled; updateMonitorBtn(); flash(curMonitoring?(LANG==="th"?"เปิดการเฝ้าดูแล้ว":"Monitoring enabled"):(LANG==="th"?"ปิดการเฝ้าดู":"Monitoring off")); }
+  else flash((data&&data.error)||"Could not update monitoring");
+};
 $("#connectBtn").onclick=async()=>{
   const url=$("#siteUrl").value.trim(); if(!url){ flash(LANG==="th"?"ใส่ URL ก่อน":"Enter a URL first"); return; }
   if(!AUTHED){ flash(LANG==="th"?"เข้าสู่ระบบเพื่อบันทึกเว็บไซต์":"Sign in to save a site"); return; }
