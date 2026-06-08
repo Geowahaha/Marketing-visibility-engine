@@ -92,6 +92,23 @@
       <div id="recsEmpty" class="empty hide" data-i="noRecs">No open recommendations — nice.</div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div class="sub" data-i="growth">What generated revenue</div>
+      <div id="revenueBody"></div>
+      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+        <select id="outcomeType" style="background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 12px;font:inherit">
+          <option value="lead">Lead</option>
+          <option value="line_add">LINE add</option>
+          <option value="phone_call">Phone call</option>
+          <option value="contact_form">Contact form</option>
+          <option value="quotation">Quotation</option>
+          <option value="meeting">Meeting</option>
+          <option value="sale">Sale</option>
+        </select>
+        <input id="outcomeValue" type="number" min="0" placeholder="฿ value (for a sale)" style="min-width:150px" />
+        <button id="logOutcomeBtn" data-i="logOutcome">Log outcome</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sub" data-i="intel">Visibility Intelligence</div>
       <div id="intelBody"></div>
     </div>
@@ -107,8 +124,8 @@
 
 <script>
 const I18N = {
-  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice.",intel:"Visibility Intelligence"},
-  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",intel:"ข้อมูลเชิงลึกการมองเห็น"}
+  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice.",intel:"Visibility Intelligence",growth:"What generated revenue",logOutcome:"Log outcome"},
+  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",intel:"ข้อมูลเชิงลึกการมองเห็น",growth:"อะไรสร้างรายได้",logOutcome:"บันทึกผลลัพธ์"}
 };
 let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
 let AUTHED = false;
@@ -204,6 +221,36 @@ async function openSite(id){
     <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score==null?"—":a.overall_score}</span></td>
     <td class="mut">${esc(a.trigger||"manual")}</td></tr>`).join("") || `<tr><td colspan="3" class="mut">—</td></tr>`;
   loadIntelligence(id);
+  loadRevenue(id);
+}
+// The money view: outcomes the owner logged + which fixes the revenue followed.
+// This is the retention/upsell proof — customers buy outcomes, not scores.
+async function loadRevenue(id){
+  const el=$("#revenueBody"); if(!el) return;
+  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังรวมผลลัพธ์…":"Loading…"}</div>`;
+  const {data}=await api("/api/intelligence/revenue?site="+encodeURIComponent(id));
+  if(!data||!data.summary){ el.innerHTML=`<div class="sub">—</div>`; return; }
+  const t=data.summary, baht=(n)=>"฿"+Number(n||0).toLocaleString();
+  let html=`<div class="row" style="gap:22px">`+
+    `<div><div class="kpi">${t.leads||0}</div><div class="sub">${LANG==="th"?"ลีด":"Leads"}</div></div>`+
+    `<div><div class="kpi">${t.sales||0}</div><div class="sub">${LANG==="th"?"ขายได้":"Sales"}</div></div>`+
+    `<div><div class="kpi" style="color:var(--good)">${baht(t.revenue)}</div><div class="sub">${LANG==="th"?"รายได้":"Revenue"}</div></div></div>`;
+  const items=((data.attribution&&data.attribution.items)||[]).filter(it=>it.revenue>0||it.leads>0);
+  if(items.length){
+    html+=`<div class="sub" style="margin-top:12px">${LANG==="th"?"สิ่งที่สร้างรายได้":"What generated it"}</div><table><tbody>`+
+      items.slice(0,6).map(it=>`<tr><td><b>${esc(it.title)}</b></td><td class="mut" style="text-align:right">${it.leads} ${LANG==="th"?"ลีด":"leads"} · ${it.sales} ${LANG==="th"?"ขาย":"sales"} · ${baht(it.revenue)}</td></tr>`).join("")+`</tbody></table>`;
+  } else {
+    html+=`<div class="sub" style="margin-top:8px">${LANG==="th"?"บันทึกลีด/ยอดขายเมื่อเกิดขึ้น แล้วระบบจะบอกว่าการแก้ไขไหนสร้างรายได้":"Log leads/sales as they happen — AIMark shows which fixes drove the revenue."}</div>`;
+  }
+  el.innerHTML=html;
+}
+async function logOutcome(){
+  if(!curSiteId) return;
+  const type=$("#outcomeType").value;
+  const val=Number($("#outcomeValue").value)||0;
+  const {status,data}=await api("/api/sites/"+encodeURIComponent(curSiteId)+"/outcome",{method:"POST",body:JSON.stringify({type,value:val})});
+  if(status===200){ $("#outcomeValue").value=""; flash(LANG==="th"?"บันทึกผลลัพธ์แล้ว":"Outcome logged"); loadRevenue(curSiteId); }
+  else flash((data&&data.error)||"Could not log outcome");
 }
 // Surface the live Visibility Intelligence (benchmark / applied-fix impact / competitor
 // threat) so the customer SEES the value — the conversion + retention hook.
@@ -246,6 +293,7 @@ function fmt(iso){ try{ const d=new Date(iso); return d.toLocaleDateString(LANG=
 $("#langBtn").onclick=()=>{ LANG=LANG==="th"?"en":"th"; localStorage.setItem("aimark_lang",LANG); applyLang(); if(AUTHED) loadSites(); };
 $("#authBtn").onclick=()=>{ if(AUTHED){ location.href="/api/auth/logout"; } else { location.href="/api/auth/start/google?next=/dashboard.html"; } };
 $("#backBtn").onclick=()=>{ $("#detail").classList.add("hide"); $("#overview").classList.remove("hide"); };
+$("#logOutcomeBtn").onclick=logOutcome;
 $("#monitorBtn").onclick=async()=>{
   if(!curSiteId) return;
   const {status,data}= await api("/api/sites/"+encodeURIComponent(curSiteId)+"/monitor",{method:"POST",body:JSON.stringify({enabled:!curMonitoring})});
