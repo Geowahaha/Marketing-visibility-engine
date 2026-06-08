@@ -50,6 +50,28 @@ import { computeStanding, decayFactor } from "../functions/api/_karma.js";
 import { onRequestPost as hireAgent } from "../functions/api/agents/[id]/hire.js";
 import { onRequestPost as migrateRep } from "../functions/api/agents/migrate-rep.js";
 import { computeSplit, revenueShares } from "../functions/api/_economy.js";
+import { onRequestGet as listSitesApi, onRequestPost as connectSite } from "../functions/api/sites.js";
+import { onRequestGet as getSiteApi } from "../functions/api/sites/[id].js";
+import { SCHEMA_STATEMENTS } from "../functions/api/_db.js";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+
+// In-process D1-compatible mock (over node:sqlite) so the relational platform
+// layer is tested with real SQL, not a fake.
+function d1Mock() {
+  const sqlite = new DatabaseSync(":memory:");
+  const wrap = (sql, args) => ({
+    run() { const info = sqlite.prepare(sql).run(...args); return { success: true, meta: { changes: info.changes, last_row_id: info.lastInsertRowid } }; },
+    first(col) { const row = sqlite.prepare(sql).get(...args); if (row == null) return null; return col !== undefined ? row[col] : row; },
+    all() { return { results: sqlite.prepare(sql).all(...args), success: true }; },
+  });
+  return {
+    prepare(sql) {
+      const base = wrap(sql, []);
+      return { bind: (...args) => wrap(sql, args), run: () => base.run(), first: (c) => base.first(c), all: () => base.all() };
+    },
+  };
+}
 
 async function post(handler, body, { env = {}, headers = {}, url = "https://aimark.pages.dev/api/test" } = {}) {
   const request = new Request(url, {
@@ -2141,5 +2163,80 @@ async function testReputationMigrationAndCap() {
   assert.ok(stored && stored.rep && stored.rep.tier === "new", "registration stamps denormalized profile.rep");
 }
 await testReputationMigrationAndCap();
+
+async function testPlatformRelationalCorePersistsAuditHistory() {
+  // Schema drift guard: the runtime schema and the canonical migration file must
+  // declare the same tables (so the self-healing schema can't silently diverge).
+  const tablesFrom = (sql) => [...sql.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]).sort();
+  const runtimeTables = tablesFrom(SCHEMA_STATEMENTS.join("\n"));
+  const fileSql = readFileSync(new URL("../migrations/0001_platform_core.sql", import.meta.url), "utf8");
+  assert.deepEqual(runtimeTables, tablesFrom(fileSql), "runtime schema must match the migration file");
+  assert.equal(runtimeTables.length, 14, "platform core = 14 tables");
+
+  const env = { AUTH_SESSION_SECRET: "plat-secret", AGENT_DB: d1Mock(), RATE_LIMIT_KV: memoryKv() };
+  const a = await signSession({ sid: "sid_pa", provider: "google", email: "a@org.com", name: "A" }, env.AUTH_SESSION_SECRET);
+  const cookieA = { cookie: `aimark_session=${a.token}` };
+
+  // Platform endpoints require login.
+  const anon = await listSitesApi({ request: new Request("https://aimark.pages.dev/api/sites"), env });
+  assert.equal(anon.status, 401, "platform requires login");
+
+  // Connect a site (the "Connect Site" user-journey step).
+  const connected = await (await connectSite({ request: new Request("https://aimark.pages.dev/api/sites", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", industry: "ecommerce" }) }), env })).json();
+  assert.equal(connected.status, "connected");
+  assert.equal(connected.site.host, "shop.example.com");
+  const siteId = connected.site.id;
+
+  await withMockFetch(async (input) => {
+    const u = String(input?.url || input || "");
+    if (u.includes("pagespeedonline")) return new Response(JSON.stringify({ error: { message: "no key" } }), { status: 429, headers: { "content-type": "application/json" } });
+    if (u.endsWith("/robots.txt")) return response("User-agent: *\nAllow: /");
+    if (u.endsWith("/sitemap.xml")) return response("<urlset><url><loc>https://shop.example.com/</loc></url></urlset>");
+    if (u.endsWith("/llms.txt")) return response("# Shop");
+    return response(htmlPage());
+  }, async () => {
+    // Run an audit (deterministic_only avoids the LLM). The dual-write persists it.
+    const scanRes = await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", deterministic_only: true }) }), env });
+    const scan = await scanRes.json();
+    assert.equal(typeof scan.overall, "number", "scan returns a numeric Visibility Score");
+
+    // The site now carries history (it became a platform, not a scanner).
+    const sites = await (await listSitesApi({ request: new Request("https://aimark.pages.dev/api/sites", { headers: cookieA }), env })).json();
+    const s = sites.sites.find((x) => x.id === siteId);
+    assert.ok(s, "site is listed for its org");
+    assert.ok(Number(s.audits_count) >= 1, "the scan persisted an audit row");
+    assert.equal(s.latest_score, Math.round(scan.overall), "latest_score denormalized from the scan");
+
+    // Audit detail = the Visibility Score time-series.
+    const detail = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}`, { headers: cookieA }), env, params: { id: siteId } })).json();
+    assert.equal(detail.site.id, siteId);
+    assert.ok(Array.isArray(detail.audits) && detail.audits.length >= 1, "audit history returned");
+    assert.equal(detail.audits[0].overall_score, Math.round(scan.overall));
+    assert.ok(Array.isArray(detail.trend), "trend series present for charting");
+
+    // A second scan appends to the time-series (continuous tracking).
+    await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ url: "https://shop.example.com", deterministic_only: true }) }), env });
+    const detail2 = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}`, { headers: cookieA }), env, params: { id: siteId } })).json();
+    assert.equal(detail2.audits.length, 2, "repeat scans accrue history (same site, no duplicate site row)");
+
+    // Anonymous scans stay ephemeral — they must NOT persist to any tenant.
+    await scanSite({ request: new Request("https://aimark.pages.dev/api/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: "https://anon.example.com", deterministic_only: true }) }), env });
+    const sitesAfterAnon = await (await listSitesApi({ request: new Request("https://aimark.pages.dev/api/sites", { headers: cookieA }), env })).json();
+    assert.equal(sitesAfterAnon.sites.some((x) => x.host === "anon.example.com"), false, "anonymous scans are not persisted");
+    assert.equal(sitesAfterAnon.sites.length, 1, "org A still has exactly its one site");
+  });
+
+  // Multi-tenant isolation: org B cannot see or read org A's site.
+  const b = await signSession({ sid: "sid_pb", provider: "google", email: "b@other.com", name: "B" }, env.AUTH_SESSION_SECRET);
+  const cookieB = { cookie: `aimark_session=${b.token}` };
+  const bSites = await (await listSitesApi({ request: new Request("https://aimark.pages.dev/api/sites", { headers: cookieB }), env })).json();
+  assert.equal(bSites.sites.length, 0, "tenant B sees none of tenant A's sites");
+  const bDetail = await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}`, { headers: cookieB }), env, params: { id: siteId } });
+  assert.equal(bDetail.status, 404, "tenant B gets 404 on tenant A's site (no cross-tenant leakage)");
+
+  // No secret leak.
+  assert.equal(/plat-secret|AUTH_SESSION_SECRET/.test(JSON.stringify({ connected })), false);
+}
+await testPlatformRelationalCorePersistsAuditHistory();
 
 console.log("api-smoke: ok");

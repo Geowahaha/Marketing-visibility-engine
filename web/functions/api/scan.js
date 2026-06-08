@@ -19,6 +19,35 @@
  */
 
 import { callLLM } from "./_llm.js";
+import { requireSession } from "./_auth.js";
+import { dbReady, ensureOrgForSession, ensureSite, recordAudit, recordFindings } from "./_db.js";
+
+/**
+ * Platform Phase 1: persist a relational audit row for SIGNED-IN users so the
+ * scanner accrues per-site history (the Visibility Score time-series). Anonymous
+ * scans stay ephemeral (the funnel). Best-effort — never affects the scan response.
+ */
+async function persistScanAudit(context, url, det) {
+  try {
+    const { request, env } = context;
+    if (!dbReady(env)) return;
+    const session = await requireSession(request, env);
+    if (!session || !session.email) return;
+    const ctx = await ensureOrgForSession(env, session);
+    if (!ctx) return;
+    const siteId = await ensureSite(env, ctx.org_id, url);
+    if (!siteId) return;
+    const auditId = await recordAudit(env, {
+      orgId: ctx.org_id, siteId, kind: "visibility",
+      overall: det.overall, scores: det.categories,
+      engineVersion: "det-rubric-v1", trigger: "manual",
+    });
+    const findings = (det.checks || [])
+      .filter((c) => String(c.status || "").toLowerCase() === "fail")
+      .map((c) => ({ category: c.category, severity: c.severity || "medium", code: c.check, title: c.check, detail: c.detail || "" }));
+    await recordFindings(env, { orgId: ctx.org_id, siteId, auditId, findings });
+  } catch { /* best-effort; the scan must never fail because of persistence */ }
+}
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const RATE_WINDOW_SEC = 3600;          // 1 hour
@@ -708,6 +737,10 @@ export async function onRequestPost(context) {
 
   const lang = (payload.lang === "th") ? "th" : "en";
   const det = computeScores(facts); // authoritative, model-independent scores
+  // Persist the audit (signed-in users only) — runs after the response in prod via
+  // waitUntil; awaited in tests. Covers every return path below in one place.
+  if (context.waitUntil) context.waitUntil(persistScanAudit(context, url, det));
+  else await persistScanAudit(context, url, det);
   if (agentFirst) {
     return json({
       ...buildDeterministicScan(url, facts, det, lang, "agent_first_local_runner"),
