@@ -19,6 +19,7 @@
  */
 
 import { recordCheckoutCredits } from "../_credits.js";
+import { recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../_entitlements.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -71,14 +72,34 @@ export async function onRequestPost(context) {
         message: "Checkout completed but payment is not paid yet; waiting for async_payment_succeeded.",
       });
     }
+    // Recurring PLAN (subscription / one-time pass) → record the plan entitlement, not credits.
+    if (isPlanCheckout(obj)) {
+      const sub = subscriptionFromStripe(obj);
+      const rec = await recordSubscription(env, sub.email, { plan: sub.plan, status: "active", current_period_end: sub.current_period_end, subscription_id: sub.subscription_id, source: sub.source });
+      return json({ received: true, event: event.type, subscription: !!rec, plan: sub.plan, email_keyed: !!sub.email });
+    }
     const result = await recordCheckoutCredits(obj, env);
     return json({ received: true, event: event.type, ...result });
   }
 
   if (event.type === "checkout.session.async_payment_succeeded" || event.type === "invoice.paid") {
     const obj = event.data?.object || {};
+    // Subscription renewal (invoice.paid for a subscription) or an async plan pass → refresh the plan.
+    const isSubInvoice = event.type === "invoice.paid" && (obj.subscription || obj.metadata?.plan || obj.lines?.data?.[0]?.metadata?.plan);
+    if (isSubInvoice || (event.type === "checkout.session.async_payment_succeeded" && isPlanCheckout(obj))) {
+      const sub = subscriptionFromStripe(obj);
+      const rec = await recordSubscription(env, sub.email, { plan: sub.plan, status: "active", current_period_end: sub.current_period_end, subscription_id: sub.subscription_id, source: sub.source });
+      return json({ received: true, event: event.type, subscription_renewed: !!rec, plan: sub.plan, email_keyed: !!sub.email });
+    }
     const result = await recordCheckoutCredits(obj, env);
     return json({ received: true, event: event.type, ...result });
+  }
+
+  if (event.type === "customer.subscription.deleted" || (event.type === "customer.subscription.updated" && ["canceled", "unpaid", "incomplete_expired"].includes(event.data?.object?.status))) {
+    const obj = event.data?.object || {};
+    const email = String(obj.metadata?.email || obj.customer_email || "").toLowerCase();
+    if (email) await cancelSubscription(env, email);
+    return json({ received: true, event: event.type, canceled: !!email });
   }
 
   if (event.type === "checkout.session.async_payment_failed") {

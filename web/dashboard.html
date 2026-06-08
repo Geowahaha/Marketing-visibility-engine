@@ -47,6 +47,8 @@
   <div class="brand">AI Mark <small id="tagline">Visibility Intelligence</small></div>
   <div class="row">
     <button class="ghost" id="langBtn">ไทย</button>
+    <span id="planBadge" class="sub"></span>
+    <button id="upgradeBtn" class="hide">Upgrade</button>
     <span id="who" class="sub"></span>
     <button id="authBtn" class="ghost">Sign in</button>
   </div>
@@ -127,7 +129,22 @@ async function refreshAuth(){
   $("#overview").classList.toggle("hide",!AUTHED);
   if(!AUTHED) $("#detail").classList.add("hide");
   applyLang();
-  if(AUTHED){ loadSites(); loadAlerts(); }
+  if(AUTHED){ loadSites(); loadAlerts(); loadBilling(); }
+}
+let PLAN_ACTIVE=false;
+async function loadBilling(){
+  const {status,data}= await api("/api/billing");
+  if(status!==200||!data){ return; }
+  PLAN_ACTIVE=!!data.active;
+  const badge=$("#planBadge"), up=$("#upgradeBtn");
+  if(PLAN_ACTIVE){ badge.textContent=(LANG==="th"?"แผน: ":"Plan: ")+(data.plan_name||"Growth Monitor"); up.classList.add("hide"); }
+  else { badge.textContent=LANG==="th"?"แผน: ฟรี":"Plan: Free"; up.classList.remove("hide"); }
+}
+async function subscribe(method){
+  const {status,data}= await api("/api/checkout",{method:"POST",body:JSON.stringify({product:"growth_monitor",method:method||"card"})});
+  if(status===200&&data&&data.checkout_url){ window.open(data.checkout_url,"_blank"); }
+  else if(data&&data.test_confirm_url){ flash(LANG==="th"?"ยังไม่ได้ตั้งค่าการชำระเงิน (setup_required)":"Payments not configured yet (setup_required)"); }
+  else flash((data&&data.error)||"Could not start checkout");
 }
 async function loadAlerts(){
   const {status,data}= await api("/api/alerts");
@@ -199,9 +216,11 @@ $("#backBtn").onclick=()=>{ $("#detail").classList.add("hide"); $("#overview").c
 $("#monitorBtn").onclick=async()=>{
   if(!curSiteId) return;
   const {status,data}= await api("/api/sites/"+encodeURIComponent(curSiteId)+"/monitor",{method:"POST",body:JSON.stringify({enabled:!curMonitoring})});
+  if(status===402){ flash(LANG==="th"?"ต้องสมัครแผนเพื่อเปิดการเฝ้าดูต่อเนื่อง":"Subscribe to enable continuous monitoring"); subscribe("card"); return; }
   if(status===200&&data){ curMonitoring=!!data.monitoring_enabled; updateMonitorBtn(); flash(curMonitoring?(LANG==="th"?"เปิดการเฝ้าดูแล้ว":"Monitoring enabled"):(LANG==="th"?"ปิดการเฝ้าดู":"Monitoring off")); }
   else flash((data&&data.error)||"Could not update monitoring");
 };
+$("#upgradeBtn").onclick=()=>subscribe("card");
 $("#connectBtn").onclick=async()=>{
   const url=$("#siteUrl").value.trim(); if(!url){ flash(LANG==="th"?"ใส่ URL ก่อน":"Enter a URL first"); return; }
   if(!AUTHED){ flash(LANG==="th"?"เข้าสู่ระบบเพื่อบันทึกเว็บไซต์":"Sign in to save a site"); return; }

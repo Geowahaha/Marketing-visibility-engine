@@ -8,6 +8,7 @@
  */
 import { requireSession } from "../../_auth.js";
 import { dbReady, ensureOrgForSession, setMonitoring, publicSite } from "../../_db.js";
+import { hasActivePlan, getPlan } from "../../_entitlements.js";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "POST,OPTIONS", "access-control-allow-headers": "content-type,authorization" };
 const jc = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
@@ -25,6 +26,18 @@ export async function onRequestPost({ request, env, params }) {
   try { body = await request.json(); } catch { body = {}; }
   const enabled = body.enabled !== false; // default true
   const freq = ["daily", "weekly", "monthly"].includes(body.frequency) ? body.frequency : "weekly";
+
+  // Monitoring is the recurring paid value: enabling it requires an active plan.
+  // (Disabling is always allowed.) This is the MRR / "pay again" gate.
+  if (enabled && !(await hasActivePlan(env, session.email))) {
+    return jc({
+      error: "subscription_required",
+      detail: "Continuous monitoring needs an active Growth Monitor plan.",
+      plan: getPlan("growth_monitor"),
+      upgrade_url: "/api/checkout",
+      checkout_product: "growth_monitor",
+    }, 402);
+  }
 
   const site = await setMonitoring(env, ctx.org_id, String(params.id || ""), enabled, freq);
   if (!site) return jc({ error: "site_not_found" }, 404);

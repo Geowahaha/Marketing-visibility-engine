@@ -54,6 +54,16 @@ import { onRequestGet as listSitesApi, onRequestPost as connectSite } from "../f
 import { onRequestGet as getSiteApi } from "../functions/api/sites/[id].js";
 import { onRequestGet as alertsApi } from "../functions/api/alerts.js";
 import { onRequestPost as monitorSite } from "../functions/api/sites/[id]/monitor.js";
+import { onRequestGet as billingApi } from "../functions/api/billing.js";
+import { onRequestPost as stripeWebhook } from "../functions/api/checkout/webhook.js";
+import { hasActivePlan, recordSubscription, cancelSubscription, subscriptionFromStripe, isPlanCheckout } from "../functions/api/_entitlements.js";
+
+async function stripeSigHeader(secret, rawBody) {
+  const t = Math.floor(Date.now() / 1000);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${t}.${rawBody}`));
+  return `t=${t},v1=${[...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
 import { SCHEMA_STATEMENTS, recordRecommendations, listRecommendationsForAudit } from "../functions/api/_db.js";
 import { readFileSync } from "node:fs";
 
@@ -2180,7 +2190,7 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
   try { ({ DatabaseSync } = await import("node:sqlite")); }
   catch { console.log("api-smoke: platform runtime test skipped (node:sqlite needs Node >=22.5); schema drift guard still ran"); return; }
 
-  const env = { AUTH_SESSION_SECRET: "plat-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv() };
+  const env = { AUTH_SESSION_SECRET: "plat-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv(), ENTITLEMENTS_KV: memoryKv() };
   const a = await signSession({ sid: "sid_pa", provider: "google", email: "a@org.com", name: "A" }, env.AUTH_SESSION_SECRET);
   const cookieA = { cookie: `aimark_session=${a.token}` };
 
@@ -2242,9 +2252,11 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
     const alerts = await (await alertsApi({ request: new Request("https://aimark.pages.dev/api/alerts", { headers: cookieA }), env })).json();
     assert.ok(alerts.count >= 1 && alerts.alerts.some((a) => a.type === "score_drop"), "a score drop raises an alert");
 
-    // Monitoring toggle (the recurring-revenue switch).
+    // Monitoring toggle (the recurring-revenue switch) is GATED behind an active
+    // plan — grant one first (the gate's own 402 path is covered in the revenue test).
+    await recordSubscription(env, "a@org.com", { plan: "growth_monitor", status: "active" });
     const mon = await (await monitorSite({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}/monitor`, { method: "POST", headers: { "content-type": "application/json", ...cookieA }, body: JSON.stringify({ enabled: true, frequency: "daily" }) }), env, params: { id: siteId } })).json();
-    assert.equal(mon.monitoring_enabled, true, "monitoring can be enabled");
+    assert.equal(mon.monitoring_enabled, true, "monitoring can be enabled with an active plan");
     const detail3 = await (await getSiteApi({ request: new Request(`https://aimark.pages.dev/api/sites/${siteId}`, { headers: cookieA }), env, params: { id: siteId } })).json();
     assert.equal(detail3.site.monitoring_enabled, true, "monitoring flag persisted on the site");
     pageMode = "good";
@@ -2268,5 +2280,77 @@ async function testPlatformRelationalCorePersistsAuditHistory() {
   assert.equal(/plat-secret|AUTH_SESSION_SECRET/.test(JSON.stringify({ connected })), false);
 }
 await testPlatformRelationalCorePersistsAuditHistory();
+
+async function testRevenueEngineSubscriptionGatesMonitoring() {
+  // 1) Entitlement logic — the recurring "pay again" record.
+  const kv = memoryKv();
+  const env0 = { ENTITLEMENTS_KV: kv };
+  assert.equal(await hasActivePlan(env0, "x@y.com"), false, "no plan by default = free");
+  await recordSubscription(env0, "x@y.com", { plan: "growth_monitor", status: "active" });
+  assert.equal(await hasActivePlan(env0, "x@y.com"), true, "active plan recognized");
+  await recordSubscription(env0, "exp@y.com", { plan: "growth_monitor", status: "active", current_period_end: new Date(Date.now() - 1000).toISOString() });
+  assert.equal(await hasActivePlan(env0, "exp@y.com"), false, "expired plan is inactive (must pay again)");
+  await cancelSubscription(env0, "x@y.com");
+  assert.equal(await hasActivePlan(env0, "x@y.com"), false, "canceled plan is inactive");
+
+  // 2) Stripe object parsing.
+  assert.equal(isPlanCheckout({ mode: "subscription" }), true);
+  assert.equal(isPlanCheckout({ metadata: { product: "credits_5" } }), false, "a credits purchase is NOT a plan");
+  const parsed = subscriptionFromStripe({ customer_email: "A@B.com", metadata: { plan: "growth_monitor" }, subscription: "sub_1" });
+  assert.equal(parsed.email, "a@b.com"); assert.equal(parsed.plan, "growth_monitor"); assert.equal(parsed.subscription_id, "sub_1");
+
+  // 3) Checkout exposes plans + creates a subscription checkout (setup_required without Stripe key).
+  const cat = await (await checkoutGet({ request: new Request("https://aimark.pages.dev/api/checkout"), env: {} })).json();
+  assert.ok(Array.isArray(cat.plans) && cat.plans.some((p) => p.id === "growth_monitor"), "checkout catalog exposes the plan");
+  const planCheckout = await (await checkoutPost({ request: new Request("https://aimark.pages.dev/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ product: "growth_monitor" }) }), env: { PAID_EXPORT_SECRET: "sec" } })).json();
+  assert.equal(planCheckout.kind, "subscription"); assert.equal(planCheckout.product, "growth_monitor"); assert.equal(planCheckout.status, "setup_required");
+  // The credits path is untouched (purely additive).
+  const creditCheckout = await (await checkoutPost({ request: new Request("https://aimark.pages.dev/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ product: "credits_5" }) }), env: { PAID_EXPORT_SECRET: "sec" } })).json();
+  assert.equal(creditCheckout.product, "credits_5", "credits checkout still works");
+
+  // 4) Authoritative path: a signed Stripe webhook records the subscription entitlement.
+  const whSecret = "whsec_test";
+  const whEnv = { STRIPE_WEBHOOK_SECRET: whSecret, ENTITLEMENTS_KV: memoryKv() };
+  const evt = JSON.stringify({ type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", customer_email: "sub@buyer.com", subscription: "sub_x", metadata: { kind: "subscription", plan: "growth_monitor" } } } });
+  const wh = await stripeWebhook({ request: new Request("https://aimark.pages.dev/api/checkout/webhook", { method: "POST", headers: { "content-type": "application/json", "stripe-signature": await stripeSigHeader(whSecret, evt) }, body: evt }), env: whEnv });
+  assert.equal((await wh.json()).subscription, true, "webhook records the subscription");
+  assert.equal(await hasActivePlan(whEnv, "sub@buyer.com"), true, "subscription is active after the webhook");
+  // A credits webhook is still routed to credits (not treated as a plan).
+  const creditEvt = JSON.stringify({ type: "checkout.session.completed", data: { object: { payment_status: "paid", customer_email: "c@buyer.com", metadata: { kind: "credits", product: "credits_5", credits: 500 } } } });
+  const wh2 = await stripeWebhook({ request: new Request("https://aimark.pages.dev/api/checkout/webhook", { method: "POST", headers: { "content-type": "application/json", "stripe-signature": await stripeSigHeader(whSecret, creditEvt) }, body: creditEvt }), env: whEnv });
+  const wh2d = await wh2.json();
+  assert.notEqual(wh2d.subscription, true, "a credits purchase is not recorded as a subscription");
+
+  // 5) The monitoring GATE (needs node:sqlite for the relational layer; skip gracefully if absent).
+  let DatabaseSync;
+  try { ({ DatabaseSync } = await import("node:sqlite")); }
+  catch { console.log("api-smoke: revenue gate runtime skipped (node:sqlite >=22.5); entitlement + webhook covered"); return; }
+  const env = { AUTH_SESSION_SECRET: "rev-secret", AGENT_DB: makeD1Mock(DatabaseSync), RATE_LIMIT_KV: memoryKv(), ENTITLEMENTS_KV: memoryKv() };
+  const u = await signSession({ sid: "sid_rev", provider: "google", email: "rev@buyer.com", name: "Rev" }, env.AUTH_SESSION_SECRET);
+  const ck = { cookie: `aimark_session=${u.token}` };
+  const connected = await (await connectSite({ request: new Request("https://aimark.pages.dev/api/sites", { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ url: "https://rev.example.com" }) }), env })).json();
+  const sid = connected.site.id;
+  // No plan → enabling monitoring is blocked with an upgrade path (the MRR gate).
+  const gated = await monitorSite({ request: new Request(`https://aimark.pages.dev/api/sites/${sid}/monitor`, { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ enabled: true }) }), env, params: { id: sid } });
+  assert.equal(gated.status, 402, "no plan → monitoring is gated (402)");
+  const gd = await gated.json();
+  assert.equal(gd.error, "subscription_required");
+  assert.ok(gd.plan && gd.checkout_product === "growth_monitor", "gate returns the upgrade target");
+  // Grant a plan → monitoring unlocks.
+  await recordSubscription(env, "rev@buyer.com", { plan: "growth_monitor", status: "active" });
+  const okMon = await (await monitorSite({ request: new Request(`https://aimark.pages.dev/api/sites/${sid}/monitor`, { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ enabled: true }) }), env, params: { id: sid } })).json();
+  assert.equal(okMon.monitoring_enabled, true, "active plan unlocks monitoring");
+  // Disabling never requires a plan.
+  await cancelSubscription(env, "rev@buyer.com");
+  const offMon = await (await monitorSite({ request: new Request(`https://aimark.pages.dev/api/sites/${sid}/monitor`, { method: "POST", headers: { "content-type": "application/json", ...ck }, body: JSON.stringify({ enabled: false }) }), env, params: { id: sid } })).json();
+  assert.equal(offMon.monitoring_enabled, false, "disabling monitoring never needs a plan");
+  // Billing endpoint reflects status for the dashboard.
+  await recordSubscription(env, "rev@buyer.com", { plan: "growth_monitor", status: "active" });
+  const bill = await (await billingApi({ request: new Request("https://aimark.pages.dev/api/billing", { headers: ck }), env })).json();
+  assert.equal(bill.active, true); assert.ok(Array.isArray(bill.plans) && bill.plans.length >= 1, "billing lists plans");
+  const billAnon = await billingApi({ request: new Request("https://aimark.pages.dev/api/billing"), env });
+  assert.equal(billAnon.status, 401, "billing requires login");
+}
+await testRevenueEngineSubscriptionGatesMonitoring();
 
 console.log("api-smoke: ok");

@@ -20,6 +20,45 @@
 
 import { paidCookieHeader, signPaidAccessToken } from "./_auth.js";
 import { recordCheckoutCredits } from "./_credits.js";
+import { getPlan, listPlans } from "./_entitlements.js";
+
+/** Create a Stripe Checkout session for a recurring PLAN (card = subscription;
+ *  PromptPay = a one-time 30-day pass, since Stripe PromptPay can't auto-recur). */
+async function createPlanStripeSession(env, plan, origin, opts = {}) {
+  const { email, token, method } = opts;
+  const currency = (env.CHECKOUT_CURRENCY || "usd").toLowerCase();
+  const amount = currency === "thb" ? plan.price.thb : plan.price.usd;
+  const promptpayPass = method === "promptpay";
+  if (promptpayPass && currency !== "thb") return { ok: false, status: 400, error: "PromptPay requires CHECKOUT_CURRENCY=thb." };
+
+  const params = new URLSearchParams();
+  params.set("mode", promptpayPass ? "payment" : "subscription");
+  params.set("success_url", `${origin}/api/checkout?action=confirm&session_id={CHECKOUT_SESSION_ID}&token=${encodeURIComponent(token)}&product=${encodeURIComponent(plan.id)}`);
+  params.set("cancel_url", `${origin}/?checkout=cancelled`);
+  params.set("metadata[kind]", promptpayPass ? "plan_pass" : "subscription");
+  params.set("metadata[plan]", plan.id);
+  params.set("metadata[method]", promptpayPass ? "promptpay" : "card");
+  if (email) params.set("customer_email", email);
+  params.set("line_items[0][quantity]", "1");
+  params.set("line_items[0][price_data][currency]", currency);
+  params.set("line_items[0][price_data][product_data][name]", `${plan.name} (${plan.interval}ly)`);
+  params.set("line_items[0][price_data][unit_amount]", String(amount));
+  if (!promptpayPass) {
+    params.set("line_items[0][price_data][recurring][interval]", plan.interval);
+    params.set("subscription_data[metadata][plan]", plan.id); // so invoice.paid renewals carry the plan
+    if (email) params.set("subscription_data[metadata][email]", email); // so cancellation events can be keyed
+  }
+  params.set("payment_method_types[0]", promptpayPass ? "promptpay" : "card");
+
+  const resp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: { "authorization": `Bearer ${env.STRIPE_SECRET_KEY}`, "content-type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+  const data = await resp.json();
+  if (!resp.ok) return { ok: false, status: resp.status, error: data.error?.message || "stripe_error" };
+  return { ok: true, url: data.url, id: data.id };
+}
 
 const json = (obj, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(obj), {
@@ -417,11 +456,12 @@ export async function onRequestGet(context) {
     free_tier: { ...FREE_TIER, display_amount: 0 },
     catalog: Object.fromEntries(Object.entries(creditPacks(env)).map(([k, v]) => [k, { ...v, display_amount: displayAmount(v.amount) }])),
     order: ["credits_5", "credits_10", "credits_20"],
+    plans: listPlans().map((p) => ({ ...p, display_price: (checkoutCurrency(env) === "thb" ? p.price.thb : p.price.usd) / 100 })),
     currency,
     providers,
     payment_methods: methods,
     ready: providers.length > 0,
-    billing_model: "credits",
+    billing_model: "credits+subscription",
     credit_unit: "AI Mark credits",
     note: providers.length ? "Payment provider configured." : "No payment provider configured yet — set STRIPE_SECRET_KEY to take live credit payments.",
   });
@@ -431,6 +471,34 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
+
+  // Recurring PLAN checkout (subscription / MRR) — additive; credits flow below is untouched.
+  const plan = getPlan(payload.product);
+  if (plan) {
+    const secret = String(env.PAID_EXPORT_SECRET || "").trim();
+    if (!secret) return json({ error: "PAID_EXPORT_SECRET not configured." }, 500);
+    const origin = originOf(request, env);
+    const currency = checkoutCurrency(env);
+    const amount = currency === "thb" ? plan.price.thb : plan.price.usd;
+    const token = await signToken({ key: plan.id, item: { credits: 0, amount } }, secret, 1800, env);
+    const oneTimePass = payload.method === "promptpay";
+    if (env.STRIPE_SECRET_KEY) {
+      const session = await createPlanStripeSession(env, plan, origin, { email: payload.email, token, method: payload.method });
+      if (!session.ok) return json({ error: "Could not create plan checkout session.", detail: session.error }, session.status || 502);
+      return json({
+        status: "ok", provider: "stripe", kind: "subscription", product: plan.id, plan,
+        mode: oneTimePass ? "one_time_pass" : "subscription",
+        currency: currency.toUpperCase(), session_id: session.id, checkout_url: session.url,
+      });
+    }
+    return json({
+      status: "setup_required", kind: "subscription", product: plan.id, plan,
+      mode: oneTimePass ? "one_time_pass" : "subscription",
+      display_amount: amount / 100, currency: currency.toUpperCase(),
+      setup: "Set STRIPE_SECRET_KEY to take live subscription payments.",
+      test_confirm_url: `${origin}/api/checkout?action=confirm&token=${encodeURIComponent(token)}&product=${encodeURIComponent(plan.id)}`,
+    });
+  }
 
   const resolved = resolveProduct(payload.product || "credits_5", payload, env);
   if (resolved.error) return json({ error: resolved.error }, 400);
