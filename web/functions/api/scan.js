@@ -58,8 +58,55 @@ async function persistScanAudit(context, url, det) {
     const findings = fails.map((c) => ({ category: c.category, severity: c.severity || "medium", code: c.check, title: c.check, detail: c.detail || "" }));
     await recordFindings(env, { orgId: ctx.org_id, siteId, auditId, findings });
     // Actionable Intelligence: prioritized recommendations (critical/high first).
+    const CHECK_TITLES = {
+      "Depth for AI citation (>=600 words)": "Add depth — expand content to 600+ words",
+      "Baseline content (>=300 words)": "Add more content — page needs 300+ words",
+      "Substantive content (>=400 words)": "Expand page content to 400+ words",
+      "Crawlable content present": "Add readable content for crawlers",
+      "FAQ / question-style content": "Add FAQ section with real buyer questions",
+      "Schema types present": "Add structured data (JSON-LD schema)",
+      "Answer/entity schema (FAQ/Article/LocalBusiness)": "Add FAQ/LocalBusiness/Article schema",
+      "Freshness signal": "Add a freshness date or 'Updated' signal",
+      "Shareable description": "Add og:description for social sharing",
+      "Title tag": "Fix or add the page title tag",
+      "Meta description": "Write a 140-160 char meta description",
+      "H1 heading": "Add a main H1 heading",
+      "Canonical URL": "Set a canonical URL",
+      "Structured data (JSON-LD)": "Add JSON-LD structured data",
+      "Image alt text": "Add alt text to images",
+      "Mobile viewport": "Add mobile viewport meta tag",
+      "robots.txt present": "Create a robots.txt file",
+      "Sitemap present": "Create and submit a sitemap.xml",
+      "llms.txt present": "Add llms.txt for AI crawlers",
+      "AI/search bots not blocked": "Unblock AI and search crawlers in robots.txt",
+      "og:title": "Add og:title for social sharing",
+      "og:description": "Add og:description for social sharing",
+      "og:image": "Add og:image for social sharing",
+      "Twitter card": "Add Twitter card meta tags",
+      "HTTPS": "Switch to HTTPS",
+    };
+    const EFFORT_BY_SEVERITY = { critical: "medium", high: "medium", medium: "low", low: "low", info: "low" };
+    const IMPACT_BY_SEVERITY = {
+      critical: "High impact on AI citations and discoverability",
+      high: "Significant impact on search and AI visibility",
+      medium: "Moderate impact on rankings and trust",
+      low: "Small improvement to signals and completeness",
+      info: "Informational — verify when possible",
+    };
     const recs = fails
-      .map((c) => ({ priority: SEVERITY_PRIORITY[String(c.severity || "medium").toLowerCase()] || 3, title: c.check, action: c.fix || "", impact: c.detail || "", effort: "low" }))
+      .map((c) => {
+        const sev = String(c.severity || "medium").toLowerCase();
+        const humanTitle = CHECK_TITLES[c.check] || c.check;
+        const detailSuffix = c.detail ? ` (${c.detail})` : "";
+        const impact = IMPACT_BY_SEVERITY[sev] || "Improves visibility signals";
+        return {
+          priority: SEVERITY_PRIORITY[sev] || 3,
+          title: humanTitle,
+          action: c.fix || "",
+          impact: impact + detailSuffix,
+          effort: EFFORT_BY_SEVERITY[sev] || "low",
+        };
+      })
       .sort((a, b) => a.priority - b.priority).slice(0, 30);
     await recordRecommendations(env, { orgId: ctx.org_id, siteId, auditId, recs });
   } catch { /* best-effort; the scan must never fail because of persistence */ }
