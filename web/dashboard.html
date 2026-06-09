@@ -3,353 +3,658 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Mark — Visibility Dashboard</title>
+<title>AIMark — Growth Intelligence</title>
 <meta name="robots" content="noindex">
 <style>
   :root{
     --bg:#0b0e14; --panel:#131823; --panel2:#1a2030; --line:#232b3d;
-    --ink:#e8edf6; --mut:#93a0b8; --acc:#4f8cff; --good:#27c08a; --warn:#f0a92f; --bad:#e85d4f;
+    --ink:#e8edf6; --mut:#6b7a99; --acc:#4f8cff; --good:#27c08a; --warn:#f0a92f; --bad:#e85d4f;
+    --radius:12px; --gap:16px;
   }
-  *{box-sizing:border-box}
-  body{margin:0;font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;background:var(--bg);color:var(--ink)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
   a{color:var(--acc);text-decoration:none}
-  header{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,14,20,.9);backdrop-filter:blur(8px)}
-  .brand{font-weight:700;letter-spacing:.2px}
-  .brand small{color:var(--mut);font-weight:500;margin-left:8px}
-  .row{display:flex;gap:8px;align-items:center}
-  button,.btn{background:var(--acc);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:600;cursor:pointer}
-  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
-  button:disabled{opacity:.5;cursor:default}
-  main{max-width:1080px;margin:0 auto;padding:22px}
-  input{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 12px;font:inherit;min-width:260px}
-  .grid{display:grid;gap:14px}
-  .cards{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
-  .kpi{font-size:34px;font-weight:800}
-  .mut{color:var(--mut)}
+
+  /* ── Header ─────────────────────────── */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 24px;height:56px;
+    border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:100;
+    background:rgba(11,14,20,.92);backdrop-filter:blur(10px);
+  }
+  .brand{font-size:16px;font-weight:800;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+  .brand-dot{width:8px;height:8px;border-radius:50%;background:var(--acc)}
+  .hdr-right{display:flex;align-items:center;gap:10px}
+
+  /* ── Buttons ─────────────────────────── */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font:600 14px/1 inherit;cursor:pointer;border:0;transition:opacity .15s}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn:hover:not(:disabled){opacity:.85}
+  .btn-primary{background:var(--acc);color:#fff}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .btn-good{background:var(--good);color:#06120d}
+  .btn-sm{padding:6px 11px;font-size:13px}
+  .badge{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line);color:var(--mut)}
+  .badge-active{border-color:var(--good);color:var(--good)}
+
+  /* ── Layout ─────────────────────────── */
+  main{max-width:1000px;margin:0 auto;padding:28px 24px}
+  .row{display:flex;align-items:center;gap:10px}
+  .row-wrap{flex-wrap:wrap}
+  .between{justify-content:space-between}
+  .col{display:flex;flex-direction:column;gap:var(--gap)}
+
+  /* ── Cards ─────────────────────────── */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .card-sm{padding:14px 16px}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--gap)}
+  .kpi{font-size:36px;font-weight:800;line-height:1;margin:6px 0 2px}
+  .kpi-sm{font-size:24px}
+
+  /* ── Typography ─────────────────────── */
+  .label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)}
   .sub{font-size:13px;color:var(--mut)}
-  table{width:100%;border-collapse:collapse;margin-top:6px}
-  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);font-size:14px}
-  th{color:var(--mut);font-weight:600}
+  .title{font-size:17px;font-weight:700}
+  .section-gap{margin-top:24px}
+
+  /* ── Tables ─────────────────────────── */
+  table{width:100%;border-collapse:collapse}
+  th{padding:10px 10px 8px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);border-bottom:1px solid var(--line)}
+  td{padding:12px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
   tr.clk{cursor:pointer}
-  tr.clk:hover{background:var(--panel2)}
-  .pill{display:inline-block;min-width:34px;text-align:center;padding:3px 9px;border-radius:999px;font-weight:700;font-size:13px}
-  .empty{padding:28px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:14px}
-  .section-title{font-weight:700;margin:24px 0 8px}
+  tr.clk:hover td{background:var(--panel2)}
+
+  /* ── Pill / tag ─────────────────────── */
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-weight:700;font-size:13px;min-width:36px;text-align:center}
+
+  /* ── Input ─────────────────────────── */
+  input,select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 13px;font:inherit;outline:none;transition:border-color .15s}
+  input:focus,select:focus{border-color:var(--acc)}
+  .input-wide{min-width:280px;width:100%}
+
+  /* ── Tabs ─────────────────────────── */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:24px}
+  .tab{padding:10px 16px;font-size:14px;font-weight:600;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;background:none;border-top:0;border-left:0;border-right:0}
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--acc);border-bottom-color:var(--acc)}
+
+  /* ── Alert bar ─────────────────────── */
+  .alert-bar{background:rgba(240,169,47,.1);border:1px solid rgba(240,169,47,.3);border-radius:10px;padding:11px 14px;font-size:14px;color:var(--warn)}
+
+  /* ── Flash ─────────────────────────── */
+  #flash{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 18px;font-size:14px;z-index:999;white-space:nowrap;box-shadow:0 4px 24px rgba(0,0,0,.4);transition:opacity .3s}
+  #flash.hide{opacity:0;pointer-events:none}
+
+  /* ── Empty states ─────────────────── */
+  .empty{padding:36px;text-align:center;color:var(--mut);border:1px dashed var(--line);border-radius:var(--radius)}
+  .empty-sm{padding:20px;text-align:center;color:var(--mut)}
+
+  /* ── Breadcrumb ─────────────────────── */
+  .breadcrumb{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mut);margin-bottom:20px}
+  .breadcrumb a{color:var(--mut);cursor:pointer}
+  .breadcrumb a:hover{color:var(--ink)}
+  .breadcrumb-sep{color:var(--line)}
+
+  /* ── Misc ─────────────────────────── */
+  .hide{display:none!important}
   .spark{display:block}
-  .hide{display:none}
-  .note{font-size:12px;color:var(--mut);margin-top:8px}
-  .flash{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+  .gap-row{gap:22px}
+  .mt4{margin-top:4px}
+  .mt8{margin-top:8px}
+  .mt12{margin-top:12px}
+  .mt16{margin-top:16px}
 </style>
 </head>
 <body>
+
+<!-- ════════════════════════════ HEADER ════════════════════════════ -->
 <header>
-  <div class="brand">AI Mark <small id="tagline">Visibility Intelligence</small></div>
-  <div class="row">
-    <button class="ghost" id="langBtn">ไทย</button>
-    <span id="planBadge" class="sub"></span>
-    <button id="upgradeBtn" class="hide">Upgrade</button>
-    <span id="who" class="sub"></span>
-    <button id="authBtn" class="ghost">Sign in</button>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    AIMark
+  </div>
+  <div class="hdr-right">
+    <button class="btn btn-ghost btn-sm" id="langBtn">ไทย</button>
+    <span id="planBadge" class="badge hide"></span>
+    <button id="upgradeBtn" class="btn btn-primary btn-sm hide" data-i="upgrade">Upgrade</button>
+    <span id="who" class="sub hide"></span>
+    <button id="authBtn" class="btn btn-ghost btn-sm">Sign in</button>
   </div>
 </header>
+
+<!-- ════════════════════════════ FLASH ════════════════════════════ -->
+<div id="flash" class="hide"></div>
+
 <main>
-  <div id="flash" class="flash hide"></div>
 
-  <div class="row" style="gap:8px;flex-wrap:wrap">
-    <input id="siteUrl" placeholder="https://your-site.com" autocomplete="off">
-    <button id="connectBtn" data-i="connect">Connect site</button>
-    <button class="ghost" id="auditBtn" data-i="audit">Run audit</button>
+  <!-- ── SIGNED-OUT STATE ── -->
+  <div id="signedOut" class="empty hide">
+    <div class="title" style="margin-bottom:8px">AI Growth Intelligence Platform</div>
+    <div class="sub" data-i="signedOut">Sign in with Google to see your visibility platform.</div>
+    <button class="btn btn-primary" style="margin-top:16px" onclick="location.href='/api/auth/start/google?next=/dashboard.html'" data-i="signin">Sign in</button>
   </div>
-  <div class="note" id="connHint">Sign in to track a site over time. A scan without sign-in stays one-off.</div>
 
-  <div id="overview" class="hide">
-    <div id="alertsBar" class="flash hide"></div>
-    <div class="section-title" data-i="portfolio">Your sites</div>
-    <div class="grid cards" id="kpis"></div>
-    <div class="card" style="margin-top:14px">
-      <table><thead><tr>
-        <th data-i="site">Site</th><th data-i="score">Visibility</th><th data-i="audits">Audits</th><th data-i="last">Last audit</th>
-      </tr></thead><tbody id="siteRows"></tbody></table>
-      <div id="sitesEmpty" class="empty hide" data-i="noSites">No sites yet. Connect one above to start tracking AI visibility.</div>
+  <!-- ══════════════════════ OVERVIEW ══════════════════════ -->
+  <div id="overview" class="hide col">
+
+    <!-- Connect bar -->
+    <div class="card card-sm">
+      <div class="row row-wrap" style="gap:10px">
+        <input id="siteUrl" class="input-wide" placeholder="https://your-site.com" autocomplete="off" style="flex:1;min-width:220px">
+        <button class="btn btn-primary" id="connectBtn" data-i="connect">Connect site</button>
+        <button class="btn btn-ghost" id="auditBtn" data-i="audit">Quick scan</button>
+      </div>
+      <div class="sub mt8" id="connHint">Sign in to track a site over time.</div>
     </div>
+
+    <!-- Alerts -->
+    <div id="alertsBar" class="alert-bar hide"></div>
+
+    <!-- KPI row -->
+    <div class="kpi-grid" id="kpis"></div>
+
+    <!-- Sites table -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)" class="row between">
+        <span class="title" data-i="portfolio">Your sites</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th data-i="site">Site</th>
+          <th data-i="score">Visibility</th>
+          <th data-i="audits">Audits</th>
+          <th data-i="last">Last audit</th>
+        </tr></thead>
+        <tbody id="siteRows"></tbody>
+      </table>
+      <div id="sitesEmpty" class="empty hide" style="border:0;border-top:1px dashed var(--line);border-radius:0" data-i="noSites">No sites yet — connect one above.</div>
+    </div>
+
   </div>
 
+  <!-- ══════════════════════ DETAIL ══════════════════════ -->
   <div id="detail" class="hide">
-    <div class="row" style="justify-content:space-between;margin-top:18px">
-      <div class="section-title" id="detailHost" style="margin:0"></div>
-      <div class="row"><button class="ghost" id="monitorBtn">Monitor</button><button class="ghost" id="backBtn" data-i="back">Back</button></div>
-    </div>
-    <div class="card">
-      <div class="row" style="justify-content:space-between;align-items:flex-end">
-        <div><div class="sub" data-i="trendLbl">Visibility Score trend</div><div class="kpi" id="curScore">—</div><div class="sub" id="deltaLbl"></div></div>
-        <svg id="spark" class="spark" width="420" height="90" viewBox="0 0 420 90" preserveAspectRatio="none"></svg>
-      </div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div class="sub" data-i="doFirst">Do these first</div>
-      <table><tbody id="recRows"></tbody></table>
-      <div id="recsEmpty" class="empty hide" data-i="noRecs">No open recommendations — nice.</div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div class="sub" data-i="growth">What generated revenue</div>
-      <div id="revenueBody"></div>
-      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
-        <select id="outcomeType" style="background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:10px 12px;font:inherit">
-          <option value="lead">Lead</option>
-          <option value="line_add">LINE add</option>
-          <option value="phone_call">Phone call</option>
-          <option value="contact_form">Contact form</option>
-          <option value="quotation">Quotation</option>
-          <option value="meeting">Meeting</option>
-          <option value="sale">Sale</option>
-        </select>
-        <input id="outcomeValue" type="number" min="0" placeholder="฿ value (for a sale)" style="min-width:150px" />
-        <button id="logOutcomeBtn" data-i="logOutcome">Log outcome</button>
-      </div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div class="sub" data-i="intel">Visibility Intelligence</div>
-      <div id="intelBody"></div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div class="sub" data-i="whyWin">Why competitors win</div>
-      <div class="row" style="gap:8px;margin:8px 0;flex-wrap:wrap">
-        <input id="compUrl" placeholder="competitor URL (e.g. acclime.com)" style="min-width:240px"/>
-        <button id="analyzeCompBtn" data-i="analyze">Analyze</button>
-      </div>
-      <div id="whyWinBody"></div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div class="sub" data-i="history">Audit history</div>
-      <table><thead><tr><th data-i="when">When</th><th data-i="score">Visibility</th><th data-i="trigger">Trigger</th></tr></thead>
-      <tbody id="auditRows"></tbody></table>
-    </div>
-  </div>
 
-  <div id="signedOut" class="empty" data-i="signedOut">Sign in with Google to see your visibility platform.</div>
+    <!-- Breadcrumb + actions -->
+    <div class="row between" style="margin-bottom:20px">
+      <div class="breadcrumb">
+        <a id="backBtn" data-i="yourSites">Your sites</a>
+        <span class="breadcrumb-sep">›</span>
+        <span id="detailHost" style="color:var(--ink);font-weight:600"></span>
+      </div>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="monitorBtn">Enable monitoring</button>
+        <button class="btn btn-ghost btn-sm" id="auditNowBtn" data-i="runAudit">Run audit</button>
+      </div>
+    </div>
+
+    <!-- Score card -->
+    <div class="card" style="margin-bottom:24px">
+      <div class="row between row-wrap" style="gap:16px">
+        <div>
+          <div class="label" data-i="trendLbl">Visibility score</div>
+          <div class="kpi" id="curScore">—</div>
+          <div class="sub mt4" id="deltaLbl"></div>
+        </div>
+        <svg id="spark" class="spark" width="380" height="80" viewBox="0 0 380 80" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="performance" data-i="tabPerf">Performance</button>
+      <button class="tab" data-tab="outcomes" data-i="tabOutcomes">Outcomes</button>
+      <button class="tab" data-tab="intelligence" data-i="tabIntel">Intelligence</button>
+      <button class="tab" data-tab="history" data-i="tabHistory">History</button>
+    </div>
+
+    <!-- ── TAB: Performance ── -->
+    <div id="tab-performance" class="col">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
+          <span class="title" data-i="doFirst">Recommendations</span>
+        </div>
+        <table>
+          <tbody id="recRows"></tbody>
+        </table>
+        <div id="recsEmpty" class="empty-sm hide" style="border-top:1px dashed var(--line)" data-i="noRecs">No open recommendations — you're good.</div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Outcomes ── -->
+    <div id="tab-outcomes" class="col hide">
+
+      <!-- Revenue summary -->
+      <div class="card">
+        <div class="label" style="margin-bottom:12px" data-i="growth">What generated revenue</div>
+        <div id="revenueBody"><div class="sub">Loading…</div></div>
+      </div>
+
+      <!-- Log outcome -->
+      <div class="card">
+        <div class="label" style="margin-bottom:14px" data-i="logOutcomeTitle">Log a new outcome</div>
+        <div class="row row-wrap" style="gap:10px">
+          <select id="outcomeType" style="flex:1;min-width:150px">
+            <option value="lead">Lead</option>
+            <option value="line_add">LINE add</option>
+            <option value="phone_call">Phone call</option>
+            <option value="contact_form">Contact form</option>
+            <option value="quotation">Quotation</option>
+            <option value="meeting">Meeting</option>
+            <option value="sale">Sale</option>
+          </select>
+          <input id="outcomeValue" type="number" min="0" placeholder="฿ value (optional)" style="flex:1;min-width:140px"/>
+          <button class="btn btn-primary" id="logOutcomeBtn" data-i="logOutcome">Log outcome</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── TAB: Intelligence ── -->
+    <div id="tab-intelligence" class="col hide">
+
+      <!-- Benchmark -->
+      <div class="card">
+        <div class="label" style="margin-bottom:12px" data-i="intel">Visibility intelligence</div>
+        <div id="intelBody"><div class="sub">Loading…</div></div>
+      </div>
+
+      <!-- Competitor analysis -->
+      <div class="card">
+        <div class="label" style="margin-bottom:12px" data-i="whyWin">Why competitors win</div>
+        <div class="row row-wrap" style="gap:10px;margin-bottom:14px">
+          <input id="compUrl" placeholder="competitor URL (e.g. acclime.com)" style="flex:1;min-width:220px"/>
+          <button class="btn btn-primary" id="analyzeCompBtn" data-i="analyze">Analyze</button>
+        </div>
+        <div id="whyWinBody"></div>
+      </div>
+
+    </div>
+
+    <!-- ── TAB: History ── -->
+    <div id="tab-history" class="hide">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px 12px;border-bottom:1px solid var(--line)">
+          <span class="title" data-i="history">Audit history</span>
+        </div>
+        <table>
+          <thead><tr>
+            <th data-i="when">When</th>
+            <th data-i="score">Visibility</th>
+            <th data-i="trigger">Trigger</th>
+          </tr></thead>
+          <tbody id="auditRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /detail -->
+
 </main>
 
 <script>
 const I18N = {
-  en:{tagline:"Visibility Intelligence",connect:"Connect site",audit:"Run audit",portfolio:"Your sites",site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",noSites:"No sites yet. Connect one above to start tracking AI visibility.",back:"Back",trendLbl:"Visibility Score trend",history:"Audit history",when:"When",trigger:"Trigger",signedOut:"Sign in with Google to see your visibility platform.",signin:"Sign in",signout:"Sign out",connHint:"Sign in to track a site over time. A scan without sign-in stays one-off.",doFirst:"Do these first",noRecs:"No open recommendations — nice.",intel:"Visibility Intelligence",growth:"What generated revenue",logOutcome:"Log outcome",whyWin:"Why competitors win",analyze:"Analyze"},
-  th:{tagline:"ระบบติดตามการมองเห็นบน AI",connect:"เพิ่มเว็บไซต์",audit:"สแกนเลย",portfolio:"เว็บไซต์ของคุณ",site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตามการมองเห็นบน AI",back:"ย้อนกลับ",trendLbl:"แนวโน้มคะแนนการมองเห็น",history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",doFirst:"แก้สิ่งเหล่านี้ก่อน",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",intel:"ข้อมูลเชิงลึกการมองเห็น",growth:"อะไรสร้างรายได้",logOutcome:"บันทึกผลลัพธ์",whyWin:"ทำไมคู่แข่งชนะ",analyze:"วิเคราะห์"}
+  en:{
+    tagline:"Growth Intelligence",upgrade:"Upgrade",
+    connect:"Connect site",audit:"Quick scan",runAudit:"Run audit",
+    portfolio:"Your sites",yourSites:"Your sites",
+    site:"Site",score:"Visibility",audits:"Audits",last:"Last audit",
+    noSites:"No sites yet — connect one above.",
+    back:"Your sites",trendLbl:"Visibility score",
+    history:"Audit history",when:"When",trigger:"Trigger",
+    signedOut:"Sign in with Google to see your growth platform.",
+    signin:"Sign in",signout:"Sign out",
+    connHint:"Sign in to track a site over time. A quick scan without sign-in stays one-off.",
+    doFirst:"Recommendations",noRecs:"No open recommendations — you're good.",
+    intel:"Visibility intelligence",growth:"What generated revenue",
+    logOutcomeTitle:"Log a new outcome",logOutcome:"Log outcome",
+    whyWin:"Why competitors win",analyze:"Analyze",
+    tabPerf:"Performance",tabOutcomes:"Outcomes",tabIntel:"Intelligence",tabHistory:"History",
+  },
+  th:{
+    tagline:"Growth Intelligence",upgrade:"อัปเกรด",
+    connect:"เพิ่มเว็บไซต์",audit:"สแกนด่วน",runAudit:"สแกนเลย",
+    portfolio:"เว็บไซต์ของคุณ",yourSites:"เว็บไซต์ของคุณ",
+    site:"เว็บไซต์",score:"คะแนนมองเห็น",audits:"ครั้งที่สแกน",last:"สแกนล่าสุด",
+    noSites:"ยังไม่มีเว็บไซต์ — เพิ่มด้านบนเพื่อเริ่มติดตาม",
+    back:"เว็บไซต์ของคุณ",trendLbl:"คะแนนการมองเห็น",
+    history:"ประวัติการสแกน",when:"เมื่อ",trigger:"ที่มา",
+    signedOut:"เข้าสู่ระบบด้วย Google เพื่อดูแพลตฟอร์มของคุณ",
+    signin:"เข้าสู่ระบบ",signout:"ออกจากระบบ",
+    connHint:"เข้าสู่ระบบเพื่อติดตามเว็บไซต์ต่อเนื่อง การสแกนแบบไม่ล็อกอินจะเป็นครั้งเดียว",
+    doFirst:"คำแนะนำที่ต้องทำ",noRecs:"ไม่มีสิ่งที่ต้องแก้ — เยี่ยม",
+    intel:"ข้อมูลเชิงลึกการมองเห็น",growth:"อะไรสร้างรายได้",
+    logOutcomeTitle:"บันทึกผลลัพธ์ใหม่",logOutcome:"บันทึก",
+    whyWin:"ทำไมคู่แข่งชนะ",analyze:"วิเคราะห์",
+    tabPerf:"ประสิทธิภาพ",tabOutcomes:"ผลลัพธ์",tabIntel:"ข้อมูลเชิงลึก",tabHistory:"ประวัติ",
+  }
 };
+
 let LANG = localStorage.getItem("aimark_lang")==="th"?"th":"en";
 let AUTHED = false;
 let curSiteId=null, curSiteHost=null, curMonitoring=false;
-const $ = (s)=>document.querySelector(s);
-const scoreColor = (n)=> n==null?"var(--mut)": n>=80?"var(--good)": n>=55?"var(--warn)":"var(--bad)";
+const $ = s=>document.querySelector(s);
+const scoreColor = n=> n==null?"var(--mut)": n>=80?"var(--good)": n>=55?"var(--warn)":"var(--bad)";
+
 function applyLang(){
   const t=I18N[LANG];
-  document.querySelectorAll("[data-i]").forEach(el=>{ const k=el.getAttribute("data-i"); if(t[k]!=null) el.textContent=t[k]; });
+  document.querySelectorAll("[data-i]").forEach(el=>{
+    const k=el.getAttribute("data-i");
+    if(t[k]!=null) el.textContent=t[k];
+  });
   $("#langBtn").textContent = LANG==="th"?"EN":"ไทย";
   $("#authBtn").textContent = AUTHED ? t.signout : t.signin;
   document.documentElement.lang = LANG;
 }
-function flash(msg){ const f=$("#flash"); f.textContent=msg; f.classList.remove("hide"); setTimeout(()=>f.classList.add("hide"),4200); }
-async function api(path,opts){ const r= await fetch(path,Object.assign({credentials:"include",headers:{"content-type":"application/json"}},opts||{})); let d=null; try{d=await r.json();}catch(e){} return {status:r.status,data:d}; }
 
+function flash(msg){
+  const f=$("#flash");
+  f.textContent=msg;
+  f.classList.remove("hide");
+  clearTimeout(f._t);
+  f._t=setTimeout(()=>f.classList.add("hide"),3800);
+}
+
+async function api(path,opts){
+  const r=await fetch(path,Object.assign({credentials:"include",headers:{"content-type":"application/json"}},opts||{}));
+  let d=null; try{d=await r.json();}catch(e){}
+  return {status:r.status,data:d};
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  ["performance","outcomes","intelligence","history"].forEach(t=>{
+    const el=$("#tab-"+t);
+    if(el) el.classList.toggle("hide",t!==name);
+  });
+}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+
+// ── Auth ──────────────────────────────────────────────────────────
 async function refreshAuth(){
-  const {status,data}= await api("/api/auth/me");
-  AUTHED = status===200 && data && (data.authenticated!==false) && (data.user||data.email);
-  $("#who").textContent = AUTHED ? (data.user?.email||data.email||"") : "";
+  const {status,data}=await api("/api/auth/me");
+  AUTHED=status===200&&data&&data.authenticated!==false&&(data.user||data.email);
+  $("#who").textContent=AUTHED?(data.user?.email||data.email||""):"";
+  $("#who").classList.toggle("hide",!AUTHED);
   $("#signedOut").classList.toggle("hide",AUTHED);
   $("#overview").classList.toggle("hide",!AUTHED);
   if(!AUTHED) $("#detail").classList.add("hide");
   applyLang();
   if(AUTHED){ loadSites(); loadAlerts(); loadBilling(); }
 }
+
+// ── Billing ──────────────────────────────────────────────────────
 let PLAN_ACTIVE=false;
 async function loadBilling(){
-  const {status,data}= await api("/api/billing");
-  if(status!==200||!data){ return; }
+  const {status,data}=await api("/api/billing");
+  if(status!==200||!data) return;
   PLAN_ACTIVE=!!data.active;
   const badge=$("#planBadge"), up=$("#upgradeBtn");
-  if(PLAN_ACTIVE){ badge.textContent=(LANG==="th"?"แผน: ":"Plan: ")+(data.plan_name||"Growth Monitor"); up.classList.add("hide"); }
-  else { badge.textContent=LANG==="th"?"แผน: ฟรี":"Plan: Free"; up.classList.remove("hide"); }
+  badge.classList.remove("hide");
+  if(PLAN_ACTIVE){
+    badge.textContent=(data.plan_name||"Growth Monitor");
+    badge.classList.add("badge-active");
+    up.classList.add("hide");
+  } else {
+    badge.textContent="Free plan";
+    badge.classList.remove("badge-active");
+    up.classList.remove("hide");
+  }
 }
+
 async function subscribe(method){
-  const {status,data}= await api("/api/checkout",{method:"POST",body:JSON.stringify({product:"growth_monitor",method:method||"card"})});
-  if(status===200&&data&&data.checkout_url){ window.open(data.checkout_url,"_blank"); }
-  else if(data&&data.test_confirm_url){ flash(LANG==="th"?"ยังไม่ได้ตั้งค่าการชำระเงิน (setup_required)":"Payments not configured yet (setup_required)"); }
-  else flash((data&&data.error)||"Could not start checkout");
+  const {status,data}=await api("/api/checkout",{method:"POST",body:JSON.stringify({product:"growth_monitor",method:method||"card"})});
+  if(status===200&&data?.checkout_url){ window.open(data.checkout_url,"_blank"); }
+  else flash((data?.error)||"Could not start checkout");
 }
+
+// ── Alerts ────────────────────────────────────────────────────────
 async function loadAlerts(){
-  const {status,data}= await api("/api/alerts");
+  const {status,data}=await api("/api/alerts");
   const bar=$("#alertsBar");
-  if(status!==200||!data||!data.alerts||!data.alerts.length){ bar.classList.add("hide"); return; }
-  const latest=data.alerts[0];
-  bar.textContent=(LANG==="th"?`มีการแจ้งเตือน ${data.count} รายการ — `:`${data.count} alert(s) — `)+latest.message;
+  if(status!==200||!data?.alerts?.length){ bar.classList.add("hide"); return; }
+  bar.textContent=(LANG==="th"?`${data.count} การแจ้งเตือน — `:` ${data.count} alert(s) — `)+data.alerts[0].message;
   bar.classList.remove("hide");
 }
+
+// ── Sites overview ────────────────────────────────────────────────
 async function loadSites(){
-  const {status,data}= await api("/api/sites");
-  if(status!==200||!data||!Array.isArray(data.sites)) return;
+  const {status,data}=await api("/api/sites");
+  if(status!==200||!Array.isArray(data?.sites)) return;
   const sites=data.sites;
   $("#sitesEmpty").classList.toggle("hide",sites.length>0);
-  // KPI cards
-  const avg = sites.filter(s=>s.latest_score!=null).reduce((a,s,_,arr)=>a+s.latest_score/arr.length,0);
-  const tracked = sites.length;
-  const totalAudits = sites.reduce((a,s)=>a+(Number(s.audits_count)||0),0);
-  $("#kpis").innerHTML =
-    card(LANG==="th"?"คะแนนเฉลี่ย":"Avg visibility", sites.some(s=>s.latest_score!=null)?Math.round(avg):"—", scoreColor(Math.round(avg)))
-    + card(LANG==="th"?"เว็บที่ติดตาม":"Sites tracked", tracked)
-    + card(LANG==="th"?"สแกนทั้งหมด":"Total audits", totalAudits);
-  $("#siteRows").innerHTML = sites.map(s=>`<tr class="clk" data-id="${s.id}">
-    <td>${esc(s.host)}</td>
-    <td><span class="pill" style="background:${scoreColor(s.latest_score)};color:#06120d">${s.latest_score==null?"—":s.latest_score}</span></td>
-    <td>${s.audits_count==null?0:s.audits_count}</td>
-    <td class="mut">${s.last_audit_at?fmt(s.last_audit_at):"—"}</td></tr>`).join("");
-  document.querySelectorAll("#siteRows tr.clk").forEach(tr=>tr.onclick=()=>openSite(tr.getAttribute("data-id")));
+  const valid=sites.filter(s=>s.latest_score!=null);
+  const avg=valid.length?Math.round(valid.reduce((a,s)=>a+s.latest_score,0)/valid.length):null;
+  const totalAudits=sites.reduce((a,s)=>a+(Number(s.audits_count)||0),0);
+  $("#kpis").innerHTML=
+    kpiCard(LANG==="th"?"คะแนนเฉลี่ย":"Avg visibility", avg!=null?avg:"—", scoreColor(avg))+
+    kpiCard(LANG==="th"?"เว็บที่ติดตาม":"Sites tracked", sites.length)+
+    kpiCard(LANG==="th"?"สแกนทั้งหมด":"Total audits", totalAudits);
+  $("#siteRows").innerHTML=sites.map(s=>`<tr class="clk" data-id="${s.id}">
+    <td style="font-weight:600">${esc(s.host)}</td>
+    <td><span class="pill" style="background:${scoreColor(s.latest_score)};color:#06120d">${s.latest_score??'—'}</span></td>
+    <td class="sub">${s.audits_count??0}</td>
+    <td class="sub">${s.last_audit_at?fmt(s.last_audit_at):"—"}</td>
+  </tr>`).join("");
+  document.querySelectorAll("#siteRows tr.clk").forEach(tr=>tr.onclick=()=>openSite(tr.dataset.id));
 }
-function card(label,val,color){ return `<div class="card"><div class="sub">${esc(label)}</div><div class="kpi" style="color:${color||'var(--ink)'}">${val}</div></div>`; }
+
+function kpiCard(label,val,color){
+  return `<div class="card"><div class="label">${esc(label)}</div><div class="kpi kpi-sm" style="color:${color||'var(--ink)'}">${val}</div></div>`;
+}
+
+// ── Monitor button ────────────────────────────────────────────────
 function updateMonitorBtn(){
   const b=$("#monitorBtn");
-  b.textContent = curMonitoring ? (LANG==="th"?"กำลังเฝ้าดู":"Monitoring on") : (LANG==="th"?"เปิดเฝ้าดู":"Enable monitoring");
-  b.style.borderColor = curMonitoring?"var(--good)":"var(--line)";
+  b.textContent=curMonitoring?(LANG==="th"?"เฝ้าดูอยู่ ✓":"Monitoring on ✓"):(LANG==="th"?"เปิดเฝ้าดู":"Enable monitoring");
+  b.className=curMonitoring?"btn btn-good btn-sm":"btn btn-ghost btn-sm";
 }
+
+// ── Open site detail ──────────────────────────────────────────────
 async function openSite(id){
-  const {status,data}= await api("/api/sites/"+encodeURIComponent(id));
-  if(status!==200||!data) { flash("Could not load site"); return; }
-  curSiteId=id; curSiteHost=data.site.host; curMonitoring=!!data.site.monitoring_enabled; updateMonitorBtn();
-  $("#overview").classList.add("hide"); $("#detail").classList.remove("hide");
-  $("#detailHost").textContent = data.site.host;
-  $("#curScore").textContent = data.site.latest_score==null?"—":data.site.latest_score;
-  $("#curScore").style.color = scoreColor(data.site.latest_score);
-  const d=data.delta||0; $("#deltaLbl").textContent = d? (d>0?`+${d}`:`${d}`)+ (LANG==="th"?" จากครั้งแรก":" since first audit"):"";
+  const {status,data}=await api("/api/sites/"+encodeURIComponent(id));
+  if(status!==200||!data){ flash("Could not load site"); return; }
+  curSiteId=id; curSiteHost=data.site.host; curMonitoring=!!data.site.monitoring_enabled;
+  updateMonitorBtn();
+  $("#overview").classList.add("hide");
+  $("#detail").classList.remove("hide");
+  $("#detailHost").textContent=data.site.host;
+  $("#curScore").textContent=data.site.latest_score??'—';
+  $("#curScore").style.color=scoreColor(data.site.latest_score);
+  const d=data.delta||0;
+  $("#deltaLbl").textContent=d?(d>0?`+${d}`:String(d))+(LANG==="th"?" จากครั้งแรก":" since first audit"):"";
   drawSpark(data.trend||[]);
-  const recs=(data.recommendations||[]);
+  // Recs
+  const recs=data.recommendations||[];
   $("#recsEmpty").classList.toggle("hide",recs.length>0);
-  const pri=(p)=> p<=1?"var(--bad)":p<=2?"var(--warn)":"var(--mut)";
-  $("#recRows").innerHTML = recs.map(r=>`<tr><td style="width:30px"><span class="pill" style="background:${pri(r.priority)};color:#06120d">${r.priority}</span></td>
-    <td><b>${esc(r.title)}</b>${r.impact?`<div class="sub">${esc(r.impact)}</div>`:""}</td>
-    <td class="mut" style="text-align:right">${esc(r.effort||"")}</td></tr>`).join("");
-  $("#auditRows").innerHTML = (data.audits||[]).map(a=>`<tr><td class="mut">${fmt(a.created_at)}</td>
-    <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score==null?"—":a.overall_score}</span></td>
-    <td class="mut">${esc(a.trigger||"manual")}</td></tr>`).join("") || `<tr><td colspan="3" class="mut">—</td></tr>`;
+  const priColor=p=>p<=1?"var(--bad)":p<=2?"var(--warn)":"var(--mut)";
+  $("#recRows").innerHTML=recs.map(r=>`<tr>
+    <td style="width:36px"><span class="pill" style="background:${priColor(r.priority)};color:#06120d">${r.priority}</span></td>
+    <td><div style="font-weight:600">${esc(r.title)}</div>${r.impact?`<div class="sub mt4">${esc(r.impact)}</div>`:""}</td>
+    <td class="sub" style="text-align:right;white-space:nowrap">${esc(r.effort||"")}</td>
+  </tr>`).join("");
+  // History
+  $("#auditRows").innerHTML=(data.audits||[]).map(a=>`<tr>
+    <td class="sub">${fmt(a.created_at)}</td>
+    <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score??'—'}</span></td>
+    <td class="sub">${esc(a.trigger||"manual")}</td>
+  </tr>`).join()||`<tr><td colspan="3" class="sub">—</td></tr>`;
+  switchTab("performance");
   loadIntelligence(id);
   loadRevenue(id);
 }
-// The money view: outcomes the owner logged + which fixes the revenue followed.
-// This is the retention/upsell proof — customers buy outcomes, not scores.
+
+// ── Revenue (Outcomes tab) ────────────────────────────────────────
 async function loadRevenue(id){
   const el=$("#revenueBody"); if(!el) return;
-  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังรวมผลลัพธ์…":"Loading…"}</div>`;
   const {data}=await api("/api/intelligence/revenue?site="+encodeURIComponent(id));
-  if(!data||!data.summary){ el.innerHTML=`<div class="sub">—</div>`; return; }
-  const t=data.summary, baht=(n)=>"฿"+Number(n||0).toLocaleString();
-  let html=`<div class="row" style="gap:22px">`+
-    `<div><div class="kpi">${t.leads||0}</div><div class="sub">${LANG==="th"?"ลีด":"Leads"}</div></div>`+
-    `<div><div class="kpi">${t.sales||0}</div><div class="sub">${LANG==="th"?"ขายได้":"Sales"}</div></div>`+
-    `<div><div class="kpi" style="color:var(--good)">${baht(t.revenue)}</div><div class="sub">${LANG==="th"?"รายได้":"Revenue"}</div></div></div>`;
-  const items=((data.attribution&&data.attribution.items)||[]).filter(it=>it.revenue>0||it.leads>0);
+  if(!data?.summary){ el.innerHTML=`<div class="sub">${LANG==="th"?"ยังไม่มีข้อมูล — บันทึกลีด/ยอดขายเพื่อเริ่มต้น":"No data yet — log leads and sales to get started."}</div>`; return; }
+  const t=data.summary, baht=n=>"฿"+Number(n||0).toLocaleString();
+  let html=`<div class="row gap-row" style="margin-bottom:16px">
+    <div><div class="kpi kpi-sm">${t.leads||0}</div><div class="sub">${LANG==="th"?"ลีด":"Leads"}</div></div>
+    <div><div class="kpi kpi-sm">${t.sales||0}</div><div class="sub">${LANG==="th"?"ขายได้":"Sales"}</div></div>
+    <div><div class="kpi kpi-sm" style="color:var(--good)">${baht(t.revenue)}</div><div class="sub">${LANG==="th"?"รายได้":"Revenue"}</div></div>
+  </div>`;
+  const items=((data.attribution?.items)||[]).filter(it=>it.revenue>0||it.leads>0);
   if(items.length){
-    html+=`<div class="sub" style="margin-top:12px">${LANG==="th"?"สิ่งที่สร้างรายได้":"What generated it"}</div><table><tbody>`+
-      items.slice(0,6).map(it=>`<tr><td><b>${esc(it.title)}</b></td><td class="mut" style="text-align:right">${it.leads} ${LANG==="th"?"ลีด":"leads"} · ${it.sales} ${LANG==="th"?"ขาย":"sales"} · ${baht(it.revenue)}</td></tr>`).join("")+`</tbody></table>`;
+    html+=`<div class="label" style="margin-bottom:8px">${LANG==="th"?"สิ่งที่สร้างรายได้":"What generated it"}</div><table><tbody>`+
+      items.slice(0,6).map(it=>`<tr>
+        <td style="font-weight:600">${esc(it.title)}</td>
+        <td class="sub" style="text-align:right">${it.leads} ${LANG==="th"?"ลีด":"leads"} · ${it.sales} ${LANG==="th"?"ขาย":"sales"} · ${baht(it.revenue)}</td>
+      </tr>`).join("")+`</tbody></table>`;
   } else {
-    html+=`<div class="sub" style="margin-top:8px">${LANG==="th"?"บันทึกลีด/ยอดขายเมื่อเกิดขึ้น แล้วระบบจะบอกว่าการแก้ไขไหนสร้างรายได้":"Log leads/sales as they happen — AIMark shows which fixes drove the revenue."}</div>`;
+    html+=`<div class="sub">${LANG==="th"?"บันทึกลีด/ยอดขายเมื่อเกิดขึ้น ระบบจะบอกว่าการแก้ไขไหนสร้างรายได้":"Log leads/sales as they happen — AIMark shows which fixes drove the revenue."}</div>`;
   }
   el.innerHTML=html;
 }
-// P2 "Why competitors win" — surface the existing gap analysis: scoreboard + the
-// specific gaps + the fixes that close them. The sales-conversion insight.
+
+// ── Intelligence (Intelligence tab) ──────────────────────────────
+async function loadIntelligence(id){
+  const el=$("#intelBody"); if(!el) return;
+  const q=encodeURIComponent(id);
+  const [bench,imp,comp]=await Promise.all([
+    api("/api/intelligence/benchmark?site="+q),
+    api("/api/intelligence/impact?site="+q),
+    api("/api/intelligence/competitors?site="+q)
+  ]);
+  const intelRow=(color,big,text)=>`<div class="row" style="gap:10px;margin:10px 0">
+    <span class="pill" style="background:${color};color:#06120d;font-size:12px">${big}</span>
+    <span style="font-size:14px">${text}</span>
+  </div>`;
+  const out=[];
+  const b=bench.data?.benchmark;
+  if(b?.available&&b.cohort?.count>=1&&b.your_percentile!=null){
+    const col=b.position==="bottom"?"var(--bad)":b.position==="top"?"var(--good)":"var(--warn)";
+    out.push(intelRow(col,b.your_percentile+"%",LANG==="th"?`นำหน้า ${b.your_percentile}% ของอุตสาหกรรม "${esc(b.industry)}" (เทียบ ${b.cohort.count} เว็บ)`:`Outperforms ${b.your_percentile}% of "${esc(b.industry)}" (vs ${b.cohort.count} sites)`));
+    if(b.gap_to_avg>0) out.push(`<div class="sub" style="margin-left:52px">${LANG==="th"?`ต่ำกว่าค่าเฉลี่ยอุตสาหกรรม ${b.gap_to_avg} คะแนน`:`${b.gap_to_avg} below industry average`}</div>`);
+  }
+  const im=imp.data?.impact;
+  if(im?.measured>0&&im.avg_delta!=null){
+    const up=im.avg_delta>=0;
+    out.push(intelRow(up?"var(--good)":"var(--bad)",(up?"+":"")+im.avg_delta,LANG==="th"?`การแก้ไขที่ทำขยับคะแนนเฉลี่ย ${up?"+":""}${im.avg_delta} (วัดแล้ว ${im.measured} รายการ)`:`Applied fixes moved score ${up?"+":""}${im.avg_delta} on avg (${im.measured} measured)`));
+  }
+  const cs=((comp.data?.competitors)||[]).filter(c=>c.latest);
+  if(cs.length){
+    const top=cs.sort((a,b)=>(b.latest.competitor_score||0)-(a.latest.competitor_score||0))[0];
+    const ahead=(top.latest.gap||0)>0;
+    out.push(intelRow(ahead?"var(--bad)":"var(--mut)",ahead?"!":"OK",LANG==="th"?`${esc(top.host)} ${ahead?`นำ ${top.latest.gap} คะแนน`:"ยังตามหลังคุณ"}`:`${esc(top.host)} ${ahead?`is ${top.latest.gap} ahead`:"is behind you"}`));
+  }
+  el.innerHTML=out.length?out.join(""):`<div class="sub">${LANG==="th"?"ยังไม่มีข้อมูลเชิงลึก — ตั้งค่าอุตสาหกรรม, สแกนซ้ำ, หรือเทียบคู่แข่งเพื่อปลดล็อก":"No intelligence yet — set the site's industry, re-scan, or analyze a competitor to unlock."}</div>`;
+}
+
+// ── Competitor analysis ────────────────────────────────────────────
 async function analyzeCompetitor(){
   if(!curSiteHost) return;
   const comp=$("#compUrl").value.trim();
   if(!comp){ flash(LANG==="th"?"ใส่ URL คู่แข่ง":"Enter a competitor URL"); return; }
   const el=$("#whyWinBody");
-  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังสแกนและวิเคราะห์ช่องว่าง… (อาจใช้เวลาสักครู่)":"Scanning + analyzing the gap… (this can take a moment)"}</div>`;
+  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังสแกนและวิเคราะห์… (อาจใช้เวลาสักครู่)":"Scanning + analyzing… (this may take a moment)"}</div>`;
   const {status,data}=await api("/api/competitor",{method:"POST",body:JSON.stringify({url:"https://"+curSiteHost,competitors:[comp]})});
-  if(status!==200||!data){ el.innerHTML=`<div class="sub">${esc((data&&data.error)||"Could not analyze")}</div>`; return; }
-  const sb=(data.scoreboard||[]);
+  if(status!==200||!data){ el.innerHTML=`<div class="sub">${esc((data?.error)||"Could not analyze")}</div>`; return; }
   let html="";
-  if(sb.length){ html+=`<table><tbody>`+sb.map(s=>`<tr><td>${esc(String(s.url||"").replace(/^https?:\/\//,"").replace(/\/$/,""))}</td><td class="mut">${s.role==="target"?(LANG==="th"?"คุณ":"You"):(LANG==="th"?"คู่แข่ง":"Competitor")}</td><td style="text-align:right"><span class="pill" style="background:${scoreColor(s.overall)};color:#06120d">${s.overall==null?"—":s.overall}</span></td></tr>`).join("")+`</tbody></table>`; }
+  const sb=data.scoreboard||[];
+  if(sb.length){
+    html+=`<table style="margin-bottom:12px"><tbody>`+sb.map(s=>`<tr>
+      <td style="font-weight:600">${esc(String(s.url||"").replace(/^https?:\/\//,"").replace(/\/$/,""))}</td>
+      <td class="sub">${s.role==="target"?(LANG==="th"?"คุณ":"You"):(LANG==="th"?"คู่แข่ง":"Competitor")}</td>
+      <td style="text-align:right"><span class="pill" style="background:${scoreColor(s.overall)};color:#06120d">${s.overall??'—'}</span></td>
+    </tr>`).join("")+`</tbody></table>`;
+  }
   if(data.preview){
-    html+=`<div class="sub" style="margin-top:10px">${LANG==="th"?"ปลดล็อกการวิเคราะห์ช่องว่าง + วิธีแก้ ด้วยแผน Growth Monitor":"Unlock the full gap analysis + the fixes with Growth Monitor"}</div><button id="whyWinUpgrade" style="margin-top:8px">Upgrade</button>`;
-    el.innerHTML=html; const ub=$("#whyWinUpgrade"); if(ub) ub.onclick=()=>subscribe("card"); return;
+    html+=`<div class="sub mt8">${LANG==="th"?"ปลดล็อกการวิเคราะห์ช่องว่าง + วิธีแก้ ด้วยแผน Growth Monitor":"Unlock the full gap analysis + fixes with Growth Monitor"}</div>
+    <button class="btn btn-primary" style="margin-top:10px" id="whyWinUpgrade">${LANG==="th"?"อัปเกรด":"Upgrade"}</button>`;
+    el.innerHTML=html;
+    const ub=$("#whyWinUpgrade"); if(ub) ub.onclick=()=>subscribe("card");
+    return;
   }
   const gaps=(data.gaps||[]).filter(g=>(g.gap||0)>0).sort((a,b)=>(b.gap||0)-(a.gap||0));
-  if(gaps.length){ html+=`<div class="sub" style="margin-top:12px">${LANG==="th"?"ทำไมคู่แข่งชนะ":"Why they win"}</div>`+gaps.slice(0,5).map(g=>`<div style="margin:8px 0"><b>${esc(g.category)}</b> <span class="mut">(+${g.gap})</span><div class="sub">${esc(g.why_it_matters||"")}</div></div>`).join(""); }
-  const fixes=(data.fixes_that_close_the_gap||[]).slice().sort((a,b)=>(a.priority||9)-(b.priority||9));
-  if(fixes.length){ html+=`<div class="sub" style="margin-top:12px">${LANG==="th"?"สิ่งที่ต้องทำเพื่อแซง":"What to do to win"}</div><table><tbody>`+fixes.slice(0,5).map(f=>`<tr><td><b>${esc(f.action||"")}</b>${f.expected_effect?`<div class="sub">${esc(f.expected_effect)}</div>`:""}</td><td class="mut" style="text-align:right">${esc(f.effort||"")}</td></tr>`).join("")+`</tbody></table>`; }
+  if(gaps.length){
+    html+=`<div class="label" style="margin-bottom:8px">${LANG==="th"?"ทำไมคู่แข่งชนะ":"Why they win"}</div>`;
+    html+=gaps.slice(0,5).map(g=>`<div style="margin:10px 0"><div style="font-weight:600">${esc(g.category)} <span class="sub">(+${g.gap})</span></div>${g.why_it_matters?`<div class="sub mt4">${esc(g.why_it_matters)}</div>`:""}</div>`).join("");
+  }
+  const fixes=(data.fixes_that_close_the_gap||[]).sort((a,b)=>(a.priority||9)-(b.priority||9));
+  if(fixes.length){
+    html+=`<div class="label" style="margin:14px 0 8px">${LANG==="th"?"สิ่งที่ต้องทำเพื่อแซง":"What to do to win"}</div><table><tbody>`+
+      fixes.slice(0,5).map(f=>`<tr>
+        <td><div style="font-weight:600">${esc(f.action||"")}</div>${f.expected_effect?`<div class="sub mt4">${esc(f.expected_effect)}</div>`:""}</td>
+        <td class="sub" style="text-align:right;white-space:nowrap">${esc(f.effort||"")}</td>
+      </tr>`).join("")+`</tbody></table>`;
+  }
   el.innerHTML=html||`<div class="sub">—</div>`;
 }
+
+// ── Log outcome ───────────────────────────────────────────────────
 async function logOutcome(){
   if(!curSiteId) return;
   const type=$("#outcomeType").value;
   const val=Number($("#outcomeValue").value)||0;
   const {status,data}=await api("/api/sites/"+encodeURIComponent(curSiteId)+"/outcome",{method:"POST",body:JSON.stringify({type,value:val})});
-  if(status===200){ $("#outcomeValue").value=""; flash(LANG==="th"?"บันทึกผลลัพธ์แล้ว":"Outcome logged"); loadRevenue(curSiteId); }
-  else flash((data&&data.error)||"Could not log outcome");
+  if(status===200){ $("#outcomeValue").value=""; flash(LANG==="th"?"บันทึกแล้ว":"Outcome logged"); loadRevenue(curSiteId); }
+  else flash((data?.error)||"Could not log outcome");
 }
-// Surface the live Visibility Intelligence (benchmark / applied-fix impact / competitor
-// threat) so the customer SEES the value — the conversion + retention hook.
-async function loadIntelligence(id){
-  const el=$("#intelBody"); if(!el) return;
-  el.innerHTML=`<div class="sub">${LANG==="th"?"กำลังวิเคราะห์…":"Analyzing…"}</div>`;
-  const q=encodeURIComponent(id);
-  const [bench,imp,comp]=await Promise.all([api("/api/intelligence/benchmark?site="+q),api("/api/intelligence/impact?site="+q),api("/api/intelligence/competitors?site="+q)]);
-  const row=(color,big,text)=>`<div style="display:flex;gap:8px;align-items:center;margin:8px 0"><span class="pill" style="background:${color};color:#06120d;min-width:34px;text-align:center">${big}</span><span>${text}</span></div>`;
-  const out=[];
-  const b=bench.data&&bench.data.benchmark;
-  if(b&&b.available&&b.cohort&&b.cohort.count>=1&&b.your_percentile!=null){
-    const col=b.position==="bottom"?"var(--bad)":b.position==="top"?"var(--good)":"var(--warn)";
-    out.push(row(col,b.your_percentile+"%",LANG==="th"?`คุณนำหน้า ${b.your_percentile}% ของอุตสาหกรรม "${esc(b.industry)}" (เทียบ ${b.cohort.count} เว็บ)`:`You outperform ${b.your_percentile}% of "${esc(b.industry)}" (vs ${b.cohort.count} sites)`));
-    if(b.gap_to_avg>0) out.push(`<div class="sub">${LANG==="th"?`ต่ำกว่าค่าเฉลี่ยอุตสาหกรรม ${b.gap_to_avg} คะแนน`:`${b.gap_to_avg} below the industry average`}</div>`);
-  }
-  const im=imp.data&&imp.data.impact;
-  if(im&&im.measured>0&&im.avg_delta!=null){
-    const up=im.avg_delta>=0;
-    out.push(row(up?"var(--good)":"var(--bad)",(up?"+":"")+im.avg_delta,LANG==="th"?`สิ่งที่คุณแก้ขยับคะแนนเฉลี่ย ${up?"+":""}${im.avg_delta} (วัดแล้ว ${im.measured} รายการ)`:`Your applied fixes moved you ${up?"+":""}${im.avg_delta} on average (${im.measured} measured)`));
-  }
-  const cs=((comp.data&&comp.data.competitors)||[]).filter(c=>c.latest);
-  if(cs.length){
-    const t=cs.slice().sort((a,b)=>(b.latest.competitor_score||0)-(a.latest.competitor_score||0))[0];
-    const ahead=(t.latest.gap||0)>0;
-    out.push(row(ahead?"var(--bad)":"var(--mut)",ahead?"!":"OK",LANG==="th"?`คู่แข่งเด่น ${esc(t.host)} ${ahead?`นำคุณ ${t.latest.gap} คะแนน`:"ยังตามหลังคุณ"}`:`Top competitor ${esc(t.host)} ${ahead?`is ${t.latest.gap} ahead`:"is behind you"}`));
-  }
-  el.innerHTML = out.length? out.join("") : `<div class="sub">${LANG==="th"?"ยังไม่มีข้อมูลเชิงลึก — ตั้งค่าอุตสาหกรรมของเว็บ, สแกนซ้ำ, หรือเทียบคู่แข่งเพื่อปลดล็อก":"No intelligence yet — set the site's industry, re-scan, or run a competitor comparison to unlock"}</div>`;
-}
+
+// ── Sparkline ─────────────────────────────────────────────────────
 function drawSpark(trend){
   const svg=$("#spark"); const pts=trend.filter(p=>p.score!=null);
-  if(pts.length<2){ svg.innerHTML=`<text x="10" y="50" fill="#93a0b8" font-size="13">${LANG==="th"?"ต้องสแกนอย่างน้อย 2 ครั้งเพื่อดูแนวโน้ม":"Two audits needed to chart a trend"}</text>`; return; }
-  const W=420,H=90,pad=8; const xs=(i)=>pad+i*(W-2*pad)/(pts.length-1); const ys=(v)=>H-pad-(v/100)*(H-2*pad);
+  if(pts.length<2){ svg.innerHTML=`<text x="10" y="44" fill="#6b7a99" font-size="13">${LANG==="th"?"ต้องสแกน 2 ครั้งขึ้นไป":"Need 2+ audits to show trend"}</text>`; return; }
+  const W=380,H=80,pad=8;
+  const xs=i=>pad+i*(W-2*pad)/(pts.length-1);
+  const ys=v=>H-pad-(v/100)*(H-2*pad);
   const d=pts.map((p,i)=>`${i?"L":"M"}${xs(i).toFixed(1)},${ys(p.score).toFixed(1)}`).join(" ");
-  svg.innerHTML=`<path d="${d}" fill="none" stroke="var(--acc)" stroke-width="2.5"/>`+pts.map((p,i)=>`<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.score).toFixed(1)}" r="3" fill="var(--acc)"/>`).join("");
+  svg.innerHTML=`<path d="${d}" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round"/>`+
+    pts.map((p,i)=>`<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.score).toFixed(1)}" r="3" fill="var(--acc)"/>`).join("");
 }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
-function fmt(iso){ try{ const d=new Date(iso); return d.toLocaleDateString(LANG==="th"?"th-TH":"en-GB",{year:"2-digit",month:"short",day:"numeric"}); }catch(e){return iso;} }
 
+// ── Utils ─────────────────────────────────────────────────────────
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+function fmt(iso){ try{ return new Date(iso).toLocaleDateString(LANG==="th"?"th-TH":"en-GB",{year:"2-digit",month:"short",day:"numeric"}); }catch(e){return iso;} }
+
+// ── Wire events ───────────────────────────────────────────────────
 $("#langBtn").onclick=()=>{ LANG=LANG==="th"?"en":"th"; localStorage.setItem("aimark_lang",LANG); applyLang(); if(AUTHED) loadSites(); };
-$("#authBtn").onclick=()=>{ if(AUTHED){ location.href="/api/auth/logout"; } else { location.href="/api/auth/start/google?next=/dashboard.html"; } };
+$("#authBtn").onclick=()=>{ AUTHED?location.href="/api/auth/logout":location.href="/api/auth/start/google?next=/dashboard.html"; };
 $("#backBtn").onclick=()=>{ $("#detail").classList.add("hide"); $("#overview").classList.remove("hide"); };
 $("#logOutcomeBtn").onclick=logOutcome;
 $("#analyzeCompBtn").onclick=analyzeCompetitor;
+$("#upgradeBtn").onclick=()=>subscribe("card");
+
 $("#monitorBtn").onclick=async()=>{
   if(!curSiteId) return;
-  const {status,data}= await api("/api/sites/"+encodeURIComponent(curSiteId)+"/monitor",{method:"POST",body:JSON.stringify({enabled:!curMonitoring})});
+  const {status,data}=await api("/api/sites/"+encodeURIComponent(curSiteId)+"/monitor",{method:"POST",body:JSON.stringify({enabled:!curMonitoring})});
   if(status===402){ flash(LANG==="th"?"ต้องสมัครแผนเพื่อเปิดการเฝ้าดูต่อเนื่อง":"Subscribe to enable continuous monitoring"); subscribe("card"); return; }
   if(status===200&&data){ curMonitoring=!!data.monitoring_enabled; updateMonitorBtn(); flash(curMonitoring?(LANG==="th"?"เปิดการเฝ้าดูแล้ว":"Monitoring enabled"):(LANG==="th"?"ปิดการเฝ้าดู":"Monitoring off")); }
-  else flash((data&&data.error)||"Could not update monitoring");
+  else flash((data?.error)||"Could not update monitoring");
 };
-$("#upgradeBtn").onclick=()=>subscribe("card");
+
+$("#auditNowBtn").onclick=async()=>{
+  if(!curSiteHost) return;
+  const btn=$("#auditNowBtn"); btn.disabled=true; const old=btn.textContent; btn.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
+  const {status,data}=await api("/api/scan",{method:"POST",body:JSON.stringify({url:"https://"+curSiteHost,lang:LANG})});
+  btn.disabled=false; btn.textContent=old;
+  if(status===200&&data){ flash((LANG==="th"?"คะแนน ":"Score ")+(data.overall??'?')+(data.grade?` (${data.grade})`:"")); openSite(curSiteId); }
+  else flash((data?.error)||"Scan failed");
+};
+
 $("#connectBtn").onclick=async()=>{
   const url=$("#siteUrl").value.trim(); if(!url){ flash(LANG==="th"?"ใส่ URL ก่อน":"Enter a URL first"); return; }
   if(!AUTHED){ flash(LANG==="th"?"เข้าสู่ระบบเพื่อบันทึกเว็บไซต์":"Sign in to save a site"); return; }
-  const {status,data}= await api("/api/sites",{method:"POST",body:JSON.stringify({url})});
-  if(status===200&&data&&data.status==="connected"){ flash((LANG==="th"?"เพิ่มแล้ว: ":"Connected: ")+data.site.host); loadSites(); }
-  else flash((data&&data.error)||"Could not connect site");
+  const {status,data}=await api("/api/sites",{method:"POST",body:JSON.stringify({url})});
+  if(status===200&&data?.status==="connected"){ flash((LANG==="th"?"เพิ่มแล้ว: ":"Connected: ")+data.site.host); loadSites(); }
+  else flash((data?.error)||"Could not connect site");
 };
+
 $("#auditBtn").onclick=async()=>{
   const url=$("#siteUrl").value.trim(); if(!url){ flash(LANG==="th"?"ใส่ URL ก่อน":"Enter a URL first"); return; }
   const btn=$("#auditBtn"); btn.disabled=true; const old=btn.textContent; btn.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
-  const {status,data}= await api("/api/scan",{method:"POST",body:JSON.stringify({url,lang:LANG})});
+  const {status,data}=await api("/api/scan",{method:"POST",body:JSON.stringify({url,lang:LANG})});
   btn.disabled=false; btn.textContent=old;
-  if(status===200&&data){ flash((LANG==="th"?"คะแนน ":"Score ")+ (data.overall!=null?data.overall:"?") + (data.grade?` (${data.grade})`:"")); if(AUTHED) loadSites(); }
-  else flash((data&&data.error)||"Scan failed");
+  if(status===200&&data){ flash((LANG==="th"?"คะแนน ":"Score ")+(data.overall??'?')+(data.grade?` (${data.grade})`:"")); if(AUTHED) loadSites(); }
+  else flash((data?.error)||"Scan failed");
 };
 
+// ── Boot ──────────────────────────────────────────────────────────
 applyLang();
 refreshAuth();
 </script>
