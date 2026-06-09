@@ -222,9 +222,21 @@ async function openSite(id){
   const recs=(data.recommendations||[]);
   $("#recsEmpty").classList.toggle("hide",recs.length>0);
   const pri=(p)=> p<=1?"var(--bad)":p<=2?"var(--warn)":"var(--mut)";
-  $("#recRows").innerHTML = recs.map(r=>`<tr><td style="width:30px"><span class="pill" style="background:${pri(r.priority)};color:#06120d">${r.priority}</span></td>
-    <td><b>${esc(r.title)}</b>${r.impact?`<div class="sub">${esc(r.impact)}</div>`:""}</td>
-    <td class="mut" style="text-align:right">${esc(r.effort||"")}</td></tr>`).join("");
+  $("#recRows").innerHTML = recs.map(r=>`<tr data-rec-id="${esc(r.id||"")}" data-rec-status="${esc(r.status||"suggested")}">
+    <td style="width:30px"><span class="pill" style="background:${pri(r.priority)};color:#06120d">${r.priority}</span></td>
+    <td>
+      <b>${esc(r.title)}</b>
+      ${r.impact?`<div class="sub">${esc(r.impact)}</div>`:""}
+      ${r.action?`<div class="sub" style="margin-top:4px;color:var(--acc);font-size:12px">📋 ${esc(r.action)}</div>`:""}
+    </td>
+    <td style="text-align:right;white-space:nowrap;vertical-align:middle">
+      <span class="mut" style="font-size:12px;margin-right:8px">${esc(r.effort||"")}</span>
+      ${r.status==="applied"
+        ? `<span class="pill" style="background:var(--good);color:#06120d;font-size:12px">✓ Done</span>`
+        : `<button onclick="applyRec('${esc(r.id||"")}',this)" style="background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer" title="${LANG==="th"?"ทำเสร็จแล้ว — บันทึกและวัดผล":"Mark done — records adoption & measures impact"}">${LANG==="th"?"✓ ทำแล้ว":"✓ Done"}</button>`
+      }
+    </td>
+  </tr>`).join("");
   $("#auditRows").innerHTML = (data.audits||[]).map(a=>`<tr><td class="mut">${fmt(a.created_at)}</td>
     <td><span class="pill" style="background:${scoreColor(a.overall_score)};color:#06120d">${a.overall_score==null?"—":a.overall_score}</span></td>
     <td class="mut">${esc(a.trigger||"manual")}</td></tr>`).join("") || `<tr><td colspan="3" class="mut">—</td></tr>`;
@@ -310,6 +322,19 @@ async function loadIntelligence(id){
     out.push(row(ahead?"var(--bad)":"var(--mut)",ahead?"!":"OK",LANG==="th"?`คู่แข่งเด่น ${esc(t.host)} ${ahead?`นำคุณ ${t.latest.gap} คะแนน`:"ยังตามหลังคุณ"}`:`Top competitor ${esc(t.host)} ${ahead?`is ${t.latest.gap} ahead`:"is behind you"}`));
   }
   el.innerHTML = out.length? out.join("") : `<div class="sub">${LANG==="th"?"ยังไม่มีข้อมูลเชิงลึก — ตั้งค่าอุตสาหกรรมของเว็บ, สแกนซ้ำ, หรือเทียบคู่แข่งเพื่อปลดล็อก":"No intelligence yet — set the site's industry, re-scan, or run a competitor comparison to unlock"}</div>`;
+}
+async function applyRec(recId, btn){
+  if(!recId) return;
+  const old=btn.textContent; btn.disabled=true; btn.textContent=LANG==="th"?"กำลังบันทึก…":"Saving…";
+  const {status,data}=await api("/api/recommendations/"+encodeURIComponent(recId)+"/applied",{method:"POST",body:"{}"});
+  if(status===200){
+    btn.replaceWith(Object.assign(document.createElement("span"),{className:"pill",style:"background:var(--good);color:#06120d;font-size:12px",textContent:"✓ Done"}));
+    flash(LANG==="th"?"บันทึกแล้ว — ระบบจะวัดผลสแกนครั้งถัดไป":"Marked done — impact measured on next audit");
+    if(curSiteId) loadRevenue(curSiteId);
+  } else {
+    btn.disabled=false; btn.textContent=old;
+    flash((data?.error)||"Could not mark as done");
+  }
 }
 function drawSpark(trend){
   const svg=$("#spark"); const pts=trend.filter(p=>p.score!=null);
