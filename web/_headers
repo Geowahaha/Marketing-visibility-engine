@@ -5,3 +5,8 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://checkout.stripe.com
+
+/bot.md
+  Content-Type: text/markdown; charset=utf-8
+/bot
+  Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory", </bot.md>; rel="alternate"; type="text/markdown"
