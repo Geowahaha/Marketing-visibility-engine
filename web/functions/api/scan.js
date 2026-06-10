@@ -19,6 +19,7 @@
  */
 
 import { callLLM } from "./_llm.js";
+import { signedFetch } from "./_botauth.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const RATE_WINDOW_SEC = 3600;          // 1 hour
@@ -86,12 +87,12 @@ function normalizeUrl(u) {
   }
 }
 
-async function tryFetchText(url, timeoutMs = 12000) {
+async function tryFetchText(env, url, timeoutMs = 12000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   const started = Date.now();
   try {
-    const r = await fetch(url, {
+    const r = await signedFetch(env, url, {
       headers: { "User-Agent": UA, "Accept-Language": "th,en;q=0.9" },
       redirect: "follow",
       signal: ctrl.signal,
@@ -679,12 +680,12 @@ export async function onRequestPost(context) {
   const root = new URL(url).origin;
   const alternateHomeUrl = oppositeWwwUrl(url);
   const [home, robots, sitemap, llms, psi, alternateHome] = await Promise.all([
-    tryFetchText(url),
-    tryFetchText(root + "/robots.txt"),
-    tryFetchText(root + "/sitemap.xml"),
-    tryFetchText(root + "/llms.txt"),
+    tryFetchText(env, url),
+    tryFetchText(env, root + "/robots.txt"),
+    tryFetchText(env, root + "/sitemap.xml"),
+    tryFetchText(env, root + "/llms.txt"),
     fetchPSI(url, env),
-    alternateHomeUrl ? tryFetchText(alternateHomeUrl, 9000) : Promise.resolve(null),
+    alternateHomeUrl ? tryFetchText(env, alternateHomeUrl, 9000) : Promise.resolve(null),
   ]);
 
   const pageFacts = home.ok ? extractFacts(home.body) : null;

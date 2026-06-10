@@ -12,6 +12,8 @@
  * Body: { url, max_pages? (default 8, capped 15) }
  */
 
+import { signedFetch } from "./_botauth.js";
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 
@@ -24,11 +26,11 @@ function normalizeUrl(u) {
   try { return new URL(u).toString(); } catch { return ""; }
 }
 
-async function fetchText(url, timeoutMs = 10000) {
+async function fetchText(env, url, timeoutMs = 10000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "th,en;q=0.9" }, redirect: "follow", signal: ctrl.signal, cf: { cacheTtl: 0 } });
+    const r = await signedFetch(env, url, { headers: { "User-Agent": UA, "Accept-Language": "th,en;q=0.9" }, redirect: "follow", signal: ctrl.signal, cf: { cacheTtl: 0 } });
     return { ok: r.ok, status: r.status, body: await r.text(), finalUrl: r.url, ct: r.headers.get("content-type") || "" };
   } catch (e) {
     return { ok: false, status: 0, body: "", finalUrl: url, error: String(e).slice(0, 120) };
@@ -88,7 +90,7 @@ function internalLinks(html, base, host) {
 }
 
 export async function onRequestPost(context) {
-  const { request } = context;
+  const { request, env } = context;
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
   const url = normalizeUrl(payload.url || payload.scan?.url || "");
@@ -99,9 +101,9 @@ export async function onRequestPost(context) {
   const host = new URL(url).hostname.replace(/^www\./, "");
 
   const [home, robots, sitemap] = await Promise.all([
-    fetchText(url),
-    fetchText(`${origin}/robots.txt`, 7000),
-    fetchText(`${origin}/sitemap.xml`, 8000),
+    fetchText(env, url),
+    fetchText(env, `${origin}/robots.txt`, 7000),
+    fetchText(env, `${origin}/sitemap.xml`, 8000),
   ]);
   if (!home.ok || !/text\/html|<html/i.test(home.ct + home.body.slice(0, 500))) {
     return json({ error: "Could not fetch the homepage as HTML.", detail: home.error || `status ${home.status}` }, 502);
@@ -111,7 +113,7 @@ export async function onRequestPost(context) {
   const sitemapRobots = [...String(robots.body || "").matchAll(/^\s*Sitemap:\s*(.+)$/gim)].map((m) => m[1].trim());
   let locs = parseSitemapLocs(sitemap.body);
   if (!locs.length && sitemapRobots.length) {
-    const sm = await fetchText(sitemapRobots[0], 8000);
+    const sm = await fetchText(env, sitemapRobots[0], 8000);
     locs = parseSitemapLocs(sm.body);
   }
   const seen = new Set([url.replace(/\/$/, "")]);
@@ -130,7 +132,7 @@ export async function onRequestPost(context) {
   // Score homepage + candidates in parallel.
   const targets = [url, ...candidates].slice(0, maxPages);
   const pages = await Promise.all(targets.map(async (p, i) => {
-    const res = i === 0 ? home : await fetchText(p);
+    const res = i === 0 ? home : await fetchText(env, p);
     if (!res.ok || !res.body) return { url: p, http_status: res.status, error: res.error || "fetch_failed" };
     const f = facts(res.body, res.finalUrl || p);
     const s = scorePage(f);
