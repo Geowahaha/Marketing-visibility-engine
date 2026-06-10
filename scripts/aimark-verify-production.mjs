@@ -146,6 +146,10 @@ const steps = [
   ["bridge e2e", () => run("npm", ["run", "test:bridge"], { cwd: webRoot })],
   ["python audits", () => run("python", ["-m", "pytest", "-q"], { cwd: repoRoot })],
   ["npm audit high", () => run("npm", ["audit", "--audit-level=high"], { cwd: webRoot })],
+  ["syntax: _botauth.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "_botauth.js")])],
+  ["syntax: deep-scan.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "deep-scan.js")])],
+  ["syntax: bot-access.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "bot-access.js")])],
+  ["botauth e2e", () => run(process.execPath, [rel("scripts", "test-botauth.mjs")])],
 ];
 
 if (!skipProduction) {

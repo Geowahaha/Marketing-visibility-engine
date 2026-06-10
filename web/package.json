@@ -12,7 +12,8 @@
     "test:bridge:real": "node ../scripts/test-aimark-local-bridge-real-runner.mjs --runner-provider codex --runner-cmd codex --runner-mode full-access",
     "test:bridge:real:apply": "node ../scripts/test-aimark-local-bridge-real-apply.mjs --runner-provider codex --runner-cmd codex --runner-mode full-access",
     "verify:production": "node ../scripts/aimark-verify-production.mjs",
-    "verify:local": "node ../scripts/aimark-verify-production.mjs --skip-production"
+    "verify:local": "node ../scripts/aimark-verify-production.mjs --skip-production",
+    "test:botauth": "node ../scripts/test-botauth.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.96.0"
