@@ -23,11 +23,12 @@
 
 import { paidStatus } from "./_auth.js";
 import { checkCreditBalance, consumeCredits, creditCost } from "./_credits.js";
+import { signedFetch } from "./_botauth.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 
-const UA = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 VisibilityEngine/1.0";
+const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
 
 function normalizeUrl(u) {
   u = (u || "").trim();
@@ -40,9 +41,9 @@ function textOf(html) {
   return String(html || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function rawFetch(url) {
+async function rawFetch(env, url) {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA }, redirect: "follow", cf: { cacheTtl: 0 } });
+    const r = await signedFetch(env, url, { headers: { "User-Agent": AIMARK_UA }, redirect: "follow", cf: { cacheTtl: 0 } });
     return textOf(await r.text());
   } catch { return ""; }
 }
@@ -178,7 +179,7 @@ export async function onRequestPost(context) {
 
   // What the human/browser sees vs what a JS-less AI bot sees.
   const [rawText, content] = await Promise.all([
-    rawFetch(url),
+    rawFetch(env, url),
     brEndpoint(env, "content", { url }),
   ]);
 

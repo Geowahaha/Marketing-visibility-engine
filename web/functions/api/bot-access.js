@@ -17,6 +17,8 @@
  * not a guarantee — which is exactly why we report both signals.
  */
 
+import { signedFetch } from "./_botauth.js";
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 
@@ -41,6 +43,7 @@ function normalizeUrl(u) {
   try { return new URL(u).toString(); } catch { return ""; }
 }
 
+// UNSIGNED by design: these simulate third-party bot UAs. Never add Web Bot Auth here (identity fraud). AIMarkBot-identity fetches use signedFetch.
 async function fetchAs(url, ua, timeoutMs = 11000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -53,6 +56,21 @@ async function fetchAs(url, ua, timeoutMs = 11000) {
     return { status: r.status, ok: r.ok, body, finalUrl: r.url, server: r.headers.get("server") || "" };
   } catch (e) {
     return { status: 0, ok: false, body: "", finalUrl: url, error: String(e).slice(0, 120) };
+  } finally { clearTimeout(t); }
+}
+
+const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
+async function fetchAsSelf(env, url, timeoutMs = 11000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await signedFetch(env, url, {
+      headers: { "User-Agent": AIMARK_UA, "Accept": "text/html,*/*", "Accept-Language": "en,th;q=0.9" },
+      redirect: "follow", signal: ctrl.signal, cf: { cacheTtl: 0 },
+    });
+    return { ok: r.ok, status: r.status, body: await r.text(), finalUrl: r.url, headers: Object.fromEntries(r.headers) };
+  } catch (e) {
+    return { ok: false, status: 0, body: "", error: String(e).slice(0, 160), finalUrl: url, headers: {} };
   } finally { clearTimeout(t); }
 }
 
@@ -103,15 +121,17 @@ function jsRenderRisk(servedRes) {
 }
 
 export async function onRequestPost(context) {
-  const { request } = context;
+  const { request, env } = context;
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
   const url = normalizeUrl(payload.url || payload.scan?.url || "");
   if (!url) return json({ error: "Provide a URL to test." }, 400);
 
   const root = new URL(url).origin;
-  const robotsRes = await fetchAs(`${root}/robots.txt`, BOTS[0].ua, 8000);
+  const robotsRes = await fetchAsSelf(env, `${root}/robots.txt`, 8000);
   const robotsBody = robotsRes.ok ? robotsRes.body : "";
+
+  const selfRes = await fetchAsSelf(env, url);
 
   // Hit the URL as every bot, in parallel.
   const results = await Promise.all(BOTS.map(async (bot) => {
@@ -148,6 +168,7 @@ export async function onRequestPost(context) {
     bots: results,
     robots_only: robotsOnly,
     js_render_risk: js,
-    honest_note: "We send each crawler's User-Agent from our server. Sites that verify crawler identity by IP/reverse-DNS may serve the real bot differently, and robots.txt is advisory — so we report both the policy (robots) and the observed fetch. This is a strong proxy, not a guarantee.",
+    aimark_bot: { ua: AIMARK_UA, signed: true, http_status: selfRes.status, fetch: selfRes.ok ? "served" : "blocked_or_error" },
+    honest_note: "We send each crawler's User-Agent from our server. Sites that verify crawler identity by IP/reverse-DNS may serve the real bot differently, and robots.txt is advisory — so we report both the policy (robots) and the observed fetch. This is a strong proxy, not a guarantee. Our own baseline fetch is made as AIMarkBot with an RFC 9421 Web Bot Auth signature (key directory: /.well-known/http-message-signatures-directory).",
   });
 }
