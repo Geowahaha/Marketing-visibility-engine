@@ -18,6 +18,7 @@
  */
 
 import { signedFetch } from "./_botauth.js";
+import { aimarkBotAccess, isOptedOut } from "./_botpolicy.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -127,9 +128,36 @@ export async function onRequestPost(context) {
   const url = normalizeUrl(payload.url || payload.scan?.url || "");
   if (!url) return json({ error: "Provide a URL to test." }, 400);
 
+  // Opt-out gate — before any target fetch
+  if (await isOptedOut(env, new URL(url).hostname)) {
+    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIMarkBot สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
+  }
+
   const root = new URL(url).origin;
   const robotsRes = await fetchAsSelf(env, `${root}/robots.txt`, 8000);
   const robotsBody = robotsRes.ok ? robotsRes.body : "";
+
+  // robots.txt honoring gate for AIMarkBot — skip live fetches when blocked, still report robots analysis
+  const botPolicy = aimarkBotAccess(robotsBody, "/");
+  if (!botPolicy.allowed) {
+    return json({
+      url,
+      robots_policy: {
+        aimarkbot_allowed: false,
+        matched_group: botPolicy.matchedGroup,
+        rule: botPolicy.rule,
+        message: {
+          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIMarkBot อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIMarkBot / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
+          en: "This site's robots.txt disallows AIMarkBot, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIMarkBot Allow: / to enable full audits.",
+        },
+      },
+      checked_at: new Date().toISOString(),
+      robots_txt_present: robotsRes.status === 200,
+      bots: BOTS.map((bot) => ({ bot: bot.id, engine: bot.engine, robots: robotsVerdict(robotsBody, bot.id), fetch: "skipped_aimarkbot_blocked", http_status: null, verdict: "skipped" })),
+      robots_only: ROBOTS_ONLY.map((id) => ({ bot: id, robots: robotsVerdict(robotsBody, id), fetch: "robots_only" })),
+      honest_note: "AIMarkBot itself is blocked by this site's robots.txt, so live fetch tests were skipped. Robots.txt policy analysis is shown above.",
+    });
+  }
 
   const selfRes = await fetchAsSelf(env, url);
 
