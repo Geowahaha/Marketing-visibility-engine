@@ -28,7 +28,7 @@ const kid = createHash("sha256")
 
 // ---------- 2. Sign as AIMarkBot (mirror of _botauth.js) ----------
 const target = "https://www.successcasting.com/robots.txt";
-const agentUrl = "https://aimark.pages.dev";
+const agentUrl = "https://aibotauth.com";
 const authority = new URL(target).host.toLowerCase();
 const agentField = `"${agentUrl}"`;
 const created = Math.floor(Date.now() / 1000);
@@ -92,7 +92,7 @@ assert(directory.keys[0].x && !directory.keys[0].d, "directory must contain publ
 
 // Directory tag note: signDirectoryResponse uses tag="http-message-signatures-directory".
 // That tag is live on workerd only (requires real signing key); the e2e above tests request signing (tag="web-bot-auth").
-// Post-deploy verification: curl -sD- https://aimark.pages.dev/.well-known/http-message-signatures-directory
+// Post-deploy verification: curl -sD- https://aibotauth.com/.well-known/http-message-signatures-directory
 // → Signature-Input must contain tag="http-message-signatures-directory"
 
 console.log("✅ Web Bot Auth e2e: sign → verify OK; cross-host replay rejected; directory valid.");

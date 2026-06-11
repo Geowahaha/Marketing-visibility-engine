@@ -1,7 +1,7 @@
-# AIMarkBot — Web Bot Auth (RFC 9421) Deployment Manual
+# AIBotAuth — Web Bot Auth (RFC 9421) Deployment Manual
 
-Goal: every audit fetch AI Mark makes carries a cryptographic signature any
-origin can verify against our published key directory. AIMarkBot becomes a
+Goal: every audit fetch AIBotAuth makes carries a cryptographic signature any
+origin can verify against our published key directory. AIBotAuth becomes a
 **verified-identity audit bot** — un-spoofable, allowlist-able, and a
 credibility line in every client report.
 
@@ -25,10 +25,11 @@ npx wrangler pages secret put BOTAUTH_PRIVATE_JWK --project-name aimark
 
 # 3. Set plain env vars (Dashboard → aimark → Settings → Variables):
 #    BOTAUTH_PUBLIC_JWK = {public JWK JSON from step 1}
-#    BOTAUTH_AGENT_URL  = https://aimark.pages.dev   (or the custom domain)
+#    BOTAUTH_AGENT_URL  = https://aibotauth.com   (or the custom domain)
+#    (Pages project name stays 'aimark'; only the agent URL changes)
 
 # 4. Deploy, then verify the directory is live:
-curl -s https://aimark.pages.dev/.well-known/http-message-signatures-directory
+curl -s https://aibotauth.com/.well-known/http-message-signatures-directory
 #    → application/http-message-signatures-directory+json with your public key,
 #      and the response itself carries Signature headers (self-signed directory).
 
@@ -53,10 +54,10 @@ const r = await signedFetch(env, url, { headers: { "User-Agent": UA }, redirect:
 Call sites to patch (pass `env` down where the helper doesn't have it):
 - `scan.js` — the target-site fetch (~line 186). NOT the Anthropic/PSI API calls.
 - `deep-scan.js` — `fetchText()` (thread `env` through).
-- `bot-access.js` / `bot-intel.js` — **only the AIMarkBot-identity fetch.**
+- `bot-access.js` / `bot-intel.js` — **only the AIBotAuth-identity fetch.**
   The per-bot simulation fetches (GPTBot UA, ClaudeBot UA…) must stay
   UNSIGNED — signing a request that claims to be GPTBot would be identity
-  confusion. Recommended pattern: fetch once as signed AIMarkBot for the
+  confusion. Recommended pattern: fetch once as signed AIBotAuth for the
   authoritative read, then run the unsigned per-UA simulations for the
   comparison matrix.
 - `render-check.js`, `social-visibility.js`, `competitor.js`, `citation-probe.js`
@@ -67,13 +68,13 @@ Nothing breaks on day one; signatures appear the moment secrets are set.
 
 ## Honest User-Agent (do this at the same time)
 
-A verified bot should not wear a Chrome costume. Change the default audit UA:
+A verified bot should not wear a Chrome costume. The default audit UA:
 
 ```
-AIMarkBot/1.0 (+https://aimark.pages.dev/bot; audit on site-owner request)
+AIBotAuth/1.0 (+https://aibotauth.com/bot; site-owner-requested audit)
 ```
 
-And publish a one-page `/bot` page (Thai + English): what AIMarkBot is, that
+Publish a one-page `/bot` page (Thai + English): what AIBotAuth is, that
 scans run at the site owner's request, the UA string, the key-directory URL,
 how to verify our signature, and a contact for opt-out. Keep the
 browser-like UA available as an explicit *comparison mode* inside
@@ -90,14 +91,14 @@ any suspicion of exposure; rotate routinely every 6–12 months.
 
 ## What to tell customers (the marketing line)
 
-> "Every AI Mark scan is cryptographically signed (RFC 9421 Web Bot Auth —
+> "Every AIBotAuth scan is cryptographically signed (RFC 9421 Web Bot Auth —
 > the same standard Cloudflare uses to verify legitimate bots). Your WAF can
 > verify it's really us, and nobody can impersonate our scanner. We hold our
 > bot to the standard we audit yours against."
 
 That last sentence is the brand. The scanner that scores other sites on
 agent-readiness is itself a model citizen of the agentic web: signed
-requests, published directory, honest UA, public bot page — and the AI Mark
+requests, published directory, honest UA, public bot page — and the AIBotAuth
 site itself should score Level 4+ on its own rubric (llms.txt, Markdown
 negotiation, Link headers, MCP card via AI Search). Eat the cooking.
 
@@ -128,7 +129,7 @@ To reverse an opt-out, contact: Geowahaha@gmail.com
 
 | Check | Command | Expect |
 |---|---|---|
-| Directory live | `curl -sI https://aimark.pages.dev/.well-known/http-message-signatures-directory` | 200, directory media type, Signature headers |
+| Directory live | `curl -sI https://aibotauth.com/.well-known/http-message-signatures-directory` | 200, directory media type, Signature headers |
 | E2E sign/verify | `node scripts/test-botauth.mjs` | ✅ all assertions |
 | Live request signed | scan any site you control; inspect access log | Signature-Agent + Signature-Input + Signature present |
 | Cloudflare recognition | target zone with Bot Management: check bot tags on our requests | signed-agent verification (rollout varies by plan) |

@@ -1,26 +1,26 @@
 /**
- * AI Mark — Web Bot Auth (_botauth.js)
+ * AIBotAuth — Web Bot Auth (_botauth.js)
  * ------------------------------------------------------------------
- * Cryptographically verified crawler identity for AIMarkBot, implementing
+ * Cryptographically verified crawler identity for AIBotAuth, implementing
  * the Web Bot Auth profile of HTTP Message Signatures (RFC 9421) with
  * Ed25519, as verified by Cloudflare Verified Bots and compatible origins.
  *
  * What target sites receive on every audit fetch:
- *   Signature-Agent: "https://aimark.pages.dev"
+ *   Signature-Agent: "https://aibotauth.com"
  *   Signature-Input: sig1=("@authority" "signature-agent");created=...;
  *                    expires=...;keyid="<jwk-thumbprint>";alg="ed25519";
  *                    tag="web-bot-auth"
  *   Signature:       sig1=:<base64 ed25519 signature>:
  *
  * Verifiers resolve Signature-Agent → GET
- * https://aimark.pages.dev/.well-known/http-message-signatures-directory
- * → match keyid → verify. Spoofing AIMarkBot becomes impossible.
+ * https://aibotauth.com/.well-known/http-message-signatures-directory
+ * → match keyid → verify. Spoofing AIBotAuth becomes impossible.
  *
  * Env (set in Cloudflare dashboard / wrangler secrets — never in code):
  *   BOTAUTH_PRIVATE_JWK  secret  Ed25519 private JWK (generate-botauth-key.mjs)
  *   BOTAUTH_PUBLIC_JWK   var     matching public JWK (also served by directory)
  *   BOTAUTH_AGENT_URL    var     origin hosting the key directory,
- *                                e.g. "https://aimark.pages.dev"
+ *                                e.g. "https://aibotauth.com"
  *
  * Fail-open by design: if the key is absent or signing throws, signedFetch
  * degrades to a normal fetch — an audit must never fail because of identity.

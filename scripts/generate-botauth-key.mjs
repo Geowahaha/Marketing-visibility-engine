@@ -29,7 +29,7 @@ const kid = createHash("sha256").update(canonical).digest("base64url");
 const publicJwk = { ...pub, kid, alg: "Ed25519", use: "sig" };
 const privateJwk = { ...priv, kid, alg: "Ed25519", use: "sig" };
 
-console.log("=== AIMarkBot Web Bot Auth identity ===\n");
+console.log("=== AIBotAuth Web Bot Auth identity ===\n");
 console.log("kid (key thumbprint):", kid, "\n");
 console.log("BOTAUTH_PUBLIC_JWK (publishable):");
 console.log(JSON.stringify(publicJwk), "\n");
@@ -38,5 +38,5 @@ console.log(JSON.stringify(privateJwk), "\n");
 console.log("Next steps:");
 console.log("  1. npx wrangler pages secret put BOTAUTH_PRIVATE_JWK --project-name aimark   (paste private JWK)");
 console.log("  2. Set BOTAUTH_PUBLIC_JWK env var to the public JWK JSON.");
-console.log("  3. Set BOTAUTH_AGENT_URL env var, e.g. https://aimark.pages.dev");
-console.log("  4. Deploy. Verify: curl -s https://aimark.pages.dev/.well-known/http-message-signatures-directory");
+console.log("  3. Set BOTAUTH_AGENT_URL env var, e.g. https://aibotauth.com");
+console.log("  4. Deploy. Verify: curl -s https://aibotauth.com/.well-known/http-message-signatures-directory");

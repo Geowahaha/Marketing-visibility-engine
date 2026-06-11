@@ -1,5 +1,5 @@
 /**
- * AIMarkBot — Bot Policy Helpers
+ * AIBotAuth — Bot Policy Helpers
  * robots.txt honoring (RFC 9309) + KV opt-out gate
  */
 
