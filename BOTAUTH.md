@@ -101,6 +101,29 @@ requests, published directory, honest UA, public bot page — and the AI Mark
 site itself should score Level 4+ on its own rubric (llms.txt, Markdown
 negotiation, Link headers, MCP card via AI Search). Eat the cooking.
 
+## Opt-out KV registry
+
+Permanent opt-out is stored in the `RATE_LIMIT_KV` binding (see wrangler.toml).
+Key format: `botoptout:<hostname>` — lowercase, no leading `www.`
+(e.g. `botoptout:example.com` covers both `example.com` and `www.example.com`).
+
+To add a host to the opt-out list (Wrangler v4):
+```
+npx wrangler kv key put botoptout:example.com 1 --binding RATE_LIMIT_KV --remote
+```
+
+To remove a host:
+```
+npx wrangler kv key delete botoptout:example.com --binding RATE_LIMIT_KV --remote
+```
+
+To list all opted-out hosts:
+```
+npx wrangler kv key list --binding RATE_LIMIT_KV --remote --prefix botoptout:
+```
+
+To reverse an opt-out, contact: Geowahaha@gmail.com
+
 ## Verification matrix (proof this works)
 
 | Check | Command | Expect |
