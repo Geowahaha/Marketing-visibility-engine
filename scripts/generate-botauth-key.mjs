@@ -2,7 +2,7 @@
 /**
  * AI Mark — Web Bot Auth key generator
  * ------------------------------------------------------------------
- * Generates the Ed25519 identity for AIMarkBot (RFC 9421 HTTP Message
+ * Generates the Ed25519 identity for AIBotAuth (RFC 9421 HTTP Message
  * Signatures, Web Bot Auth profile) and prints:
  *
  *   1. BOTAUTH_PRIVATE_JWK  -> set as an encrypted Cloudflare secret:

@@ -3,7 +3,7 @@
  * AI Mark — Web Bot Auth end-to-end test (no network needed)
  * ------------------------------------------------------------------
  * Plays both sides:
- *   1. AIMarkBot: generate Ed25519 identity, sign a request to a target
+ *   1. AIBotAuth: generate Ed25519 identity, sign a request to a target
  *      exactly as web/functions/api/_botauth.js does.
  *   2. Target origin verifier: parse Signature-Input / Signature /
  *      Signature-Agent, rebuild the RFC 9421 signature base, fetch the
@@ -26,7 +26,7 @@ const kid = createHash("sha256")
   .update(JSON.stringify({ crv: pubJwk.crv, kty: pubJwk.kty, x: pubJwk.x }))
   .digest("base64url");
 
-// ---------- 2. Sign as AIMarkBot (mirror of _botauth.js) ----------
+// ---------- 2. Sign as AIBotAuth (mirror of _botauth.js) ----------
 const target = "https://www.successcasting.com/robots.txt";
 const agentUrl = "https://aibotauth.com";
 const authority = new URL(target).host.toLowerCase();

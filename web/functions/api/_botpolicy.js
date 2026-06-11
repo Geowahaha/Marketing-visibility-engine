@@ -51,9 +51,9 @@ export function aimarkBotAccess(robotsTxt, path = "/") {
   let matchedGroupName = null;
 
   for (const g of groups) {
-    if (g.agents.includes("aimarkbot")) {
+    if (g.agents.includes("aibotauth")) {
       selectedGroup = g;
-      matchedGroupName = "aimarkbot";
+      matchedGroupName = "aibotauth";
       break;
     }
   }
