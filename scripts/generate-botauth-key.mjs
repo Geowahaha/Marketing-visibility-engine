@@ -26,8 +26,8 @@ const priv = privateKey.export({ format: "jwk" }); // adds d
 const canonical = JSON.stringify({ crv: pub.crv, kty: pub.kty, x: pub.x });
 const kid = createHash("sha256").update(canonical).digest("base64url");
 
-const publicJwk = { ...pub, kid, alg: "Ed25519", use: "sig" };
-const privateJwk = { ...priv, kid, alg: "Ed25519", use: "sig" };
+const publicJwk  = { ...pub,  kid, alg: "EdDSA", use: "sig" };
+const privateJwk = { ...priv, kid, alg: "EdDSA", use: "sig" };
 
 console.log("=== AIMarkBot Web Bot Auth identity ===\n");
 console.log("kid (key thumbprint):", kid, "\n");

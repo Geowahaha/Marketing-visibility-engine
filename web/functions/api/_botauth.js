@@ -49,7 +49,7 @@ async function getSigningKey(env) {
   if (!_keyPromise) {
     _keyPromise = (async () => {
       try {
-        const jwk = JSON.parse(env.BOTAUTH_PRIVATE_JWK);
+        const { alg, use, key_ops, ...jwk } = JSON.parse(env.BOTAUTH_PRIVATE_JWK);
         const key = await crypto.subtle.importKey(
           "jwk", jwk, { name: "Ed25519" }, false, ["sign"],
         );
