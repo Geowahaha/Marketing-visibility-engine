@@ -26,20 +26,20 @@ test("* Disallow: / → allowed: false, matchedGroup: '*'", () => {
   assert.equal(r.matchedGroup, "*", "matchedGroup should be *");
 });
 
-// 3. AIMarkBot Allow / overrides * Disallow /
-test("AIMarkBot Allow: / overrides * Disallow: / → allowed: true, matchedGroup: 'aimarkbot'", () => {
-  const robots = "User-agent: *\nDisallow: /\n\nUser-agent: AIMarkBot\nAllow: /";
+// 3. AIBotAuth Allow / overrides * Disallow /
+test("AIBotAuth Allow: / overrides * Disallow: / → allowed: true, matchedGroup: 'aibotauth'", () => {
+  const robots = "User-agent: *\nDisallow: /\n\nUser-agent: AIBotAuth\nAllow: /";
   const r = aimarkBotAccess(robots, "/");
   assert.equal(r.allowed, true, "allowed should be true");
-  assert.equal(r.matchedGroup, "aimarkbot", "matchedGroup should be aimarkbot");
+  assert.equal(r.matchedGroup, "aibotauth", "matchedGroup should be aibotauth");
 });
 
-// 4. AIMarkBot Disallow /
-test("AIMarkBot Disallow: / → allowed: false, matchedGroup: 'aimarkbot'", () => {
-  const robots = "User-agent: AIMarkBot\nDisallow: /";
+// 4. AIBotAuth Disallow /
+test("AIBotAuth Disallow: / → allowed: false, matchedGroup: 'aibotauth'", () => {
+  const robots = "User-agent: AIBotAuth\nDisallow: /";
   const r = aimarkBotAccess(robots, "/");
   assert.equal(r.allowed, false, "allowed should be false");
-  assert.equal(r.matchedGroup, "aimarkbot", "matchedGroup should be aimarkbot");
+  assert.equal(r.matchedGroup, "aibotauth", "matchedGroup should be aibotauth");
 });
 
 // 5. Specific-path disallow only — checking / → allowed
@@ -49,11 +49,11 @@ test("Disallow: /admin/ only → checking / → allowed: true", () => {
   assert.equal(r.allowed, true, "allowed should be true for /");
 });
 
-// 6. Case insensitivity — AImarkBot (mixed case) matches as aimarkbot group
-test("User-agent: AImarkBot (mixed case) → matched as aimarkbot group", () => {
-  const robots = "User-agent: AImarkBot\nAllow: /\n\nUser-agent: *\nDisallow: /";
+// 6. Case insensitivity — AIbotAuth (mixed case) matches as aibotauth group
+test("User-agent: AIbotAuth (mixed case) → matched as aibotauth group", () => {
+  const robots = "User-agent: AIbotAuth\nAllow: /\n\nUser-agent: *\nDisallow: /";
   const r = aimarkBotAccess(robots, "/page");
-  assert.equal(r.matchedGroup, "aimarkbot", "matchedGroup should be aimarkbot (case insensitive)");
+  assert.equal(r.matchedGroup, "aibotauth", "matchedGroup should be aibotauth (case insensitive)");
   assert.equal(r.allowed, true, "allowed should be true");
 });
 

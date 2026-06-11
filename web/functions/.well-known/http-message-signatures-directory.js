@@ -1,10 +1,10 @@
 /**
- * AI Mark — Web Bot Auth key directory
+ * AIBotAuth — Web Bot Auth key directory
  * GET /.well-known/http-message-signatures-directory
  * ------------------------------------------------------------------
- * Publishes AIMarkBot's Ed25519 public key(s) as a JWKS so any origin
+ * Publishes AIBotAuth's Ed25519 public key(s) as a JWKS so any origin
  * (Cloudflare Verified Bots, custom verifiers) can authenticate our
- * scanner's signed requests. This is the file that makes AIMarkBot one
+ * scanner's signed requests. This is the file that makes AIBotAuth one
  * of the first audit bots with cryptographically verified identity.
  *
  * Spec notes implemented here:

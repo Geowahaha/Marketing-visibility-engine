@@ -28,7 +28,7 @@ import { signedFetch } from "./_botauth.js";
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 
-const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
+const AIMARK_UA = "AIBotAuth/1.0 (+https://aibotauth.com/bot; site-owner-requested audit)";
 
 function normalizeUrl(u) {
   u = (u || "").trim();

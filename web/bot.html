@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AIMarkBot — Verified Audit Bot · บอทตรวจสอบที่ยืนยันตัวตนได้</title>
-<meta name="description" content="AIMarkBot is a cryptographically signed website audit bot (RFC 9421 Web Bot Auth). Runs only on site-owner request. Verify our signature, read our crawl policy, or opt out. บอทตรวจสอบเว็บไซต์ที่เซ็นลายเซ็นดิจิทัลทุกคำขอ">
-<link rel="canonical" href="https://aimark.pages.dev/bot">
-<link rel="alternate" type="text/markdown" href="/bot.md" title="AIMarkBot policy (markdown)">
+<title>AIBotAuth — Verified Audit Bot · บอทตรวจสอบที่ยืนยันตัวตนได้</title>
+<meta name="description" content="AIBotAuth is a cryptographically signed website audit bot (RFC 9421 Web Bot Auth). Runs only on site-owner request. Verify our signature, read our crawl policy, or opt out. บอทตรวจสอบเว็บไซต์ที่เซ็นลายเซ็นดิจิทัลทุกคำขอ">
+<link rel="canonical" href="https://aibotauth.com/bot">
+<link rel="alternate" type="text/markdown" href="/bot.md" title="AIBotAuth policy (markdown)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -98,7 +98,7 @@
 <div class="wrap">
 
   <div class="bar">
-    <div class="brand"><b>AI Mark</b> / bot</div>
+    <div class="brand"><b>AIBotAuth</b> / bot</div>
     <div class="langs" role="group" aria-label="Language">
       <button id="btn-th" aria-pressed="true"  onclick="setLang('th')">ไทย</button>
       <button id="btn-en" aria-pressed="false" onclick="setLang('en')">EN</button>
@@ -108,13 +108,13 @@
   <div class="hero">
     <div>
       <div class="field">§ identity · machine passport</div>
-      <h1 lang="th">AIMarkBot คือบอทตรวจสอบ<br>ที่พิสูจน์ตัวตนได้ทุกคำขอ</h1>
-      <h1 lang="en">AIMarkBot is an audit bot<br>that proves who it is, on every request</h1>
+      <h1 lang="th">AIBotAuth คือบอทตรวจสอบ<br>ที่พิสูจน์ตัวตนได้ทุกคำขอ</h1>
+      <h1 lang="en">AIBotAuth is an audit bot<br>that proves who it is, on every request</h1>
       <p class="lede" lang="th">ทุกคำขอที่เราส่งถึงเว็บไซต์ของคุณถูกเซ็นด้วยลายเซ็นดิจิทัล Ed25519 ตามมาตรฐาน RFC 9421 (Web Bot Auth) — ตรวจสอบได้ ปลอมแปลงไม่ได้ และเราสแกนเฉพาะเมื่อเจ้าของเว็บไซต์ร้องขอเท่านั้น</p>
       <p class="lede" lang="en">Every request we send to your site carries an Ed25519 digital signature under RFC 9421 (Web Bot Auth) — verifiable, unforgeable. We scan only at the site owner's request.</p>
       <div class="ua">
         <small lang="th">User-Agent ของเรา</small><small lang="en">Our User-Agent</small>
-        AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)
+        AIBotAuth/1.0 (+https://aibotauth.com/bot; site-owner-requested audit)
       </div>
     </div>
 
@@ -131,8 +131,8 @@
           </text>
         </g>
         <circle cx="100" cy="100" r="46" fill="#121820" stroke="#1E2733"/>
-        <text x="100" y="92" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E8E4DA">AIMARK</text>
-        <text x="100" y="110" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E08A2E">BOT</text>
+        <text x="100" y="92" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E8E4DA">AIBOT</text>
+        <text x="100" y="110" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E08A2E">AUTH</text>
         <circle class="pulse" cx="100" cy="128" r="3.5" fill="#4CAF7D"/>
       </svg>
     </div>
@@ -142,10 +142,10 @@
     <div class="field">§ verify</div>
     <h2 lang="th">วิธีตรวจสอบว่าเป็นเราจริง</h2>
     <h2 lang="en">How to verify it's really us</h2>
-    <p lang="th">อย่าเชื่อ User-Agent — ใครก็ปลอมได้ ให้ตรวจลายเซ็นแทน ทุกคำขอของ AIMarkBot มี header สามตัวนี้:</p>
-    <p lang="en">Don't trust the User-Agent — anyone can fake a string. Verify the signature instead. Every AIMarkBot request carries these three headers:</p>
+    <p lang="th">อย่าเชื่อ User-Agent — ใครก็ปลอมได้ ให้ตรวจลายเซ็นแทน ทุกคำขอของ AIBotAuth มี header สามตัวนี้:</p>
+    <p lang="en">Don't trust the User-Agent — anyone can fake a string. Verify the signature instead. Every AIBotAuth request carries these three headers:</p>
 
-    <pre class="spec"><span class="h">Signature-Agent:</span> <span class="v">"https://aimark.pages.dev"</span>
+    <pre class="spec"><span class="h">Signature-Agent:</span> <span class="v">"https://aibotauth.com"</span>
 <span class="h">Signature-Input:</span> <span class="v">sig1=("@authority" "signature-agent");created=1781184000;
   expires=1781184300;keyid="QbIbMk…zuk";alg="ed25519";tag="web-bot-auth"</span>
 <span class="h">Signature:</span> <span class="v">sig1=:MEUCIQDx…signature-bytes…:</span>  <span class="c"># Ed25519 over the RFC 9421 base</span></pre>
@@ -179,11 +179,11 @@
     <table>
       <thead><tr>
         <th lang="th">พฤติกรรม</th><th lang="en">Behavior</th>
-        <th>AIMarkBot</th>
+        <th>AIBotAuth</th>
       </tr></thead>
       <tbody>
         <tr>
-          <td><span lang="th">สแกนเมื่อเจ้าของเว็บไซต์ (หรือผู้ได้รับมอบหมาย) ร้องขอผ่าน AI Mark เท่านั้น</span><span lang="en">Scans only when the site owner (or their delegate) requests an audit through AI Mark</span></td>
+          <td><span lang="th">สแกนเมื่อเจ้าของเว็บไซต์ (หรือผู้ได้รับมอบหมาย) ร้องขอผ่าน AIBotAuth เท่านั้น</span><span lang="en">Scans only when the site owner (or their delegate) requests an audit through AIBotAuth</span></td>
           <td><span class="chip ok">YES</span></td>
         </tr>
         <tr>
@@ -199,7 +199,7 @@
           <td><span class="chip no">NEVER</span></td>
         </tr>
         <tr>
-          <td><span lang="th">ปลอมตัวเป็นบอทอื่น: โหมดจำลอง bot-access ของเรา (ส่ง UA ของ GPTBot ฯลฯ เพื่อเทียบผล) จะไม่มีลายเซ็นของเราเด็ดขาด — ลายเซ็นใช้กับตัวตน AIMarkBot เท่านั้น</span><span lang="en">Impersonates other bots: our bot-access simulation mode (sending GPTBot etc. UAs for comparison) is never signed — our signature belongs to the AIMarkBot identity only</span></td>
+          <td><span lang="th">ปลอมตัวเป็นบอทอื่น: โหมดจำลอง bot-access ของเรา (ส่ง UA ของ GPTBot ฯลฯ เพื่อเทียบผล) จะไม่มีลายเซ็นของเราเด็ดขาด — ลายเซ็นใช้กับตัวตน AIBotAuth เท่านั้น</span><span lang="en">Impersonates other bots: our bot-access simulation mode (sending GPTBot etc. UAs for comparison) is never signed — our signature belongs to the AIBotAuth identity only</span></td>
           <td><span class="chip no">NEVER</span></td>
         </tr>
       </tbody>
@@ -211,31 +211,31 @@
     <h2 lang="th">คำถามที่พบบ่อย</h2>
     <h2 lang="en">Frequently asked questions</h2>
 
-    <h3 lang="th">ทำไม AIMarkBot ถึงเข้ามาที่เว็บไซต์ของฉัน?</h3>
-    <h3 lang="en">Why did AIMarkBot visit my site?</h3>
-    <p lang="th">มีผู้ใช้ AI Mark — โดยปกติคือเจ้าของเว็บไซต์ ทีมการตลาด หรือเอเจนซี่ที่ดูแลเว็บไซต์นั้น — สั่งตรวจสอบความพร้อมด้าน AI visibility ของหน้าเว็บ การสแกนอ่านหน้าเว็บสาธารณะแบบเดียวกับเบราว์เซอร์ ไม่พยายามเข้าสู่ระบบหรือเข้าถึงส่วนที่ป้องกันไว้</p>
-    <p lang="en">An AI Mark user — normally the site's owner, marketing team, or agency — requested an AI-visibility audit of those pages. The scan reads public pages the way a browser would; it never attempts logins or protected areas.</p>
+    <h3 lang="th">ทำไม AIBotAuth ถึงเข้ามาที่เว็บไซต์ของฉัน?</h3>
+    <h3 lang="en">Why did AIBotAuth visit my site?</h3>
+    <p lang="th">มีผู้ใช้ AIBotAuth — โดยปกติคือเจ้าของเว็บไซต์ ทีมการตลาด หรือเอเจนซี่ที่ดูแลเว็บไซต์นั้น — สั่งตรวจสอบความพร้อมด้าน AI visibility ของหน้าเว็บ การสแกนอ่านหน้าเว็บสาธารณะแบบเดียวกับเบราว์เซอร์ ไม่พยายามเข้าสู่ระบบหรือเข้าถึงส่วนที่ป้องกันไว้</p>
+    <p lang="en">An AIBotAuth user — normally the site's owner, marketing team, or agency — requested an AI-visibility audit of those pages. The scan reads public pages the way a browser would; it never attempts logins or protected areas.</p>
 
     <h3 lang="th">ขอไม่ให้สแกนได้ไหม?</h3>
     <h3 lang="en">Can I opt out?</h3>
-    <p lang="th">ได้ทันที สองวิธี: เพิ่ม <code>User-agent: AIMarkBot</code> + <code>Disallow: /</code> ใน robots.txt ของคุณ (เราเคารพเสมอ) หรือเขียนอีเมลมาที่ <a href="mailto:Geowahaha@gmail.com">Geowahaha@gmail.com</a> เพื่อขึ้นบัญชี opt-out ถาวร</p>
-    <p lang="en">Yes, immediately, two ways: add <code>User-agent: AIMarkBot</code> + <code>Disallow: /</code> to your robots.txt (always honored), or email <a href="mailto:Geowahaha@gmail.com">Geowahaha@gmail.com</a> for a permanent opt-out.</p>
+    <p lang="th">ได้ทันที สองวิธี: เพิ่ม <code>User-agent: AIBotAuth</code> + <code>Disallow: /</code> ใน robots.txt ของคุณ (เราเคารพเสมอ) หรือเขียนอีเมลมาที่ <a href="mailto:Geowahaha@gmail.com">Geowahaha@gmail.com</a> เพื่อขึ้นบัญชี opt-out ถาวร</p>
+    <p lang="en">Yes, immediately, two ways: add <code>User-agent: AIBotAuth</code> + <code>Disallow: /</code> to your robots.txt (always honored), or email <a href="mailto:Geowahaha@gmail.com">Geowahaha@gmail.com</a> for a permanent opt-out.</p>
 
     <h3 lang="th">ทำไมบอทตรวจสอบต้องเซ็นลายเซ็น?</h3>
     <h3 lang="en">Why does an audit bot sign its requests?</h3>
-    <p lang="th">เพราะเราตรวจสอบเว็บไซต์คนอื่นเรื่องความพร้อมสำหรับยุค AI agent — เราจึงถือมาตรฐานเดียวกันกับตัวเอง: ตัวตนที่พิสูจน์ได้ UA ที่ตรงไปตรงมา และนโยบายที่เปิดเผย ลายเซ็นทำให้ WAF ของคุณแยก "AIMarkBot ตัวจริง" ออกจากใครก็ตามที่พิมพ์ชื่อเราใส่ User-Agent ได้</p>
-    <p lang="en">Because we audit other sites on agent-readiness, we hold our own bot to the same standard: provable identity, an honest UA, and a published policy. The signature lets your WAF separate the real AIMarkBot from anyone typing our name into a User-Agent string.</p>
+    <p lang="th">เพราะเราตรวจสอบเว็บไซต์คนอื่นเรื่องความพร้อมสำหรับยุค AI agent — เราจึงถือมาตรฐานเดียวกันกับตัวเอง: ตัวตนที่พิสูจน์ได้ UA ที่ตรงไปตรงมา และนโยบายที่เปิดเผย ลายเซ็นทำให้ WAF ของคุณแยก "AIBotAuth ตัวจริง" ออกจากใครก็ตามที่พิมพ์ชื่อเราใส่ User-Agent ได้</p>
+    <p lang="en">Because we audit other sites on agent-readiness, we hold our own bot to the same standard: provable identity, an honest UA, and a published policy. The signature lets your WAF separate the real AIBotAuth from anyone typing our name into a User-Agent string.</p>
   </section>
 
   <footer>
-    <div lang="th">AIMarkBot ดำเนินการโดย AI Mark — เครื่องมือตรวจสอบ AI visibility สำหรับธุรกิจ · <a href="/">สแกนเว็บไซต์ของคุณ</a> · <a href="/bot.md">อ่านหน้านี้แบบ markdown</a></div>
-    <div lang="en">AIMarkBot is operated by AI Mark — the AI-visibility audit platform · <a href="/">Scan your site</a> · <a href="/bot.md">This page as markdown</a></div>
+    <div lang="th">AIBotAuth — บอทตรวจสอบที่ยืนยันตัวตนได้ เครื่องมือตรวจสอบ AI visibility สำหรับธุรกิจ · <a href="/">สแกนเว็บไซต์ของคุณ</a> · <a href="/bot.md">อ่านหน้านี้แบบ markdown</a></div>
+    <div lang="en">AIBotAuth — the AI-visibility audit platform · <a href="/">Scan your site</a> · <a href="/bot.md">This page as markdown</a></div>
     <div class="mono">key directory: /.well-known/http-message-signatures-directory · contact: Geowahaha@gmail.com</div>
   </footer>
 </div>
 
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebPage","name":"AIMarkBot — Verified Audit Bot","url":"https://aimark.pages.dev/bot","inLanguage":["th","en"],"description":"AIMarkBot is a cryptographically signed website audit bot (RFC 9421 Web Bot Auth). It scans only at the site owner's request, respects robots.txt, and publishes its public keys for verification.","publisher":{"@type":"Organization","name":"AI Mark","url":"https://aimark.pages.dev"}}
+{"@context":"https://schema.org","@type":"WebPage","name":"AIBotAuth — Verified Audit Bot","url":"https://aibotauth.com/bot","inLanguage":["th","en"],"description":"AIBotAuth is a cryptographically signed website audit bot (RFC 9421 Web Bot Auth). It scans only at the site owner's request, respects robots.txt, and publishes its public keys for verification.","publisher":{"@type":"Organization","name":"AIBotAuth","url":"https://aibotauth.com"}}
 </script>
 <script>
 function setLang(l){
