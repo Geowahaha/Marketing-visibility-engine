@@ -90,6 +90,11 @@ assert(!bad, "signature must NOT verify for a different authority");
 const directory = { keys: [{ ...pubJwk, kid, alg: "Ed25519", use: "sig" }] };
 assert(directory.keys[0].x && !directory.keys[0].d, "directory must contain public key only");
 
+// Directory tag note: signDirectoryResponse uses tag="http-message-signatures-directory".
+// That tag is live on workerd only (requires real signing key); the e2e above tests request signing (tag="web-bot-auth").
+// Post-deploy verification: curl -sD- https://aimark.pages.dev/.well-known/http-message-signatures-directory
+// → Signature-Input must contain tag="http-message-signatures-directory"
+
 console.log("✅ Web Bot Auth e2e: sign → verify OK; cross-host replay rejected; directory valid.");
 console.log(`   kid=${kid}`);
 console.log(`   Signature-Input: ${sentHeaders["signature-input"].slice(0, 96)}...`);
