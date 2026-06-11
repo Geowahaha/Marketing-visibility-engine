@@ -21,6 +21,7 @@
 import { callLLM } from "./_llm.js";
 import { requireSession } from "./_auth.js";
 import { dbReady, ensureOrgForSession, ensureSite, getSite, recordAudit, recordFindings, recordRecommendations, recordAlert } from "./_db.js";
+import { signedFetch } from "./_botauth.js";
 
 const SEVERITY_PRIORITY = { critical: 1, high: 2, medium: 3, low: 4, info: 5 };
 
@@ -117,9 +118,7 @@ const RATE_WINDOW_SEC = 3600;          // 1 hour
 const RATE_LIMIT_DEFAULT = 5;          // scans per IP per window
 const PSI_CACHE_TTL_SEC = 24 * 60 * 60; // 24 hours per URL to avoid quota burn
 const PSI_ERROR_CACHE_TTL_SEC = 10 * 60; // short backoff for quota/timeout errors
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 VisibilityEngine/1.0";
+const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
 
 const json = (obj, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(obj), {
@@ -178,13 +177,13 @@ function normalizeUrl(u) {
   }
 }
 
-async function tryFetchText(url, timeoutMs = 12000) {
+async function tryFetchText(env, url, timeoutMs = 12000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   const started = Date.now();
   try {
-    const r = await fetch(url, {
-      headers: { "User-Agent": UA, "Accept-Language": "th,en;q=0.9" },
+    const r = await signedFetch(env, url, {
+      headers: { "User-Agent": AIMARK_UA, "Accept-Language": "th,en;q=0.9" },
       redirect: "follow",
       signal: ctrl.signal,
       cf: { cacheTtl: 0 },
@@ -771,12 +770,12 @@ export async function onRequestPost(context) {
   const root = new URL(url).origin;
   const alternateHomeUrl = oppositeWwwUrl(url);
   const [home, robots, sitemap, llms, psi, alternateHome] = await Promise.all([
-    tryFetchText(url),
-    tryFetchText(root + "/robots.txt"),
-    tryFetchText(root + "/sitemap.xml"),
-    tryFetchText(root + "/llms.txt"),
+    tryFetchText(env, url),
+    tryFetchText(env, root + "/robots.txt"),
+    tryFetchText(env, root + "/sitemap.xml"),
+    tryFetchText(env, root + "/llms.txt"),
     fetchPSI(url, env),
-    alternateHomeUrl ? tryFetchText(alternateHomeUrl, 9000) : Promise.resolve(null),
+    alternateHomeUrl ? tryFetchText(env, alternateHomeUrl, 9000) : Promise.resolve(null),
   ]);
 
   const pageFacts = home.ok ? extractFacts(home.body) : null;
