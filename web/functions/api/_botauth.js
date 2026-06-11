@@ -64,14 +64,17 @@ async function getSigningKey(env) {
 }
 
 /**
- * Build the RFC 9421 signature base for the Web Bot Auth component set
- * ("@authority" "signature-agent") and the matching parameter string.
+ * Build the RFC 9421 signature base.
+ * reqFlag=true → directory self-signature: component list uses ";req" on @authority
+ * and a nonce is included. reqFlag=false → outgoing request signature (normal).
  */
-function buildSignatureBase({ authority, agentField, created, expires, kid, tag }) {
-  const params =
-    `("@authority" "signature-agent")` +
+function buildSignatureBase({ authority, agentField, created, expires, kid, tag, nonce, reqFlag }) {
+  const authorityComp = reqFlag ? `"@authority";req` : `"@authority"`;
+  let params =
+    `(${authorityComp} "signature-agent")` +
     `;created=${created};expires=${expires}` +
     `;keyid="${kid}";alg="ed25519";tag="${tag}"`;
+  if (nonce) params += `;nonce="${nonce}"`;
   const base =
     `"@authority": ${authority}\n` +
     `"signature-agent": ${agentField}\n` +
@@ -84,7 +87,7 @@ function buildSignatureBase({ authority, agentField, created, expires, kid, tag 
  * Returns null when unconfigured (caller falls back to plain fetch).
  * tag defaults to SIG_TAG ("web-bot-auth"); signDirectoryResponse passes "http-message-signatures-directory".
  */
-export async function botAuthHeaders(env, url, tag = SIG_TAG) {
+export async function botAuthHeaders(env, url, tag = SIG_TAG, { nonce, reqFlag } = {}) {
   const entry = await getSigningKey(env);
   if (!entry) return null;
   try {
@@ -94,7 +97,7 @@ export async function botAuthHeaders(env, url, tag = SIG_TAG) {
     const created = Math.floor(Date.now() / 1000);
     const expires = created + SIG_TTL_SEC;
     const { base, params } = buildSignatureBase({
-      authority, agentField, created, expires, kid: entry.kid, tag,
+      authority, agentField, created, expires, kid: entry.kid, tag, nonce, reqFlag,
     });
     const sig = await crypto.subtle.sign("Ed25519", entry.key, enc.encode(base));
     return {
@@ -124,9 +127,16 @@ export async function signedFetch(env, url, init = {}) {
 }
 
 /**
- * Sign a RESPONSE we serve (the key directory). Uses tag="http-message-signatures-directory"
- * per the Web Bot Auth directory spec to distinguish directory self-signatures from request signatures.
+ * Sign a RESPONSE we serve (the key directory).
+ * Per Cloudflare Bot Directory spec:
+ *   - component list: ("@authority";req "signature-agent") — ;req means @authority
+ *     is derived from the incoming REQUEST that triggered this response
+ *   - tag="http-message-signatures-directory"
+ *   - nonce: 32 random bytes (base64) to prevent response replay
+ * Accepts the full incoming Request object so we can read its host.
  */
-export async function signDirectoryResponse(env, requestUrl) {
-  return botAuthHeaders(env, requestUrl, "http-message-signatures-directory");
+export async function signDirectoryResponse(env, request) {
+  const requestUrl = typeof request === "string" ? request : request.url;
+  const nonce = b64(crypto.getRandomValues(new Uint8Array(32)));
+  return botAuthHeaders(env, requestUrl, "http-message-signatures-directory", { nonce, reqFlag: true });
 }
