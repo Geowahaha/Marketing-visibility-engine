@@ -10,7 +10,7 @@
 - User-Agent: `AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)`
 - Operator: AI Mark — https://aimark.pages.dev
 - Key directory (JWKS, Ed25519): https://aimark.pages.dev/.well-known/http-message-signatures-directory
-- Contact / opt-out: bot@aimark.dev
+- Contact / opt-out: Geowahaha@gmail.com
 
 ## How to verify a request is really from us
 
@@ -50,4 +50,4 @@ User-agent: AIMarkBot
 Disallow: /
 ```
 
-or email bot@aimark.dev for a permanent opt-out.
+or email Geowahaha@gmail.com for a permanent opt-out.
