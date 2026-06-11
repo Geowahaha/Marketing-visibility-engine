@@ -42,7 +42,7 @@ export async function onRequestGet({ request, env }) {
     "cache-control": "public, max-age=86400",
     "access-control-allow-origin": "*",
   };
-  const sig = await signDirectoryResponse(env, request.url);
+  const sig = await signDirectoryResponse(env, request);
   if (sig) Object.assign(headers, sig);
   return new Response(JSON.stringify({ keys }), { status: 200, headers });
 }
