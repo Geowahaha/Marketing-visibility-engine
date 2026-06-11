@@ -44,7 +44,7 @@ function normalizeUrl(u) {
   try { return new URL(u).toString(); } catch { return ""; }
 }
 
-// UNSIGNED by design: these simulate third-party bot UAs. Never add Web Bot Auth here (identity fraud). AIMarkBot-identity fetches use signedFetch.
+// UNSIGNED by design: these simulate third-party bot UAs. Never add Web Bot Auth here (identity fraud). AIBotAuth-identity fetches use signedFetch.
 async function fetchAs(url, ua, timeoutMs = 11000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -60,7 +60,7 @@ async function fetchAs(url, ua, timeoutMs = 11000) {
   } finally { clearTimeout(t); }
 }
 
-const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
+const AIMARK_UA = "AIBotAuth/1.0 (+https://aibotauth.com/bot; site-owner-requested audit)";
 async function fetchAsSelf(env, url, timeoutMs = 11000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -130,14 +130,14 @@ export async function onRequestPost(context) {
 
   // Opt-out gate — before any target fetch
   if (await isOptedOut(env, new URL(url).hostname)) {
-    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIMarkBot สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
+    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIBotAuth สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
   }
 
   const root = new URL(url).origin;
   const robotsRes = await fetchAsSelf(env, `${root}/robots.txt`, 8000);
   const robotsBody = robotsRes.ok ? robotsRes.body : "";
 
-  // robots.txt honoring gate for AIMarkBot — skip live fetches when blocked, still report robots analysis
+  // robots.txt honoring gate for AIBotAuth — skip live fetches when blocked, still report robots analysis
   const botPolicy = aimarkBotAccess(robotsBody, "/");
   if (!botPolicy.allowed) {
     return json({
@@ -147,15 +147,15 @@ export async function onRequestPost(context) {
         matched_group: botPolicy.matchedGroup,
         rule: botPolicy.rule,
         message: {
-          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIMarkBot อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIMarkBot / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
-          en: "This site's robots.txt disallows AIMarkBot, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIMarkBot Allow: / to enable full audits.",
+          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIBotAuth อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIBotAuth / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
+          en: "This site's robots.txt disallows AIBotAuth, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIBotAuth Allow: / to enable full audits.",
         },
       },
       checked_at: new Date().toISOString(),
       robots_txt_present: robotsRes.status === 200,
       bots: BOTS.map((bot) => ({ bot: bot.id, engine: bot.engine, robots: robotsVerdict(robotsBody, bot.id), fetch: "skipped_aimarkbot_blocked", http_status: null, verdict: "skipped" })),
       robots_only: ROBOTS_ONLY.map((id) => ({ bot: id, robots: robotsVerdict(robotsBody, id), fetch: "robots_only" })),
-      honest_note: "AIMarkBot itself is blocked by this site's robots.txt, so live fetch tests were skipped. Robots.txt policy analysis is shown above.",
+      honest_note: "AIBotAuth itself is blocked by this site's robots.txt, so live fetch tests were skipped. Robots.txt policy analysis is shown above.",
     });
   }
 
@@ -197,6 +197,6 @@ export async function onRequestPost(context) {
     robots_only: robotsOnly,
     js_render_risk: js,
     aimark_bot: { ua: AIMARK_UA, signed: true, http_status: selfRes.status, fetch: selfRes.ok ? "served" : "blocked_or_error" },
-    honest_note: "We send each crawler's User-Agent from our server. Sites that verify crawler identity by IP/reverse-DNS may serve the real bot differently, and robots.txt is advisory — so we report both the policy (robots) and the observed fetch. This is a strong proxy, not a guarantee. Our own baseline fetch is made as AIMarkBot with an RFC 9421 Web Bot Auth signature (key directory: /.well-known/http-message-signatures-directory).",
+    honest_note: "We send each crawler's User-Agent from our server. Sites that verify crawler identity by IP/reverse-DNS may serve the real bot differently, and robots.txt is advisory — so we report both the policy (robots) and the observed fetch. This is a strong proxy, not a guarantee. Our own baseline fetch is made as AIBotAuth with an RFC 9421 Web Bot Auth signature (key directory: /.well-known/http-message-signatures-directory).",
   });
 }

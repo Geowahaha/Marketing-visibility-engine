@@ -119,7 +119,7 @@ const RATE_WINDOW_SEC = 3600;          // 1 hour
 const RATE_LIMIT_DEFAULT = 5;          // scans per IP per window
 const PSI_CACHE_TTL_SEC = 24 * 60 * 60; // 24 hours per URL to avoid quota burn
 const PSI_ERROR_CACHE_TTL_SEC = 10 * 60; // short backoff for quota/timeout errors
-const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
+const AIMARK_UA = "AIBotAuth/1.0 (+https://aibotauth.com/bot; site-owner-requested audit)";
 
 const json = (obj, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(obj), {
@@ -770,7 +770,7 @@ export async function onRequestPost(context) {
 
   // Opt-out gate — before any target fetch
   if (await isOptedOut(env, new URL(url).hostname)) {
-    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIMarkBot สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
+    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIBotAuth สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
   }
 
   const root = new URL(url).origin;
@@ -794,8 +794,8 @@ export async function onRequestPost(context) {
         matched_group: botPolicy.matchedGroup,
         rule: botPolicy.rule,
         message: {
-          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIMarkBot อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIMarkBot / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
-          en: "This site's robots.txt disallows AIMarkBot, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIMarkBot Allow: / to enable full audits.",
+          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIBotAuth อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIBotAuth / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
+          en: "This site's robots.txt disallows AIBotAuth, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIBotAuth Allow: / to enable full audits.",
         },
       },
       fetch: { robots: { status: robots.status, present: robots.ok && /(allow|disallow|user-agent)/i.test(robots.body) } },

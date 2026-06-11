@@ -15,7 +15,7 @@
 import { signedFetch } from "./_botauth.js";
 import { aimarkBotAccess, isOptedOut } from "./_botpolicy.js";
 
-const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
+const AIMARK_UA = "AIBotAuth/1.0 (+https://aibotauth.com/bot; site-owner-requested audit)";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -100,7 +100,7 @@ export async function onRequestPost(context) {
 
   // Opt-out gate — before any target fetch
   if (await isOptedOut(env, new URL(url).hostname)) {
-    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIMarkBot สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
+    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIBotAuth สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
   }
 
   const origin = new URL(url).origin;
@@ -125,8 +125,8 @@ export async function onRequestPost(context) {
         matched_group: botPolicy.matchedGroup,
         rule: botPolicy.rule,
         message: {
-          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIMarkBot อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIMarkBot / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
-          en: "This site's robots.txt disallows AIMarkBot, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIMarkBot Allow: / to enable full audits.",
+          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIBotAuth อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIBotAuth / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
+          en: "This site's robots.txt disallows AIBotAuth, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIBotAuth Allow: / to enable full audits.",
         },
       },
       pages: [],
