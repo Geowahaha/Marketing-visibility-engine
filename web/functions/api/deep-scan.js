@@ -13,6 +13,7 @@
  */
 
 import { signedFetch } from "./_botauth.js";
+import { aimarkBotAccess, isOptedOut } from "./_botpolicy.js";
 
 const AIMARK_UA = "AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)";
 
@@ -97,6 +98,11 @@ export async function onRequestPost(context) {
   if (!url) return json({ error: "Provide a URL to crawl." }, 400);
   const maxPages = Math.max(2, Math.min(15, parseInt(payload.max_pages, 10) || 8));
 
+  // Opt-out gate — before any target fetch
+  if (await isOptedOut(env, new URL(url).hostname)) {
+    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIMarkBot สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
+  }
+
   const origin = new URL(url).origin;
   const host = new URL(url).hostname.replace(/^www\./, "");
 
@@ -107,6 +113,25 @@ export async function onRequestPost(context) {
   ]);
   if (!home.ok || !/text\/html|<html/i.test(home.ct + home.body.slice(0, 500))) {
     return json({ error: "Could not fetch the homepage as HTML.", detail: home.error || `status ${home.status}` }, 502);
+  }
+
+  // robots.txt honoring gate — RFC 9309; skip crawl loop when blocked
+  const botPolicy = aimarkBotAccess(robots.body || "", "/");
+  if (!botPolicy.allowed) {
+    return json({
+      url,
+      robots_policy: {
+        aimarkbot_allowed: false,
+        matched_group: botPolicy.matchedGroup,
+        rule: botPolicy.rule,
+        message: {
+          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIMarkBot อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIMarkBot / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
+          en: "This site's robots.txt disallows AIMarkBot, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIMarkBot Allow: / to enable full audits.",
+        },
+      },
+      pages: [],
+      robots_txt: robots.ok ? robots.body.slice(0, 3000) : "",
+    });
   }
 
   // Discover candidate pages: sitemap first (quality), then homepage links.

@@ -139,9 +139,11 @@ async function productionSmoke() {
 const steps = [
   ["syntax: scan.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "scan.js")])],
   ["syntax: _botauth.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "_botauth.js")])],
+  ["syntax: _botpolicy.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "_botpolicy.js")])],
   ["syntax: deep-scan.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "deep-scan.js")])],
   ["syntax: bot-access.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "bot-access.js")])],
   ["botauth e2e", () => run(process.execPath, [rel("scripts", "test-botauth.mjs")])],
+  ["botpolicy e2e", () => run(process.execPath, [rel("scripts", "test-botpolicy.mjs")])],
   ["syntax: system-health.js", () => run(process.execPath, ["--check", rel("web", "functions", "api", "system-health.js")])],
   ["syntax: local bridge", () => run(process.execPath, ["--check", rel("scripts", "aimark-local-bridge.mjs")])],
   ["syntax: resident agent", () => run(process.execPath, ["--check", rel("scripts", "aimark-resident-agent.mjs")])],

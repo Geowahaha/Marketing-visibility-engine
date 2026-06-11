@@ -67,11 +67,11 @@ async function getSigningKey(env) {
  * Build the RFC 9421 signature base for the Web Bot Auth component set
  * ("@authority" "signature-agent") and the matching parameter string.
  */
-function buildSignatureBase({ authority, agentField, created, expires, kid }) {
+function buildSignatureBase({ authority, agentField, created, expires, kid, tag }) {
   const params =
     `("@authority" "signature-agent")` +
     `;created=${created};expires=${expires}` +
-    `;keyid="${kid}";alg="ed25519";tag="${SIG_TAG}"`;
+    `;keyid="${kid}";alg="ed25519";tag="${tag}"`;
   const base =
     `"@authority": ${authority}\n` +
     `"signature-agent": ${agentField}\n` +
@@ -82,8 +82,9 @@ function buildSignatureBase({ authority, agentField, created, expires, kid }) {
 /**
  * Produce the three Web Bot Auth headers for a request to `url`.
  * Returns null when unconfigured (caller falls back to plain fetch).
+ * tag defaults to SIG_TAG ("web-bot-auth"); signDirectoryResponse passes "http-message-signatures-directory".
  */
-export async function botAuthHeaders(env, url) {
+export async function botAuthHeaders(env, url, tag = SIG_TAG) {
   const entry = await getSigningKey(env);
   if (!entry) return null;
   try {
@@ -93,7 +94,7 @@ export async function botAuthHeaders(env, url) {
     const created = Math.floor(Date.now() / 1000);
     const expires = created + SIG_TTL_SEC;
     const { base, params } = buildSignatureBase({
-      authority, agentField, created, expires, kid: entry.kid,
+      authority, agentField, created, expires, kid: entry.kid, tag,
     });
     const sig = await crypto.subtle.sign("Ed25519", entry.key, enc.encode(base));
     return {
@@ -123,11 +124,9 @@ export async function signedFetch(env, url, init = {}) {
 }
 
 /**
- * Sign a RESPONSE we serve (used by the key directory itself, which the
- * Web Bot Auth spec expects to carry a directory signature binding our
- * own authority). Same base shape, tag remains "web-bot-auth" with the
- * directory media type carrying the semantics.
+ * Sign a RESPONSE we serve (the key directory). Uses tag="http-message-signatures-directory"
+ * per the Web Bot Auth directory spec to distinguish directory self-signatures from request signatures.
  */
 export async function signDirectoryResponse(env, requestUrl) {
-  return botAuthHeaders(env, requestUrl);
+  return botAuthHeaders(env, requestUrl, "http-message-signatures-directory");
 }

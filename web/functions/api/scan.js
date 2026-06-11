@@ -22,6 +22,7 @@ import { callLLM } from "./_llm.js";
 import { requireSession } from "./_auth.js";
 import { dbReady, ensureOrgForSession, ensureSite, getSite, recordAudit, recordFindings, recordRecommendations, recordAlert } from "./_db.js";
 import { signedFetch } from "./_botauth.js";
+import { aimarkBotAccess, isOptedOut } from "./_botpolicy.js";
 
 const SEVERITY_PRIORITY = { critical: 1, high: 2, medium: 3, low: 4, info: 5 };
 
@@ -767,6 +768,11 @@ export async function onRequestPost(context) {
   const userPrompt = (payload.prompt || "").toString().slice(0, 2000);
   if (!url) return json({ error: "Please provide a valid website URL." }, 400);
 
+  // Opt-out gate — before any target fetch
+  if (await isOptedOut(env, new URL(url).hostname)) {
+    return json({ error: "host_opted_out", message: { th: "เจ้าของเว็บไซต์นี้ขอไม่ให้ AIMarkBot สแกน หากต้องการยกเลิก opt-out ติดต่อ Geowahaha@gmail.com", en: "The site owner has requested a permanent opt-out. Contact Geowahaha@gmail.com to reverse." } });
+  }
+
   const root = new URL(url).origin;
   const alternateHomeUrl = oppositeWwwUrl(url);
   const [home, robots, sitemap, llms, psi, alternateHome] = await Promise.all([
@@ -777,6 +783,25 @@ export async function onRequestPost(context) {
     fetchPSI(url, env),
     alternateHomeUrl ? tryFetchText(env, alternateHomeUrl, 9000) : Promise.resolve(null),
   ]);
+
+  // robots.txt honoring gate — RFC 9309
+  const botPolicy = aimarkBotAccess(robots.body || "", "/");
+  if (!botPolicy.allowed) {
+    return json({
+      url,
+      robots_policy: {
+        aimarkbot_allowed: false,
+        matched_group: botPolicy.matchedGroup,
+        rule: botPolicy.rule,
+        message: {
+          th: "เว็บไซต์นี้ไม่อนุญาตให้ AIMarkBot อ่านเนื้อหาตาม robots.txt เราเคารพกฎนั้น จึงวิเคราะห์ได้เฉพาะ robots/sitemap/DNS — หากคุณเป็นเจ้าของเว็บ เพิ่ม User-agent: AIMarkBot / Allow: / เพื่อเปิดการตรวจเต็มรูปแบบ",
+          en: "This site's robots.txt disallows AIMarkBot, so we honored it and analyzed only robots/sitemap/DNS-level signals. If you own this site, add User-agent: AIMarkBot Allow: / to enable full audits.",
+        },
+      },
+      fetch: { robots: { status: robots.status, present: robots.ok && /(allow|disallow|user-agent)/i.test(robots.body) } },
+      robotsTxt: robots.ok ? robots.body.slice(0, 3000) : "",
+    });
+  }
 
   const pageFacts = home.ok ? extractFacts(home.body) : null;
   const performanceLite = buildPerformanceLite(home);
