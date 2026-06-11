@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIMarkBot — Verified Audit Bot · บอทตรวจสอบที่ยืนยันตัวตนได้</title>
+<meta name="description" content="AIMarkBot is a cryptographically signed website audit bot (RFC 9421 Web Bot Auth). Runs only on site-owner request. Verify our signature, read our crawl policy, or opt out. บอทตรวจสอบเว็บไซต์ที่เซ็นลายเซ็นดิจิทัลทุกคำขอ">
+<link rel="canonical" href="https://aimark.pages.dev/bot">
+<link rel="alternate" type="text/markdown" href="/bot.md" title="AIMarkBot policy (markdown)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0F14; --panel:#121820; --line:#1E2733;
+    --paper:#E8E4DA; --muted:#8B93A1;
+    --amber:#E08A2E; --amber-dim:#A66520;
+    --ok:#4CAF7D;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--sans);line-height:1.65;font-size:16.5px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
+  a{color:var(--amber);text-decoration:none}
+  a:hover,a:focus-visible{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:2px}
+  code,pre{font-family:var(--mono)}
+
+  /* language switching: both languages live in the DOM */
+  [lang="en"]{display:none}
+  body.en [lang="en"]{display:revert}
+  body.en [lang="th"]{display:none}
+
+  /* top bar */
+  .bar{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
+  .brand{font-family:var(--mono);font-weight:600;letter-spacing:.04em}
+  .brand b{color:var(--amber)}
+  .langs{display:flex;gap:2px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .langs button{background:none;border:0;color:var(--muted);font:inherit;font-size:13.5px;padding:6px 14px;cursor:pointer}
+  .langs button[aria-pressed="true"]{background:var(--panel);color:var(--paper)}
+
+  /* hero: identity document */
+  .hero{display:grid;grid-template-columns:1fr auto;gap:34px;align-items:center;padding:58px 0 44px}
+  .field{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
+  h1{font-size:clamp(30px,5.4vw,44px);font-weight:700;line-height:1.18;margin:10px 0 14px}
+  .lede{color:var(--muted);max-width:52ch}
+  .ua{margin-top:26px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
+      border-radius:6px;padding:13px 16px;font-family:var(--mono);font-size:13.5px;word-break:break-all}
+  .ua small{display:block;color:var(--muted);font-family:var(--sans);margin-bottom:5px;font-size:12.5px}
+
+  /* the seal — signature element */
+  .seal{position:relative;width:172px;height:172px;flex:none}
+  .seal svg{width:100%;height:100%}
+  .seal .ring{animation:spin 40s linear infinite;transform-origin:50% 50%}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.seal .ring{animation:none}}
+  .seal .pulse{animation:pulse 3.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.seal .pulse{animation:none;opacity:.9}}
+
+  /* sections as protocol fields */
+  section{padding:40px 0;border-top:1px solid var(--line)}
+  h2{font-size:23px;font-weight:600;margin:8px 0 16px}
+  h3{font-size:17px;font-weight:600;margin:22px 0 8px}
+  p{margin:0 0 12px;max-width:68ch}
+  p.note{color:var(--muted);font-size:14.5px}
+
+  .spec{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px;overflow-x:auto;
+        font-size:13px;line-height:1.75;margin:14px 0}
+  .spec .h{color:var(--amber)}
+  .spec .v{color:var(--paper)}
+  .spec .c{color:var(--muted)}
+
+  ol.steps{list-style:none;counter-reset:s;margin:18px 0}
+  ol.steps li{counter-increment:s;position:relative;padding:0 0 18px 52px;max-width:66ch}
+  ol.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:1px;
+        font-family:var(--mono);font-size:13px;color:var(--amber);border:1px solid var(--line);
+        border-radius:6px;padding:4px 8px;background:var(--panel)}
+
+  table{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  .chip{display:inline-block;font-family:var(--mono);font-size:12px;border-radius:5px;padding:2px 9px}
+  .chip.ok{color:var(--ok);border:1px solid var(--ok)}
+  .chip.no{color:var(--muted);border:1px solid var(--line)}
+
+  footer{padding:34px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+  footer .mono{font-family:var(--mono);font-size:12.5px;margin-top:8px;word-break:break-all}
+
+  @media (max-width:680px){
+    .hero{grid-template-columns:1fr;padding-top:40px}
+    .seal{width:128px;height:128px;order:-1}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="brand"><b>AI Mark</b> / bot</div>
+    <div class="langs" role="group" aria-label="Language">
+      <button id="btn-th" aria-pressed="true"  onclick="setLang('th')">ไทย</button>
+      <button id="btn-en" aria-pressed="false" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <div class="field">§ identity · machine passport</div>
+      <h1 lang="th">AIMarkBot คือบอทตรวจสอบ<br>ที่พิสูจน์ตัวตนได้ทุกคำขอ</h1>
+      <h1 lang="en">AIMarkBot is an audit bot<br>that proves who it is, on every request</h1>
+      <p class="lede" lang="th">ทุกคำขอที่เราส่งถึงเว็บไซต์ของคุณถูกเซ็นด้วยลายเซ็นดิจิทัล Ed25519 ตามมาตรฐาน RFC 9421 (Web Bot Auth) — ตรวจสอบได้ ปลอมแปลงไม่ได้ และเราสแกนเฉพาะเมื่อเจ้าของเว็บไซต์ร้องขอเท่านั้น</p>
+      <p class="lede" lang="en">Every request we send to your site carries an Ed25519 digital signature under RFC 9421 (Web Bot Auth) — verifiable, unforgeable. We scan only at the site owner's request.</p>
+      <div class="ua">
+        <small lang="th">User-Agent ของเรา</small><small lang="en">Our User-Agent</small>
+        AIMarkBot/1.0 (+https://aimark.pages.dev/bot; site-owner-requested audit)
+      </div>
+    </div>
+
+    <div class="seal" aria-hidden="true">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <path id="cir" d="M100,100 m-72,0 a72,72 0 1,1 144,0 a72,72 0 1,1 -144,0"/>
+        </defs>
+        <g class="ring">
+          <circle cx="100" cy="100" r="88" fill="none" stroke="#1E2733" stroke-width="1"/>
+          <circle cx="100" cy="100" r="84" fill="none" stroke="#E08A2E" stroke-width="1.5" stroke-dasharray="3 6" opacity=".8"/>
+          <text font-family="IBM Plex Mono,monospace" font-size="11.5" letter-spacing="3.5" fill="#8B93A1">
+            <textPath href="#cir">ED25519 · RFC 9421 · WEB BOT AUTH · SIGNED ·</textPath>
+          </text>
+        </g>
+        <circle cx="100" cy="100" r="46" fill="#121820" stroke="#1E2733"/>
+        <text x="100" y="92" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E8E4DA">AIMARK</text>
+        <text x="100" y="110" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E08A2E">BOT</text>
+        <circle class="pulse" cx="100" cy="128" r="3.5" fill="#4CAF7D"/>
+      </svg>
+    </div>
+  </div>
+
+  <section id="verify">
+    <div class="field">§ verify</div>
+    <h2 lang="th">วิธีตรวจสอบว่าเป็นเราจริง</h2>
+    <h2 lang="en">How to verify it's really us</h2>
+    <p lang="th">อย่าเชื่อ User-Agent — ใครก็ปลอมได้ ให้ตรวจลายเซ็นแทน ทุกคำขอของ AIMarkBot มี header สามตัวนี้:</p>
+    <p lang="en">Don't trust the User-Agent — anyone can fake a string. Verify the signature instead. Every AIMarkBot request carries these three headers:</p>
+
+    <pre class="spec"><span class="h">Signature-Agent:</span> <span class="v">"https://aimark.pages.dev"</span>
+<span class="h">Signature-Input:</span> <span class="v">sig1=("@authority" "signature-agent");created=1781184000;
+  expires=1781184300;keyid="QbIbMk…zuk";alg="ed25519";tag="web-bot-auth"</span>
+<span class="h">Signature:</span> <span class="v">sig1=:MEUCIQDx…signature-bytes…:</span>  <span class="c"># Ed25519 over the RFC 9421 base</span></pre>
+
+    <ol class="steps">
+      <li>
+        <span lang="th">ดึงกุญแจสาธารณะของเราจาก key directory: <a href="/.well-known/http-message-signatures-directory"><code>/.well-known/http-message-signatures-directory</code></a> (JWKS, Ed25519)</span>
+        <span lang="en">Fetch our public key from the key directory: <a href="/.well-known/http-message-signatures-directory"><code>/.well-known/http-message-signatures-directory</code></a> (JWKS, Ed25519)</span>
+      </li>
+      <li>
+        <span lang="th">จับคู่ <code>keyid</code> ใน Signature-Input กับ <code>kid</code> ของกุญแจใน directory</span>
+        <span lang="en">Match the <code>keyid</code> in Signature-Input to the <code>kid</code> of a key in the directory</span>
+      </li>
+      <li>
+        <span lang="th">สร้าง signature base ตาม RFC 9421 จาก <code>@authority</code> (โฮสต์ของคุณ) + <code>signature-agent</code> แล้วตรวจลายเซ็นด้วย Ed25519</span>
+        <span lang="en">Rebuild the RFC 9421 signature base from <code>@authority</code> (your host) + <code>signature-agent</code>, then verify with Ed25519</span>
+      </li>
+      <li>
+        <span lang="th">เช็คช่วงเวลา <code>created</code>/<code>expires</code> (หน้าต่าง 5 นาที — ลายเซ็นเก่าใช้ซ้ำไม่ได้ และลายเซ็นผูกกับโฮสต์ของคุณ นำไป replay ที่โดเมนอื่นไม่ได้)</span>
+        <span lang="en">Check the <code>created</code>/<code>expires</code> window (5 minutes — old signatures can't be replayed, and each signature is bound to your host, so it can't be replayed elsewhere)</span>
+      </li>
+    </ol>
+    <p class="note" lang="th">ใช้ Cloudflare? Web Bot Auth ถูกตรวจสอบให้อัตโนมัติในระบบ Verified Bots — คุณสามารถ allowlist บอทที่เซ็นลายเซ็นแล้วบล็อกบอทปลอมได้จาก dashboard</p>
+    <p class="note" lang="en">On Cloudflare? Web Bot Auth is verified automatically under Verified Bots — you can allowlist signed bots and block impostors from the dashboard.</p>
+  </section>
+
+  <section id="behavior">
+    <div class="field">§ behavior</div>
+    <h2 lang="th">เราทำอะไร และไม่ทำอะไร</h2>
+    <h2 lang="en">What we do, and what we never do</h2>
+    <table>
+      <thead><tr>
+        <th lang="th">พฤติกรรม</th><th lang="en">Behavior</th>
+        <th>AIMarkBot</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span lang="th">สแกนเมื่อเจ้าของเว็บไซต์ (หรือผู้ได้รับมอบหมาย) ร้องขอผ่าน AI Mark เท่านั้น</span><span lang="en">Scans only when the site owner (or their delegate) requests an audit through AI Mark</span></td>
+          <td><span class="chip ok">YES</span></td>
+        </tr>
+        <tr>
+          <td><span lang="th">เคารพ robots.txt และรายงานนโยบายของคุณกลับให้เจ้าของเว็บไซต์เห็น</span><span lang="en">Respects robots.txt and reports your declared policy back to the requesting owner</span></td>
+          <td><span class="chip ok">YES</span></td>
+        </tr>
+        <tr>
+          <td><span lang="th">ปริมาณต่ำ: การสแกนหนึ่งครั้งอ่านไม่เกิน ~15 หน้า ภายในไม่กี่วินาที ไม่มี crawl ต่อเนื่องหากไม่ได้เปิด monitoring</span><span lang="en">Low volume: one audit reads at most ~15 pages within seconds; no recurring crawl unless monitoring is enabled by the owner</span></td>
+          <td><span class="chip ok">YES</span></td>
+        </tr>
+        <tr>
+          <td><span lang="th">เก็บเนื้อหาไปฝึกโมเดล AI / ขายข้อมูล / สแกนแบบไม่บอกใคร</span><span lang="en">Collects content for AI training, resells data, or crawls the open web uninvited</span></td>
+          <td><span class="chip no">NEVER</span></td>
+        </tr>
+        <tr>
+          <td><span lang="th">ปลอมตัวเป็นบอทอื่น: โหมดจำลอง bot-access ของเรา (ส่ง UA ของ GPTBot ฯลฯ เพื่อเทียบผล) จะไม่มีลายเซ็นของเราเด็ดขาด — ลายเซ็นใช้กับตัวตน AIMarkBot เท่านั้น</span><span lang="en">Impersonates other bots: our bot-access simulation mode (sending GPTBot etc. UAs for comparison) is never signed — our signature belongs to the AIMarkBot identity only</span></td>
+          <td><span class="chip no">NEVER</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="faq">
+    <div class="field">§ questions</div>
+    <h2 lang="th">คำถามที่พบบ่อย</h2>
+    <h2 lang="en">Frequently asked questions</h2>
+
+    <h3 lang="th">ทำไม AIMarkBot ถึงเข้ามาที่เว็บไซต์ของฉัน?</h3>
+    <h3 lang="en">Why did AIMarkBot visit my site?</h3>
+    <p lang="th">มีผู้ใช้ AI Mark — โดยปกติคือเจ้าของเว็บไซต์ ทีมการตลาด หรือเอเจนซี่ที่ดูแลเว็บไซต์นั้น — สั่งตรวจสอบความพร้อมด้าน AI visibility ของหน้าเว็บ การสแกนอ่านหน้าเว็บสาธารณะแบบเดียวกับเบราว์เซอร์ ไม่พยายามเข้าสู่ระบบหรือเข้าถึงส่วนที่ป้องกันไว้</p>
+    <p lang="en">An AI Mark user — normally the site's owner, marketing team, or agency — requested an AI-visibility audit of those pages. The scan reads public pages the way a browser would; it never attempts logins or protected areas.</p>
+
+    <h3 lang="th">ขอไม่ให้สแกนได้ไหม?</h3>
+    <h3 lang="en">Can I opt out?</h3>
+    <p lang="th">ได้ทันที สองวิธี: เพิ่ม <code>User-agent: AIMarkBot</code> + <code>Disallow: /</code> ใน robots.txt ของคุณ (เราเคารพเสมอ) หรือเขียนอีเมลมาที่ <a href="mailto:bot@aimark.dev">bot@aimark.dev</a> เพื่อขึ้นบัญชี opt-out ถาวร</p>
+    <p lang="en">Yes, immediately, two ways: add <code>User-agent: AIMarkBot</code> + <code>Disallow: /</code> to your robots.txt (always honored), or email <a href="mailto:bot@aimark.dev">bot@aimark.dev</a> for a permanent opt-out.</p>
+
+    <h3 lang="th">ทำไมบอทตรวจสอบต้องเซ็นลายเซ็น?</h3>
+    <h3 lang="en">Why does an audit bot sign its requests?</h3>
+    <p lang="th">เพราะเราตรวจสอบเว็บไซต์คนอื่นเรื่องความพร้อมสำหรับยุค AI agent — เราจึงถือมาตรฐานเดียวกันกับตัวเอง: ตัวตนที่พิสูจน์ได้ UA ที่ตรงไปตรงมา และนโยบายที่เปิดเผย ลายเซ็นทำให้ WAF ของคุณแยก "AIMarkBot ตัวจริง" ออกจากใครก็ตามที่พิมพ์ชื่อเราใส่ User-Agent ได้</p>
+    <p lang="en">Because we audit other sites on agent-readiness, we hold our own bot to the same standard: provable identity, an honest UA, and a published policy. The signature lets your WAF separate the real AIMarkBot from anyone typing our name into a User-Agent string.</p>
+  </section>
+
+  <footer>
+    <div lang="th">AIMarkBot ดำเนินการโดย AI Mark — เครื่องมือตรวจสอบ AI visibility สำหรับธุรกิจ · <a href="/">สแกนเว็บไซต์ของคุณ</a> · <a href="/bot.md">อ่านหน้านี้แบบ markdown</a></div>
+    <div lang="en">AIMarkBot is operated by AI Mark — the AI-visibility audit platform · <a href="/">Scan your site</a> · <a href="/bot.md">This page as markdown</a></div>
+    <div class="mono">key directory: /.well-known/http-message-signatures-directory · contact: bot@aimark.dev</div>
+  </footer>
+</div>
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","name":"AIMarkBot — Verified Audit Bot","url":"https://aimark.pages.dev/bot","inLanguage":["th","en"],"description":"AIMarkBot is a cryptographically signed website audit bot (RFC 9421 Web Bot Auth). It scans only at the site owner's request, respects robots.txt, and publishes its public keys for verification.","publisher":{"@type":"Organization","name":"AI Mark","url":"https://aimark.pages.dev"}}
+</script>
+<script>
+function setLang(l){
+  document.body.classList.toggle('en', l==='en');
+  document.documentElement.lang = l;
+  document.getElementById('btn-th').setAttribute('aria-pressed', l==='th');
+  document.getElementById('btn-en').setAttribute('aria-pressed', l==='en');
+  try{localStorage.setItem('aimark-lang', l);}catch(e){}
+}
+try{
+  var saved = localStorage.getItem('aimark-lang');
+  if(saved==='en' || (!saved && !/^th/i.test(navigator.language||''))) setLang('en');
+}catch(e){}
+</script>
+</body>
+</html>
