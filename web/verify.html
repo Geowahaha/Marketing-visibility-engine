@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIBotAuth — Verify Us · พิสูจน์ตัวตนของเรา</title>
+<meta name="description" content="Your browser cryptographically verifies that this server holds the private key matching our published Ed25519 public key. Real verification — no mocks. เบราว์เซอร์ของคุณตรวจสอบว่าเซิร์ฟเวอร์นี้ถือกุญแจส่วนตัวที่ตรงกับกุญแจสาธารณะที่เราประกาศไว้จริง">
+<link rel="canonical" href="https://aibotauth.com/verify">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0F14; --panel:#121820; --line:#1E2733;
+    --paper:#E8E4DA; --muted:#8B93A1;
+    --amber:#E08A2E; --amber-dim:#A66520;
+    --ok:#4CAF7D; --err:#E05050;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--sans);line-height:1.65;font-size:16.5px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
+  a{color:var(--amber);text-decoration:none}
+  a:hover,a:focus-visible{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:2px}
+  code,pre{font-family:var(--mono)}
+
+  [lang="en"]{display:none}
+  body.en [lang="en"]{display:revert}
+  body.en [lang="th"]{display:none}
+
+  .bar{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
+  .brand{font-family:var(--mono);font-weight:600;letter-spacing:.04em}
+  .brand b{color:var(--amber)}
+  .langs{display:flex;gap:2px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .langs button{background:none;border:0;color:var(--muted);font:inherit;font-size:13.5px;padding:6px 14px;cursor:pointer}
+  .langs button[aria-pressed="true"]{background:var(--panel);color:var(--paper)}
+
+  .hero{display:grid;grid-template-columns:1fr auto;gap:34px;align-items:center;padding:58px 0 44px}
+  .field{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,42px);font-weight:700;line-height:1.18;margin:10px 0 14px}
+  .lede{color:var(--muted);max-width:56ch}
+
+  .seal{position:relative;width:172px;height:172px;flex:none}
+  .seal svg{width:100%;height:100%}
+  .seal .ring{animation:spin 40s linear infinite;transform-origin:50% 50%}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.seal .ring{animation:none}}
+
+  /* ── verification card ── */
+  section{padding:40px 0;border-top:1px solid var(--line)}
+  h2{font-size:22px;font-weight:600;margin:8px 0 16px}
+  p{margin:0 0 12px;max-width:68ch}
+  p.note{color:var(--muted);font-size:14.5px}
+
+  #verify-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:28px 28px 24px;margin:20px 0;
+  }
+  .status-row{display:flex;align-items:center;gap:14px;min-height:52px}
+  .status-icon{font-size:36px;line-height:1;flex:none;font-style:normal}
+  .status-text{font-family:var(--mono);font-size:15px;font-weight:600}
+  .status-text.ok{color:var(--ok)}
+  .status-text.err{color:var(--err)}
+  .status-text.pending{color:var(--muted)}
+
+  .detail-grid{
+    display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;
+    font-family:var(--mono);font-size:12.5px;margin-top:20px;
+  }
+  .detail-grid .k{color:var(--muted);white-space:nowrap}
+  .detail-grid .v{color:var(--paper);word-break:break-all}
+  .detail-grid .v.ok{color:var(--ok)}
+
+  .retry-btn{
+    margin-top:18px;background:none;border:1px solid var(--amber);color:var(--amber);
+    font:inherit;font-size:13.5px;padding:8px 18px;border-radius:6px;cursor:pointer;
+  }
+  .retry-btn:hover{background:var(--amber);color:var(--ink)}
+  .retry-btn:disabled{opacity:.45;cursor:default}
+
+  /* ── explainer ── */
+  ol.steps{list-style:none;counter-reset:s;margin:18px 0}
+  ol.steps li{counter-increment:s;position:relative;padding:0 0 16px 52px;max-width:66ch}
+  ol.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:1px;
+        font-family:var(--mono);font-size:13px;color:var(--amber);border:1px solid var(--line);
+        border-radius:6px;padding:4px 8px;background:var(--panel)}
+
+  /* ── collapsible code panel ── */
+  .code-toggle{
+    background:none;border:1px solid var(--line);color:var(--muted);font:inherit;
+    font-size:13.5px;padding:8px 16px;border-radius:6px;cursor:pointer;margin-top:18px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .code-toggle:hover{border-color:var(--amber);color:var(--paper)}
+  .code-toggle .arr{font-style:normal;transition:transform .2s}
+  .code-toggle[aria-expanded="true"] .arr{transform:rotate(90deg)}
+  #code-panel{display:none;margin-top:12px}
+  #code-panel.open{display:block}
+
+  .code-wrap{position:relative}
+  pre.snippet{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:16px 18px;overflow-x:auto;font-size:13px;line-height:1.75;
+    color:var(--paper);tab-size:2;
+  }
+  .copy-btn{
+    position:absolute;top:10px;right:10px;background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);font-family:var(--mono);font-size:11.5px;padding:4px 10px;
+    border-radius:5px;cursor:pointer;
+  }
+  .copy-btn:hover{border-color:var(--amber);color:var(--amber)}
+  .copy-btn.copied{color:var(--ok);border-color:var(--ok)}
+
+  footer{padding:34px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+  footer .mono{font-family:var(--mono);font-size:12.5px;margin-top:8px;word-break:break-all}
+
+  @media(max-width:680px){
+    .hero{grid-template-columns:1fr;padding-top:40px}
+    .seal{width:116px;height:116px;order:-1}
+    .detail-grid{grid-template-columns:1fr;gap:2px}
+    .detail-grid .k{margin-top:8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="brand"><a href="/"><b>AIBotAuth</b></a> <span style="color:var(--muted)">/</span> verify</div>
+    <div class="langs" role="group" aria-label="Language">
+      <button id="btn-th" aria-pressed="true"  onclick="setLang('th')">ไทย</button>
+      <button id="btn-en" aria-pressed="false" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <div class="field">§ cryptographic proof · panel 1</div>
+      <h1 lang="th">เราพิสูจน์ตัวตนของเราได้<br>แบบเรียลไทม์</h1>
+      <h1 lang="en">We prove who we are —<br>in your browser, right now</h1>
+      <p class="lede" lang="th">เบราว์เซอร์ของคุณดึงกุญแจสาธารณะจาก key directory ของเรา แล้วตรวจสอบว่าเซิร์ฟเวอร์นี้ผลิตลายเซ็นที่ตรงกันได้จริง เฉพาะผู้ที่มีกุญแจส่วนตัวที่ตรงกันเท่านั้นที่ทำได้</p>
+      <p class="lede" lang="en">Your browser fetches our public key from our key directory and verifies that this server produced a matching signature. Only the holder of the matching private key could do that.</p>
+    </div>
+
+    <div class="seal" aria-hidden="true">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <path id="cir" d="M100,100 m-72,0 a72,72 0 1,1 144,0 a72,72 0 1,1 -144,0"/>
+        </defs>
+        <g class="ring">
+          <circle cx="100" cy="100" r="88" fill="none" stroke="#1E2733" stroke-width="1"/>
+          <circle cx="100" cy="100" r="84" fill="none" stroke="#E08A2E" stroke-width="1.5" stroke-dasharray="3 6" opacity=".8"/>
+          <text font-family="IBM Plex Mono,monospace" font-size="11.5" letter-spacing="3.5" fill="#8B93A1">
+            <textPath href="#cir">ED25519 · RFC 9421 · WEB BOT AUTH · SIGNED ·</textPath>
+          </text>
+        </g>
+        <circle cx="100" cy="100" r="46" fill="#121820" stroke="#1E2733"/>
+        <text x="100" y="92" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E8E4DA">AIBOT</text>
+        <text x="100" y="110" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#E08A2E">AUTH</text>
+        <circle id="seal-dot" cx="100" cy="128" r="3.5" fill="#8B93A1"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── verification card ── -->
+  <section>
+    <div class="field">§ live verification</div>
+    <h2 lang="th">ผลการตรวจสอบ Ed25519</h2>
+    <h2 lang="en">Ed25519 verification result</h2>
+
+    <div id="verify-card">
+      <div class="status-row">
+        <em class="status-icon" id="status-icon">⋯</em>
+        <span class="status-text pending" id="status-text" lang="th">กำลังตรวจสอบ…</span>
+        <span class="status-text pending" id="status-text-en" lang="en">Verifying…</span>
+      </div>
+
+      <div class="detail-grid" id="detail-grid" style="display:none">
+        <span class="k">algorithm</span>
+        <span class="v">Ed25519</span>
+
+        <span class="k">keyid</span>
+        <span class="v" id="d-keyid">—</span>
+
+        <span class="k">signed message</span>
+        <span class="v" id="d-message">—</span>
+
+        <span class="k">key source</span>
+        <span class="v" id="d-dirsrc">—</span>
+
+        <span class="k">result</span>
+        <span class="v ok" id="d-result">—</span>
+      </div>
+
+      <button class="retry-btn" id="retry-btn" onclick="runVerify()" disabled>
+        <span lang="th">ตรวจสอบอีกครั้ง</span>
+        <span lang="en">Verify again</span>
+      </button>
+    </div>
+
+    <p class="note" lang="th">เบราว์เซอร์ใช้ <code>crypto.subtle.verify('Ed25519', ...)</code> กับกุญแจที่ดึงมาจาก directory โดยตรง — ไม่ใช่กุญแจที่ endpoint ส่งมา นั่นคือส่วนที่เป็นหลักฐาน</p>
+    <p class="note" lang="en">The browser calls <code>crypto.subtle.verify('Ed25519', …)</code> using the key fetched from the directory — never a key returned by the endpoint. That's the part that constitutes proof.</p>
+  </section>
+
+  <!-- ── how it works ── -->
+  <section>
+    <div class="field">§ how it works</div>
+    <h2 lang="th">วิธีการทำงาน</h2>
+    <h2 lang="en">How it works</h2>
+
+    <ol class="steps">
+      <li>
+        <span lang="th">เบราว์เซอร์ดึง <a href="/.well-known/http-message-signatures-directory"><code>/.well-known/http-message-signatures-directory</code></a> → แยก JWKS → ดึง public JWK ที่ตรงกับ keyid ของเรา → <code>crypto.subtle.importKey('jwk', …, 'Ed25519', …)</code></span>
+        <span lang="en">Browser fetches <a href="/.well-known/http-message-signatures-directory"><code>/.well-known/http-message-signatures-directory</code></a> → parses JWKS → takes the public JWK matching our keyid → <code>crypto.subtle.importKey('jwk', …, 'Ed25519', …)</code></span>
+      </li>
+      <li>
+        <span lang="th">เบราว์เซอร์ดึง <code>/api/verify-self</code> → ได้รับ <code>{ message, signature_b64, keyid }</code> (เซิร์ฟเวอร์เซ็นสตริงรูปแบบตายตัว <code>aibotauth-verify:&lt;timestamp&gt;</code> ด้วยกุญแจส่วนตัว)</span>
+        <span lang="en">Browser fetches <code>/api/verify-self</code> → receives <code>{ message, signature_b64, keyid }</code> (server signs fixed-format string <code>aibotauth-verify:&lt;timestamp&gt;</code> with its private key)</span>
+      </li>
+      <li>
+        <span lang="th">ยืนยันว่า keyid จาก verify-self ตรงกับ keyid ใน directory จากนั้นจึง <code>crypto.subtle.verify('Ed25519', publicKey, signature, message)</code> — กุญแจสาธารณะมาจาก directory เท่านั้น ไม่ใช่จาก endpoint</span>
+        <span lang="en">Confirm verify-self keyid === directory keyid, then <code>crypto.subtle.verify('Ed25519', publicKey, signature, message)</code> — the public key comes from the directory only, never from the endpoint</span>
+      </li>
+      <li>
+        <span lang="th">ถ้า <code>verify()</code> คืนค่า <code>true</code> แสดงว่าเซิร์ฟเวอร์นี้ถือกุญแจส่วนตัวที่ตรงกับ identity ที่เผยแพร่ต่อสาธารณะ</span>
+        <span lang="en">If <code>verify()</code> returns <code>true</code>, this server holds the private key matching our publicly published identity</span>
+      </li>
+    </ol>
+
+    <!-- collapsible code panel -->
+    <button class="code-toggle" id="code-toggle-btn" aria-expanded="false" aria-controls="code-panel" onclick="toggleCode()">
+      <em class="arr" aria-hidden="true">▶</em>
+      <span lang="th">แสดงโค้ดที่ตรวจสอบ (~12 บรรทัด)</span>
+      <span lang="en">Show the code that verified this (~12 lines)</span>
+    </button>
+
+    <div id="code-panel" role="region" aria-label="Browser verification snippet">
+      <div class="code-wrap">
+        <button class="copy-btn" id="copy-btn" onclick="copySnippet()" aria-label="Copy code">copy</button>
+        <pre class="snippet" id="code-snippet">// Fetch the published public key from the key directory
+const dir = await fetch('/.well-known/http-message-signatures-directory');
+const { keys } = await dir.json();
+const jwk = keys.find(k => k.kid === TARGET_KID);
+
+// Import the public key (browser SubtleCrypto — no library needed)
+const publicKey = await crypto.subtle.importKey(
+  'jwk', jwk, { name: 'Ed25519' }, true, ['verify']
+);
+
+// Ask the server for a fresh signed challenge
+const res  = await fetch('/api/verify-self');
+const { message, signature_b64, keyid } = await res.json();
+
+// Guard: the keyid must match what we fetched from the directory
+if (keyid !== TARGET_KID) throw new Error('keyid mismatch');
+
+// Base64 → bytes helpers
+const b64ToBytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const utf8       = s => new TextEncoder().encode(s);
+
+// PROOF: verify the signature using the PUBLIC key from the DIRECTORY
+const ok = await crypto.subtle.verify(
+  'Ed25519', publicKey,
+  b64ToBytes(signature_b64),
+  utf8(message)
+);</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── plain-language explainer ── -->
+  <section>
+    <div class="field">§ in plain language</div>
+    <h2 lang="th">พูดให้เข้าใจง่าย</h2>
+    <h2 lang="en">What this actually means</h2>
+
+    <p lang="th">การเซ็นลายเซ็นด้วย Ed25519 นั้นเป็นเรื่องของคณิตศาสตร์: มีเพียงกุญแจส่วนตัวเท่านั้นที่สามารถผลิตลายเซ็นที่กุญแจสาธารณะตรวจสอบผ่าน เบราว์เซอร์ของคุณเพิ่งทำสิ่งที่ยากมากที่จะปลอมแปลง — มันดึงกุญแจสาธารณะจาก directory อิสระ แล้วพิสูจน์ว่าเซิร์ฟเวอร์นี้มีกุญแจที่ตรงกัน</p>
+    <p lang="en">Ed25519 signing is mathematics: only the private key can produce a signature that the public key verifies. Your browser just did something very hard to fake — it fetched our public key from an independent directory and proved this server holds the matching private key.</p>
+
+    <p lang="th">นั่นหมายความว่าเมื่อ AIBotAuth เยี่ยมชมเว็บไซต์ของคุณพร้อมลายเซ็น — คุณสามารถตรวจสอบกับ directory เดียวกันนี้ได้ และรู้ว่าเป็นเราจริงๆ ไม่ใช่ใครก็ตามที่พิมพ์ชื่อของเราลงใน User-Agent</p>
+    <p lang="en">That means when AIBotAuth visits your site with a signature — you can verify against this same directory and know it's actually us, not anyone who typed our name into a User-Agent string.</p>
+
+    <p class="note" lang="th">keyid ที่ใช้ในหน้านี้: <code>5xf8JFMLpUyZNxMO0BKDIirQ-K03npBxuOhXRa3nQNI</code> · <a href="/.well-known/http-message-signatures-directory">ดู key directory</a> · <a href="/bot">หน้า bot identity</a></p>
+    <p class="note" lang="en">keyid used on this page: <code>5xf8JFMLpUyZNxMO0BKDIirQ-K03npBxuOhXRa3nQNI</code> · <a href="/.well-known/http-message-signatures-directory">View key directory</a> · <a href="/bot">Bot identity page</a></p>
+  </section>
+
+  <footer>
+    <div lang="th">AIBotAuth — บอทตรวจสอบที่ยืนยันตัวตนได้ · <a href="/">สแกนเว็บไซต์ของคุณ</a> · <a href="/bot">bot identity</a> · <a href="/bot.md">markdown</a></div>
+    <div lang="en">AIBotAuth — the AI-visibility audit platform · <a href="/">Scan your site</a> · <a href="/bot">Bot identity</a> · <a href="/bot.md">Markdown</a></div>
+    <div class="mono">key directory: /.well-known/http-message-signatures-directory · contact: Geowahaha@gmail.com</div>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+// ── language switch (identical to /bot pattern) ──────────────────────
+function setLang(l) {
+  document.body.classList.toggle('en', l === 'en');
+  document.documentElement.lang = l;
+  document.getElementById('btn-th').setAttribute('aria-pressed', l === 'th');
+  document.getElementById('btn-en').setAttribute('aria-pressed', l === 'en');
+  try { localStorage.setItem('aimark-lang', l); } catch(e) {}
+}
+try {
+  var saved = localStorage.getItem('aimark-lang');
+  if (saved === 'en' || (!saved && !/^th/i.test(navigator.language || ''))) setLang('en');
+} catch(e) {}
+
+// ── code toggle ───────────────────────────────────────────────────────
+function toggleCode() {
+  var btn   = document.getElementById('code-toggle-btn');
+  var panel = document.getElementById('code-panel');
+  var open  = btn.getAttribute('aria-expanded') === 'true';
+  btn.setAttribute('aria-expanded', !open);
+  panel.classList.toggle('open', !open);
+}
+
+// ── copy snippet ──────────────────────────────────────────────────────
+function copySnippet() {
+  var text = document.getElementById('code-snippet').textContent;
+  var btn  = document.getElementById('copy-btn');
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(function() { btn.textContent = 'failed'; });
+}
+
+// ── core verification ─────────────────────────────────────────────────
+var TARGET_KID = '5xf8JFMLpUyZNxMO0BKDIirQ-K03npBxuOhXRa3nQNI';
+
+function b64ToBytes(s) {
+  return Uint8Array.from(atob(s), function(c) { return c.charCodeAt(0); });
+}
+
+function setStatus(state, thText, enText) {
+  var icon = document.getElementById('status-icon');
+  var txtTh = document.getElementById('status-text');
+  var txtEn = document.getElementById('status-text-en');
+  var dot   = document.getElementById('seal-dot');
+
+  icon.textContent = state === 'ok' ? '✓' : state === 'err' ? '✗' : '⋯';
+  txtTh.className = 'status-text ' + state;
+  txtEn.className = 'status-text ' + state;
+  txtTh.textContent = thText;
+  txtEn.textContent = enText;
+
+  if (dot) {
+    dot.setAttribute('fill', state === 'ok' ? '#4CAF7D' : state === 'err' ? '#E05050' : '#8B93A1');
+  }
+}
+
+function showDetails(keyid, message, dirUrl, resultText) {
+  document.getElementById('detail-grid').style.display = 'grid';
+  document.getElementById('d-keyid').textContent    = keyid;
+  document.getElementById('d-message').textContent  = message;
+  document.getElementById('d-dirsrc').textContent   = dirUrl;
+  document.getElementById('d-result').textContent   = resultText;
+}
+
+async function runVerify() {
+  var retryBtn = document.getElementById('retry-btn');
+  retryBtn.disabled = true;
+  document.getElementById('detail-grid').style.display = 'none';
+  setStatus('pending', 'กำลังตรวจสอบ…', 'Verifying…');
+
+  var DIRECTORY_URL = '/.well-known/http-message-signatures-directory';
+
+  try {
+    // Step 1 — fetch the public key from the DIRECTORY
+    var dirRes = await fetch(DIRECTORY_URL);
+    if (!dirRes.ok) throw new Error('directory fetch failed: HTTP ' + dirRes.status);
+    var dirJson = await dirRes.json();
+    if (!dirJson.keys || !dirJson.keys.length) throw new Error('directory returned no keys');
+
+    var jwk = dirJson.keys.find(function(k) { return k.kid === TARGET_KID; });
+    if (!jwk) throw new Error('keyid ' + TARGET_KID + ' not found in directory');
+
+    // Import — strip alg/use/key_ops in case they are present (spec requires clean JWK)
+    var cleanJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x };
+    if (jwk.kid) cleanJwk.kid = jwk.kid;
+    var publicKey = await crypto.subtle.importKey(
+      'jwk', cleanJwk, { name: 'Ed25519' }, true, ['verify']
+    );
+
+    // Step 2 — fetch a fresh signed challenge from the server
+    var sigRes = await fetch('/api/verify-self');
+    if (!sigRes.ok) throw new Error('verify-self fetch failed: HTTP ' + sigRes.status);
+    var sigJson = await sigRes.json();
+    var message      = sigJson.message;
+    var signature_b64 = sigJson.signature_b64;
+    var keyid        = sigJson.keyid;
+
+    // Validate response shape
+    if (!message || !signature_b64 || !keyid) throw new Error('verify-self response missing fields');
+
+    // Validate fixed-format message — server should never sign anything else
+    if (!/^aibotauth-verify:\d+$/.test(message)) {
+      throw new Error('server returned unexpected message format: ' + message);
+    }
+
+    // Step 3 — confirm keyid match BEFORE verifying
+    if (keyid !== TARGET_KID) {
+      throw new Error('keyid mismatch: endpoint=' + keyid + ' directory=' + TARGET_KID);
+    }
+
+    // Step 4 — VERIFY with the key from the DIRECTORY (not from the endpoint)
+    var sigBytes = b64ToBytes(signature_b64);
+    var msgBytes = new TextEncoder().encode(message);
+    var ok = await crypto.subtle.verify('Ed25519', publicKey, sigBytes, msgBytes);
+
+    if (!ok) throw new Error('signature verification failed — cryptographic mismatch');
+
+    // ── success ──
+    var shortKid = keyid.slice(0, 8) + '…' + keyid.slice(-4);
+    setStatus('ok',
+      '✓ ยืนยันแล้ว · Ed25519 · keyid ' + shortKid,
+      '✓ Verified · Ed25519 · keyid ' + shortKid
+    );
+    showDetails(keyid, message, DIRECTORY_URL, '✓ valid');
+
+  } catch (err) {
+    setStatus('err',
+      '✗ ไม่ผ่านการตรวจสอบ: ' + err.message,
+      '✗ Verification failed: ' + err.message
+    );
+    document.getElementById('d-result') && (document.getElementById('d-result').textContent = '✗ ' + err.message);
+  } finally {
+    retryBtn.disabled = false;
+  }
+}
+
+// Auto-run on load
+runVerify();
+</script>
+</body>
+</html>
