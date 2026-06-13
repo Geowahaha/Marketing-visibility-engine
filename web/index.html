@@ -3292,7 +3292,8 @@ async function heroDeepScan(){
   if(!url) return;
   const btn=upsell?upsell.querySelector(".upsell-btn"):null;
   const heroWrap=document.querySelector(".hero-wrap");
-  // Immediate loading feedback — button text + status + disable
+  let claudeSuccess=false; // flag: suppress updateUpsellBtn in finally after Claude ran
+  // Immediate loading feedback
   if(btn){btn.disabled=true;btn.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";}
   if(status) status.textContent=LANG==="th"?"กำลังวิเคราะห์ด้วย Claude…":"Analyzing with Claude…";
   try{
@@ -3315,19 +3316,43 @@ async function heroDeepScan(){
       if(status) status.textContent=d.error||(LANG==="th"?"สแกนไม่สำเร็จ":"Scan failed");
       return;
     }
-    if(status) status.textContent="";
+    // Render the result (same schema whether Claude or deterministic)
     if(results){results.innerHTML=renderDeepScan(d);results.style.display="";}
-    // Unlock vertical scrolling from top now that results are long
     if(heroWrap) heroWrap.classList.add("has-results");
-    // Refresh credits from server — authoritative after deduction
-    await loadSession();
+    if(d._llm_fallback){
+      // All LLM providers failed — deterministic baseline only, no credit charged
+      if(status) status.textContent=LANG==="th"
+        ?"⚠ Claude ไม่พร้อมใช้งาน — แสดงผลสแกนพื้นฐาน (ไม่ตัดเครดิต)":"⚠ Claude unavailable — showing baseline scan (no credit charged)";
+      // Leave upsell showing so user can retry
+    }else{
+      // Claude ran — consumeCredits fired server-side (d._credits_charged === true)
+      claudeSuccess=true;
+      if(status) status.textContent="";
+      if(upsell) upsell.style.display="none"; // hide: they already paid for this scan
+      await loadSession(); // refresh balance — authoritative after server deduction
+      if(btn){
+        btn.disabled=false;
+        btn.textContent=LANG==="th"?"สแกนอีกครั้ง":"Scan again";
+        btn.onclick=resetHeroScan;
+      }
+    }
   }catch(e){
     if(status) status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
   }finally{
-    // Always restore button to correct state (covers success, 401, 402, 429, error)
     if(btn) btn.disabled=false;
-    updateUpsellBtn();
+    // Don't call updateUpsellBtn after Claude success — button is now "Scan again"
+    if(!claudeSuccess) updateUpsellBtn();
   }
+}
+
+function resetHeroScan(){
+  const results=$("heroResults"), upsell=$("heroUpsell"), status=$("heroStatus");
+  if(results){results.innerHTML="";results.style.display="none";}
+  if(status) status.textContent="";
+  if(upsell) upsell.style.display="none";
+  document.querySelector(".hero-wrap")?.classList.remove("has-results");
+  // Restore upsell card for a fresh scan, but let updateUpsellBtn set the button
+  updateUpsellBtn();
 }
 
 function renderDeepScan(d){
