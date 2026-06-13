@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIBotAuth — They See You · บอทเห็นเว็บคุณไหม</title>
+<meta name="description" content="See exactly what AI crawlers (ClaudeBot, GPTBot, PerplexityBot, Googlebot…) receive when they visit any site — served, JS-blocked, or turned away. And see why AIBotAuth's signed request is the only row that isn't just a string anyone can type.">
+<link rel="canonical" href="https://aibotauth.com/they-see-you">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0F14; --panel:#121820; --line:#1E2733;
+    --paper:#E8E4DA; --muted:#8B93A1;
+    --amber:#E08A2E; --amber-dim:#A66520;
+    --ok:#4CAF7D; --warn:#D4901A; --err:#E05050;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans Thai','IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--sans);line-height:1.65;font-size:16.5px}
+  .wrap{max-width:900px;margin:0 auto;padding:0 22px}
+  a{color:var(--amber);text-decoration:none}
+  a:hover,a:focus-visible{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:2px}
+  code{font-family:var(--mono)}
+
+  /* language switching: scoped to .wrap — html/body never targeted (blank-page fix) */
+  .wrap [lang="en"]{display:none}
+  body.en .wrap [lang="en"]{display:revert}
+  body.en .wrap [lang="th"]{display:none}
+
+  /* top bar */
+  .bar{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
+  .brand{font-family:var(--mono);font-weight:600;letter-spacing:.04em}
+  .brand b{color:var(--amber)}
+  .langs{display:flex;gap:2px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .langs button{background:none;border:0;color:var(--muted);font:inherit;font-size:13.5px;padding:6px 14px;cursor:pointer}
+  .langs button[aria-pressed="true"]{background:var(--panel);color:var(--paper)}
+
+  /* hero */
+  .hero{padding:52px 0 36px}
+  .field{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;color:var(--amber);text-transform:uppercase}
+  h1{font-size:clamp(26px,4.8vw,40px);font-weight:700;line-height:1.2;margin:10px 0 14px}
+  .lede{color:var(--muted);max-width:60ch;margin-bottom:0}
+
+  /* scan box */
+  section{padding:36px 0;border-top:1px solid var(--line)}
+  h2{font-size:21px;font-weight:600;margin:8px 0 16px}
+  p{margin:0 0 12px;max-width:68ch}
+  p.note{color:var(--muted);font-size:14px}
+
+  .scan-box{display:flex;gap:10px;margin:16px 0 6px;flex-wrap:wrap}
+  .scan-input{
+    flex:1;min-width:220px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;color:var(--paper);font:inherit;font-size:14.5px;padding:11px 14px;
+    outline:none;
+  }
+  .scan-input:focus{border-color:var(--amber)}
+  .scan-btn{
+    background:var(--amber);border:0;color:var(--ink);font:inherit;font-weight:600;
+    font-size:14px;padding:11px 20px;border-radius:8px;cursor:pointer;white-space:nowrap;
+  }
+  .scan-btn:hover{background:#f09b3e}
+  .scan-btn:disabled{opacity:.5;cursor:default}
+
+  /* results container */
+  #results-section{padding:0}
+  #results{margin:20px 0 0}
+
+  /* loading */
+  .loading{
+    display:flex;align-items:center;gap:14px;padding:28px 22px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    font-family:var(--mono);font-size:13.5px;color:var(--muted);
+  }
+  .spinner{
+    width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--amber);
+    border-radius:50%;animation:spin .8s linear infinite;flex:none;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-top-color:var(--muted)}}
+
+  /* error / rate-limit message */
+  .msg-box{
+    padding:18px 20px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel);font-size:14.5px;
+  }
+  .msg-box.err{border-color:var(--err);color:var(--err)}
+  .msg-box.warn{border-color:var(--warn);color:var(--warn)}
+
+  /* summary bar */
+  .summary-bar{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px 10px 0 0;
+    padding:16px 20px;margin-bottom:0;
+  }
+  .summary-url{font-family:var(--mono);font-size:13px;color:var(--muted);word-break:break-all}
+  .summary-score{font-family:var(--mono);font-size:14px;font-weight:600}
+  .summary-score .n{color:var(--ok)}
+
+  /* JS-render risk warning */
+  .js-warn{
+    background:rgba(212,144,26,.1);border:1px solid var(--warn);border-top:none;
+    border-radius:0;padding:12px 20px;font-size:14px;color:var(--warn);
+  }
+
+  /* bot table */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px}
+  table.bots{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.bots thead th{
+    background:#0e1318;font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);padding:10px 14px;text-align:left;
+    border-bottom:1px solid var(--line);font-weight:500;
+  }
+  table.bots tbody tr{border-bottom:1px solid var(--line)}
+  table.bots tbody tr:last-child{border-bottom:none}
+  table.bots td{padding:11px 14px;vertical-align:middle}
+  .td-bot code{font-size:13px;color:var(--paper)}
+  .td-engine{color:var(--muted);font-size:13px}
+
+  /* verdict + robots badges */
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;
+    font-family:var(--mono);font-size:11.5px;font-weight:600;
+    padding:3px 8px;border-radius:5px;border:1px solid transparent;white-space:nowrap;
+  }
+  .badge.ok  {color:var(--ok);  background:rgba(76,175,125,.10);border-color:rgba(76,175,125,.28)}
+  .badge.warn{color:var(--warn);background:rgba(212,144,26,.10);border-color:rgba(212,144,26,.28)}
+  .badge.err {color:var(--err); background:rgba(224,80,80,.10); border-color:rgba(224,80,80,.28)}
+  .badge.muted{color:var(--muted);background:rgba(139,147,161,.08);border-color:var(--line)}
+
+  /* robots-only row */
+  tr.robots-only td{background:#0d1117;color:var(--muted);font-size:13px}
+
+  /* AIBotAuth special row */
+  tr.aimark-row td{padding:0;border-bottom:none}
+  .aimark-card{
+    margin:12px 0 4px;
+    background:linear-gradient(135deg,rgba(224,138,46,.06) 0%,rgba(18,24,32,0) 100%);
+    border:1px solid var(--amber);border-radius:10px;padding:18px 20px;
+    display:grid;grid-template-columns:1fr auto;gap:18px;align-items:start;
+  }
+  .aimark-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .aimark-sig-badge{
+    font-family:var(--mono);font-size:11.5px;font-weight:600;padding:3px 10px;
+    border-radius:5px;border:1px solid var(--amber);color:var(--amber);
+    background:rgba(224,138,46,.1);white-space:nowrap;
+  }
+  .aimark-engine{font-size:13px;color:var(--muted)}
+  .aimark-status{font-family:var(--mono);font-size:12.5px;margin-top:4px}
+  .aimark-status.ok{color:var(--ok)}
+  .aimark-status.err{color:var(--err)}
+  .aimark-note{font-size:13.5px;color:var(--muted);max-width:46ch;margin-bottom:10px}
+  .aimark-link{
+    display:inline-block;font-family:var(--mono);font-size:13px;font-weight:600;
+    color:var(--amber);border:1px solid var(--amber);border-radius:6px;
+    padding:7px 14px;margin-top:2px;transition:background .15s;
+  }
+  .aimark-link:hover{background:rgba(224,138,46,.12);text-decoration:none}
+  @media(max-width:600px){
+    .aimark-card{grid-template-columns:1fr}
+    .aimark-link-wrap{margin-top:6px}
+  }
+
+  /* checked-at line */
+  .checked-at{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px}
+
+  /* honest-note collapsible */
+  .honest-toggle{
+    margin-top:16px;background:none;border:1px solid var(--line);color:var(--muted);
+    font:inherit;font-size:13px;padding:7px 14px;border-radius:6px;cursor:pointer;
+    display:flex;align-items:center;gap:7px;
+  }
+  .honest-toggle:hover{border-color:var(--amber);color:var(--paper)}
+  .honest-toggle .arr{font-style:normal;transition:transform .18s}
+  .honest-toggle[aria-expanded="true"] .arr{transform:rotate(90deg)}
+  #honest-note{display:none;margin-top:10px;padding:14px 16px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;font-size:13.5px;color:var(--muted);line-height:1.7}
+  #honest-note.open{display:block}
+
+  /* explainer section */
+  ol.steps{list-style:none;counter-reset:s;margin:18px 0}
+  ol.steps li{counter-increment:s;position:relative;padding:0 0 16px 52px;max-width:66ch}
+  ol.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:1px;
+    font-family:var(--mono);font-size:13px;color:var(--amber);border:1px solid var(--line);
+    border-radius:6px;padding:4px 8px;background:var(--panel)}
+
+  footer{padding:34px 0 56px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+  footer .mono{font-family:var(--mono);font-size:12px;margin-top:8px;word-break:break-all}
+
+  @media(max-width:680px){.scan-box{flex-direction:column}.scan-input,.scan-btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="brand"><a href="/" style="color:inherit"><b>AIBotAuth</b></a> <span style="color:var(--muted)">/</span> they-see-you</div>
+    <div class="langs" role="group" aria-label="Language">
+      <button id="btn-th" aria-pressed="true"  onclick="setLang('th')">ไทย</button>
+      <button id="btn-en" aria-pressed="false" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+
+  <!-- ── hero ── -->
+  <div class="hero">
+    <div class="field">§ panel 2 · bot access</div>
+    <h1 lang="th">AI บอทเห็นเว็บไซต์ของคุณไหม?</h1>
+    <h1 lang="en">Do AI bots actually see your site?</h1>
+    <p class="lede" lang="th">เราส่ง request จริงในนาม crawler AI หลักทุกตัวและรายงานสิ่งที่พวกมันได้รับจริงๆ — อ่านได้ ถูก JS บล็อก หรือถูกปฏิเสธ เพียงแค่รู้ว่า "ไม่ได้บล็อก" ใน robots.txt ไม่เพียงพอ</p>
+    <p class="lede" lang="en">We send real requests impersonating each major AI crawler and report what they actually receive — served, JS-blocked, or turned away. Knowing you're "not blocked" in robots.txt isn't enough.</p>
+  </div>
+
+  <!-- ── scan box ── -->
+  <section>
+    <div class="field">§ live scan</div>
+    <h2 lang="th">สแกนเว็บไซต์</h2>
+    <h2 lang="en">Scan a site</h2>
+    <p lang="th">ป้อน URL ด้านล่างเพื่อตรวจสอบว่า AI บอทหลักๆ อ่านเว็บไซต์นั้นได้จริงหรือไม่ เราได้โหลดผลของ <strong>successcasting.com</strong> ไว้ให้แล้วเป็นตัวอย่าง</p>
+    <p lang="en">Enter any URL to check whether major AI crawlers can actually read it. We've pre-loaded <strong>successcasting.com</strong> as a demo — it's our Case Study Zero for AI visibility.</p>
+
+    <form id="scan-form" onsubmit="handleSubmit(event)" autocomplete="off">
+      <div class="scan-box">
+        <input id="url-input" class="scan-input" type="url"
+          placeholder="https://example.com"
+          value="https://www.successcasting.com"
+          aria-label="URL to scan" required>
+        <button id="scan-btn" class="scan-btn" type="submit">
+          <span lang="th">สแกนเลย</span>
+          <span lang="en">Scan</span>
+        </button>
+      </div>
+    </form>
+    <p class="note" lang="th">อัตรา: สูงสุด 10 ครั้ง/นาที/IP · ใช้เฉพาะ URL สาธารณะ (https://…) เท่านั้น</p>
+    <p class="note" lang="en">Rate: up to 10 scans/min/IP · Public URLs only (https://…)</p>
+  </section>
+
+  <!-- ── results ── -->
+  <section id="results-section" style="border-top:none;padding-top:0">
+    <div id="results">
+      <!-- populated by JS -->
+    </div>
+  </section>
+
+  <!-- ── explainer ── -->
+  <section>
+    <div class="field">§ the unsigned problem</div>
+    <h2 lang="th">User-Agent คือการอ้าง ไม่ใช่หลักฐาน</h2>
+    <h2 lang="en">A User-Agent is a claim, not proof</h2>
+    <p lang="th">ทุกแถวในตารางด้านบน ยกเว้นแถว AIBotAuth คือ request ที่ส่ง User-Agent string ที่ใครก็ตั้งค่าได้ เซิร์ฟเวอร์ของคุณไม่มีทางรู้ว่าเป็น GPTBot ตัวจริงหรือแค่ใครบางคนที่พิมพ์สตริงนั้นลง</p>
+    <p lang="en">Every row in the table above — except AIBotAuth — is a request carrying a User-Agent string any script can set. Your server has no way to know if that's the real GPTBot or someone who just typed that string in.</p>
+
+    <ol class="steps">
+      <li>
+        <span lang="th">AIBotAuth เซ็นทุก request ด้วย Ed25519 ตาม RFC 9421 (Web Bot Auth) — ลายเซ็นผูกกับโดเมน ช่วงเวลา และ key identity ของเรา</span>
+        <span lang="en">AIBotAuth signs every request with Ed25519 under RFC 9421 (Web Bot Auth) — the signature is bound to the target domain, a time window, and our key identity</span>
+      </li>
+      <li>
+        <span lang="th">เซิร์ฟเวอร์ของคุณดึงกุญแจสาธารณะของเราจาก <a href="/.well-known/http-message-signatures-directory"><code>/.well-known/http-message-signatures-directory</code></a> และตรวจสอบลายเซ็นได้ทันที — ไม่ต้องมีผู้กลาง</span>
+        <span lang="en">Your server fetches our public key from <a href="/.well-known/http-message-signatures-directory"><code>/.well-known/http-message-signatures-directory</code></a> and verifies the signature inline — no intermediary needed</span>
+      </li>
+      <li>
+        <span lang="th">หากลายเซ็นผ่าน แสดงว่าเป็น AIBotAuth ตัวจริง ไม่ใช่ใครก็ตามที่คัดลอก User-Agent ของเรา — ปลอมแปลงทางคณิตศาสตร์ไม่ได้</span>
+        <span lang="en">If the signature verifies, it's the real AIBotAuth — not anyone who copied our User-Agent string. It's mathematically unforgeable</span>
+      </li>
+    </ol>
+
+    <div class="ua" style="margin-top:22px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:6px;padding:14px 16px;font-size:14px">
+      <span lang="th">ต้องการเห็นการพิสูจน์ตัวตนทำงานสดๆ? เปิดหน้า <a href="/verify">ตรวจสอบลายเซ็น Panel 1</a> — เบราว์เซอร์ของคุณจะ verify ลายเซ็น Ed25519 ของเราเองต่อหน้า</span>
+      <span lang="en">Want to see the identity proof run live? Open <a href="/verify">Panel 1 — real-time signature check</a> — your browser verifies our Ed25519 signature itself, in front of you.</span>
+    </div>
+  </section>
+
+  <footer>
+    <div lang="th">AIBotAuth — บอทตรวจสอบที่ยืนยันตัวตนได้ · <a href="/">สแกนเว็บไซต์</a> · <a href="/verify">พิสูจน์ตัวตน (Panel 1)</a> · <a href="/bot">bot identity</a> · <a href="/bot.md">markdown</a></div>
+    <div lang="en">AIBotAuth — the AI-visibility audit platform · <a href="/">Scan your site</a> · <a href="/verify">Verify us (Panel 1)</a> · <a href="/bot">Bot identity</a> · <a href="/bot.md">Markdown</a></div>
+    <div class="mono">key directory: /.well-known/http-message-signatures-directory · contact: Geowahaha@gmail.com</div>
+  </footer>
+
+</div><!-- /wrap -->
+
+<noscript>
+  <style>.wrap{padding-bottom:40px}</style>
+  <div style="margin:0 auto;max-width:900px;padding:20px 22px;font-family:sans-serif;color:#E8E4DA;background:#0B0F14">
+    <p>Enable JavaScript to run the live bot-access scan. The rest of the page content is visible above.</p>
+  </div>
+</noscript>
+
+<script>
+// ── language switch ───────────────────────────────────────────────────────────
+function setLang(l) {
+  document.body.classList.toggle('en', l === 'en');
+  document.documentElement.lang = l;
+  document.getElementById('btn-th').setAttribute('aria-pressed', l === 'th');
+  document.getElementById('btn-en').setAttribute('aria-pressed', l === 'en');
+  try { localStorage.setItem('aimark-lang', l); } catch(e) {}
+}
+try {
+  var saved = localStorage.getItem('aimark-lang');
+  if (saved === 'en' || (!saved && !/^th/i.test(navigator.language || ''))) setLang('en');
+} catch(e) {}
+
+function lang() { return document.body.classList.contains('en') ? 'en' : 'th'; }
+
+// ── verdict helpers ───────────────────────────────────────────────────────────
+var VERDICT_CFG = {
+  can_read:         { cls: 'ok',   icon: '✓', en: 'can read',       th: 'อ่านได้' },
+  partial_js_risk:  { cls: 'warn', icon: '⚠', en: 'JS risk',        th: 'JS บล็อก?' },
+  blocked_by_robots:{ cls: 'err',  icon: '✗', en: 'blocked (robots)',th: 'บล็อก (robots)' },
+  cannot_read:      { cls: 'err',  icon: '✗', en: 'cannot read',     th: 'อ่านไม่ได้' },
+  uncertain:        { cls: 'muted',icon: '?', en: 'uncertain',       th: 'ไม่แน่ชัด' },
+  skipped:          { cls: 'muted',icon: '—', en: 'skipped',         th: 'ข้าม' },
+};
+function vCfg(v) { return VERDICT_CFG[v] || { cls:'muted', icon:'?', en: v, th: v }; }
+
+var ROBOTS_CFG = {
+  allowed:       { cls: 'ok',    label: 'allowed' },
+  blocked:       { cls: 'err',   label: 'blocked' },
+  not_specified: { cls: 'muted', label: 'not set' },
+};
+function rCfg(r) { return ROBOTS_CFG[r] || { cls:'muted', label: r || '—' }; }
+
+function badge(cls, text) {
+  return '<span class="badge ' + cls + '">' + esc(text) + '</span>';
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── render helpers ────────────────────────────────────────────────────────────
+function renderBotRow(bot) {
+  var vc = vCfg(bot.verdict);
+  var rc = rCfg(bot.robots);
+  var verdictLabel = lang() === 'th' ? vc.th : vc.en;
+  var chars = bot.text_chars ? ' · ' + (bot.text_chars / 1000).toFixed(1) + 'k chars' : '';
+  return '<tr>' +
+    '<td class="td-bot"><code>' + esc(bot.bot) + '</code></td>' +
+    '<td class="td-engine">' + esc(bot.engine) + '</td>' +
+    '<td>' + badge(rc.cls, rc.label) + '</td>' +
+    '<td>' + badge(vc.cls, vc.icon + ' ' + verdictLabel + chars) + '</td>' +
+    '<td style="font-size:12.5px;color:var(--muted)">' + esc(bot.note || '') + '</td>' +
+    '</tr>';
+}
+
+function renderRobotsOnlyRow(bot) {
+  var rc = rCfg(bot.robots);
+  var vLabel = bot.verdict === 'allowed_by_robots' ? 'allowed (training)' : 'blocked (training)';
+  var vCls = bot.verdict === 'allowed_by_robots' ? 'ok' : 'err';
+  return '<tr class="robots-only">' +
+    '<td><code>' + esc(bot.bot) + '</code></td>' +
+    '<td>' + esc(bot.engine) + '</td>' +
+    '<td>' + badge(rc.cls, rc.label) + '</td>' +
+    '<td>' + badge(vCls, vLabel) + '</td>' +
+    '<td style="font-size:12.5px">' + esc(bot.note || 'robots-only token') + '</td>' +
+    '</tr>';
+}
+
+function renderAimarkRow(aimark) {
+  var ok = aimark.fetch === 'served';
+  var statusCls = ok ? 'ok' : 'err';
+  var statusText = esc(aimark.fetch) + ' · HTTP ' + esc(String(aimark.http_status || '?'));
+  var thNote = 'แถวอื่นทั้งหมดเป็นแค่ User-Agent ที่ใครก็พิมพ์ได้ — แถวนี้มีลายเซ็น Ed25519 ที่ตรวจสอบได้จริง';
+  var enNote = 'Every other row is an unsigned User-Agent anyone can fake — this one is cryptographically verifiable.';
+  return '<tr class="aimark-row">' +
+    '<td colspan="5">' +
+    '<div class="aimark-card">' +
+      '<div>' +
+        '<div class="aimark-head">' +
+          '<span class="aimark-sig-badge">✓ signed · Ed25519 · verifiable</span>' +
+          '<span class="aimark-engine">AIBotAuth/1.0 · this audit bot</span>' +
+        '</div>' +
+        '<div class="aimark-status ' + statusCls + '">' + statusText + '</div>' +
+      '</div>' +
+      '<div>' +
+        '<p class="aimark-note" lang="th">' + thNote + '</p>' +
+        '<p class="aimark-note" lang="en">' + enNote + '</p>' +
+        '<div class="aimark-link-wrap">' +
+          '<a href="/verify" class="aimark-link">' +
+            '<span lang="th">ดูการพิสูจน์สด →</span>' +
+            '<span lang="en">See how →</span>' +
+          '</a>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '</td></tr>';
+}
+
+function renderResults(data) {
+  var l = lang();
+  var canRead = data.summary ? data.summary.can_read : '?';
+  var total   = data.summary ? data.summary.total   : '?';
+
+  // Summary bar
+  var urlLabel = '<span class="summary-url">↳ ' + esc(data.url) + '</span>';
+  var scoreLabel = l === 'th'
+    ? '<span class="summary-score"><span class="n">' + canRead + '/' + total + '</span> crawler อ่านได้</span>'
+    : '<span class="summary-score"><span class="n">' + canRead + '/' + total + '</span> crawlers can read</span>';
+  var html = '<div class="summary-bar">' + urlLabel + scoreLabel + '</div>';
+
+  // JS render risk warning
+  if (data.js_render_risk && data.js_render_risk.likely) {
+    html += '<div class="js-warn">⚠ ' + esc(data.js_render_risk.note) + '</div>';
+  }
+
+  // Bot table
+  html += '<div class="table-wrap"><table class="bots"><thead><tr>' +
+    '<th>Bot</th><th>Engine</th>' +
+    '<th lang="th">robots.txt</th><th lang="en">robots.txt</th>' +
+    '<th lang="th">ผลจริง</th><th lang="en">Live result</th>' +
+    '<th lang="th">หมายเหตุ</th><th lang="en">Note</th>' +
+    '</tr></thead><tbody>';
+
+  (data.bots || []).forEach(function(bot) { html += renderBotRow(bot); });
+  (data.robots_only || []).forEach(function(bot) { html += renderRobotsOnlyRow(bot); });
+
+  if (data.aimark_bot) {
+    html += renderAimarkRow(data.aimark_bot);
+  }
+
+  html += '</tbody></table></div>';
+
+  // Checked-at + honest-note toggle
+  if (data.checked_at) {
+    html += '<p class="checked-at">checked ' + esc(data.checked_at.replace('T', ' ').replace(/\.\d+Z$/, ' UTC')) + '</p>';
+  }
+  if (data.honest_note) {
+    html += '<button class="honest-toggle" aria-expanded="false" aria-controls="honest-note" onclick="toggleHonest(this)">' +
+      '<em class="arr" aria-hidden="true">▶</em>' +
+      '<span lang="th">หมายเหตุความซื่อสัตย์เกี่ยวกับข้อจำกัด</span>' +
+      '<span lang="en">Honest note about limitations</span>' +
+      '</button>' +
+      '<div id="honest-note" role="region">' + esc(data.honest_note) + '</div>';
+  }
+
+  return html;
+}
+
+function toggleHonest(btn) {
+  var panel = document.getElementById('honest-note');
+  var open = btn.getAttribute('aria-expanded') === 'true';
+  btn.setAttribute('aria-expanded', !open);
+  panel.classList.toggle('open', !open);
+}
+
+// ── scan logic ────────────────────────────────────────────────────────────────
+var scanning = false;
+
+function setLoadingState(url) {
+  var l = lang();
+  var msg = l === 'th'
+    ? 'กำลังส่ง request ในนาม crawler ทุกตัว — อาจใช้เวลา 10–20 วินาที…'
+    : 'Sending requests as each crawler — this takes 10–20 seconds…';
+  document.getElementById('results').innerHTML =
+    '<div class="loading"><div class="spinner"></div>' +
+    '<span>' + msg + ' <code style="color:var(--paper)">' + esc(url) + '</code></span></div>';
+}
+
+function setErrorState(err, status) {
+  var l = lang();
+  var html;
+  if (status === 429) {
+    html = '<div class="msg-box warn">' +
+      '<span lang="th">⏱ ส่ง request บ่อยเกินไป กรุณาลองใหม่ในอีก 1 นาที</span>' +
+      '<span lang="en">⏱ Too many scans. Please wait a minute and try again.</span>' +
+      '</div>';
+  } else if (err && err.detail) {
+    html = '<div class="msg-box err">' +
+      '<span lang="th">⚠ URL ไม่ถูกต้อง: ' + esc(err.detail) + '</span>' +
+      '<span lang="en">⚠ Invalid URL: ' + esc(err.detail) + '</span>' +
+      '</div>';
+  } else {
+    var msg = err && err.error ? esc(err.error) : (l === 'th' ? 'เกิดข้อผิดพลาด กรุณาลองใหม่' : 'Request failed. Please try again.');
+    html = '<div class="msg-box err">⚠ ' + msg + '</div>';
+  }
+  document.getElementById('results').innerHTML = html;
+}
+
+async function runScan(url) {
+  if (scanning) return;
+  scanning = true;
+  var btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  setLoadingState(url);
+
+  try {
+    var res = await fetch('/api/bot-access', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: url }),
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      setErrorState(data, res.status);
+    } else {
+      document.getElementById('results').innerHTML = renderResults(data);
+    }
+  } catch (e) {
+    setErrorState({ error: String(e) }, 0);
+  } finally {
+    scanning = false;
+    btn.disabled = false;
+  }
+}
+
+function handleSubmit(e) {
+  e.preventDefault();
+  var url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  runScan(url);
+}
+
+// Auto-run on load
+runScan('https://www.successcasting.com');
+</script>
+</body>
+</html>
