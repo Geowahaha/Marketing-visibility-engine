@@ -20,6 +20,7 @@
 
 import { callLLM } from "./_llm.js";
 import { requireSession } from "./_auth.js";
+import { checkCreditBalance, consumeCredits } from "./_credits.js";
 import { dbReady, ensureOrgForSession, ensureSite, getSite, recordAudit, recordFindings, recordRecommendations, recordAlert } from "./_db.js";
 import { signedFetch } from "./_botauth.js";
 import { aimarkBotAccess, isOptedOut } from "./_botpolicy.js";
@@ -751,6 +752,12 @@ export async function onRequestPost(context) {
   } catch {
     return json({ error: "Invalid JSON body." }, 400);
   }
+  // Auth gate — session must exist before any fetch or LLM spend
+  const session = await requireSession(request, env);
+  if (!session || !session.email) {
+    return json({ error: "login_required", message: "Sign in to run a full scan." }, 401);
+  }
+
   const agentFirst = !!(payload.deterministic_only || payload.agent_first);
   const ip = request.headers.get("CF-Connecting-IP") || "";
   const rl = agentFirst
@@ -829,6 +836,17 @@ export async function onRequestPost(context) {
   // waitUntil; awaited in tests. Covers every return path below in one place.
   if (context.waitUntil) context.waitUntil(persistScanAudit(context, url, det));
   else await persistScanAudit(context, url, det);
+  // Credit gate — check before spending any LLM tokens (agentFirst path skips LLM so no charge)
+  if (!agentFirst) {
+    const creditCheck = await checkCreditBalance(request, env, { amount: 1, feature: "scan" });
+    if (!creditCheck.ok) {
+      if (creditCheck.error === "insufficient_credits") {
+        return json({ error: "insufficient_credits", balance: creditCheck.balance ?? 0, needed: 1, checkout_url: "/?modal=credits" }, 402);
+      }
+      return json({ error: creditCheck.error || "credit_check_failed" }, 503);
+    }
+  }
+
   if (agentFirst) {
     return json({
       ...buildDeterministicScan(url, facts, det, lang, "agent_first_local_runner"),
@@ -923,5 +941,15 @@ export async function onRequestPost(context) {
   scan._migration = facts.migration; // raw canonical/index migration evidence for QA/export
   scan._cwv = psi;           // raw Core Web Vitals for the metrics strip
   scan._rateRemaining = rl.remaining;
+
+  // Deduct 1 credit after successful LLM response — fail-safe: log errors, still return result
+  const scanId = `scan:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  const deduction = await consumeCredits(request, env, { amount: 1, feature: "scan", idempotency_key: scanId })
+    .catch(e => ({ ok: false, error: String(e) }));
+  if (!deduction.ok && !deduction.already_charged) {
+    console.error("[scan] credit deduction failed after successful scan:", deduction.error);
+  }
+  scan._credits_charged = deduction.ok || !!deduction.already_charged;
+
   return json(scan);
 }

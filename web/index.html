@@ -3,30 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Mark — AI Visibility Agent</title>
-<meta name="description" content="AI Mark scans weak websites, finds Thai SME leads, prepares outreach, and hands work to a local AI agent.">
+<title>AIBotAuth — AI Visibility Check</title>
+<meta name="description" content="Check if AI bots can read your website. Free scan with 8 real AI crawlers including AIBotAuth, signed with Ed25519.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#050505;
-  --rail:#090909;
-  --panel:#151515;
-  --panel2:#1d1d1d;
-  --panel3:#242424;
-  --line:#2e2e2e;
-  --line2:#3a3a3a;
-  --text:#f2f2f2;
-  --muted:#9b9b9b;
-  --soft:#c7c7c7;
-  --accent:#f08b32;
+  --bg:#0b0f14;
+  --rail:#0e1218;
+  --panel:#151b22;
+  --panel2:#1c242d;
+  --panel3:#232c36;
+  --line:#2a333e;
+  --line2:#36424f;
+  --text:#eef0f3;
+  --muted:#8a95a3;
+  --soft:#c0c8d0;
+  --accent:#e08a2e;
   --accent2:#23c6a6;
   --good:#45c46b;
   --warn:#e3ad35;
   --bad:#ef5f72;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Thai','IBM Plex Mono',ui-sans-serif,system-ui,-apple-system,sans-serif;letter-spacing:0;overflow:hidden}
 button,input,select{font:inherit}
 button{cursor:pointer}
 a{color:var(--text)}
@@ -132,7 +135,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 .composer-tool.model{border-right:0;max-width:190px}
 .send{width:42px;height:42px;border-radius:12px;border:0;background:#f2f2f2;color:#070707;font-size:19px;line-height:1}
 .send:disabled{opacity:.5;cursor:default}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
 .modal.on{display:flex}
 .modal-card{background:#191919;border:1px solid #343434;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.5);width:min(92vw,520px);padding:22px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
@@ -207,42 +210,116 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 .promo-row input{flex:1;min-width:0;background:#121212;border:1px solid #303030;border-radius:10px;color:#f1f1f1;padding:10px 12px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#f2f2f2;color:#050505;border-radius:999px;padding:10px 14px;font-size:13px;font-weight:650;opacity:0;pointer-events:none;transition:.2s;z-index:70;max-width:min(90vw,640px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
-@media(max-width:920px){
+/* Hamburger + topbar-brand: hidden on desktop, shown on mobile */
+.hamburger-btn{display:none;align-items:center;justify-content:center;width:38px;height:38px;border:0;background:transparent;color:#c0c8d0;border-radius:9px;flex-shrink:0;-webkit-tap-highlight-color:transparent}
+.hamburger-btn:hover{background:#151b22}
+.topbar-brand{display:none;align-items:center;min-width:0}
+.drawer-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:39;-webkit-tap-highlight-color:transparent}
+@media(max-width:767px){
+  /* Base */
   body{overflow:auto}
   .shell{height:auto;min-height:100vh;display:block}
-  .sidebar{height:auto;margin:0;border-radius:0;border-left:0;border-right:0;border-top:0}
-  .side-top{padding:12px 14px}
-  .team-row,.connect-card,.sidebar-foot{display:none}
-  .side-section{display:flex;gap:6px;overflow:auto;padding:0 10px 10px}
-  .side-label{display:none}
-  .nav-item{width:auto;grid-template-columns:20px auto;white-space:nowrap;min-height:36px}
-  .nav-badge{display:none}
-  .main{height:auto;min-height:calc(100vh - 118px)}
-  .topbar{padding:0 14px;gap:8px;flex-wrap:wrap;height:auto;min-height:62px;padding-top:10px;padding-bottom:10px}
-  .top-title span{display:none}
-  .status-strip{grid-template-columns:1fr;padding:12px 14px 0}
-  .runner-controls{grid-template-columns:1fr}
-  #thread{padding:14px 14px 20px;min-height:56vh}
-  .composer{position:sticky;bottom:0;padding:0 14px 14px}
-  .composer .box{flex-wrap:wrap}
-  .composer-tool{flex:1;max-width:none;border-right:0;border:1px solid #2c2c2c}
-  .composer input{flex-basis:calc(100% - 52px);padding-left:8px}
-  .msg{display:block}
-  .msg .who{min-width:0;margin-bottom:6px}
-  .bar{grid-template-columns:120px 1fr 38px}
+  /* Off-canvas sidebar drawer */
+  .sidebar{
+    position:fixed;top:0;left:0;
+    width:280px;height:100%;
+    margin:0;border-radius:0;
+    border:none;border-right:1px solid var(--line);
+    -webkit-transform:translateX(-100%);transform:translateX(-100%);
+    -webkit-transition:-webkit-transform .22s ease;transition:transform .22s ease;
+    z-index:40;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sidebar.drawer-open{-webkit-transform:translateX(0);transform:translateX(0)}
+  .drawer-overlay.drawer-open{display:block}
+  /* Mobile topbar */
+  .main{height:auto}
+  .topbar{height:56px;padding:0 12px;gap:8px;background:#050505}
+  .hamburger-btn{display:flex}
+  .topbar-brand{display:flex}
+  .top-title{display:none}
+  /* Hide non-essential topbar items on mobile */
+  .topbar .pill{display:none}
+  /* .lang stays visible on mobile so users can switch TH↔EN */
+  /* Workspace */
+  .workspace{overflow:visible}
+  .hero-wrap{flex:none;padding:36px 16px 56px;justify-content:flex-start;min-height:calc(100vh - 56px)}
+  .hero-headline{font-size:clamp(20px,7vw,28px);margin-bottom:10px}
+  .hero-sub{font-size:13px;margin-bottom:24px}
+  /* Scan box: stack on small screens */
+  .scan-box{-webkit-flex-direction:column;flex-direction:column;gap:8px}
+  /* 16px min prevents iOS Safari auto-zoom on input focus */
+  .scan-box input{font-size:16px;padding:14px 14px}
+  .scan-box button{width:100%;padding:16px;font-size:15px}
+  .hero-status{font-size:12px}
+  /* Results table: horizontal scroll on narrow viewports */
+  .hero-results{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .results-table{min-width:360px}
+  .upsell-card{padding:16px 14px}
+  /* Modals */
   .credit-grid{grid-template-columns:1fr}
-  .credit-card,.modal-card{border-radius:16px;padding:18px}
-  .pill.hide-mobile{display:none}
+  .credit-card,.modal-card{border-radius:16px;padding:18px;width:min(94vw,520px)}
+  .runner-controls{grid-template-columns:1fr}
+  .bar{grid-template-columns:110px 1fr 38px}
+  .payment-methods{grid-template-columns:1fr}
 }
+/* --- Phase 2: hero scan --- */
+.workspace{display:flex;flex-direction:column;overflow:hidden}
+.hero-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px 72px;overflow-y:auto;gap:0}
+.hero-headline{font-size:clamp(22px,3vw,36px);font-weight:700;text-align:center;line-height:1.25;margin:0 0 12px;letter-spacing:-.02em;font-family:'IBM Plex Mono',monospace}
+.hero-sub{font-size:14px;color:var(--muted);text-align:center;margin:0 0 36px;line-height:1.65;max-width:560px}
+.scan-box{display:flex;gap:10px;width:100%;max-width:600px}
+.scan-box input{flex:1;background:#111820;border:1px solid var(--line2);border-radius:12px;padding:14px 18px;font-size:14px;color:var(--text);outline:none;font-family:var(--mono)}
+.scan-box input:focus{border-color:var(--accent)}
+.scan-box button{background:var(--accent);color:#0b0f14;border:0;border-radius:12px;padding:14px 26px;font-weight:700;font-size:14px;white-space:nowrap;font-family:'IBM Plex Mono',monospace}
+.scan-box button:hover{filter:brightness(1.1)}
+.scan-box button:disabled{opacity:.45;cursor:not-allowed}
+.hero-status{width:100%;max-width:600px;margin-top:14px;font-size:13px;color:var(--muted);text-align:center;min-height:18px}
+.hero-results{width:100%;max-width:660px;margin-top:22px}
+.results-meta{font-size:12px;color:var(--muted);margin-bottom:8px;font-family:var(--mono)}
+.results-table{width:100%;border-collapse:collapse;font-size:13px}
+.results-table th{text-align:left;color:var(--muted);font-weight:500;padding:6px 10px;border-bottom:1px solid var(--line)}
+.results-table td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.results-table tr:last-child td{border-bottom:none}
+.rbadge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.04em;font-family:var(--mono)}
+.rbadge.green{background:#0d2a1a;color:#4dce7a}
+.rbadge.amber{background:#2a1a05;color:#e08a2e}
+.rbadge.red{background:#2a0d0d;color:#ef5f72}
+.aibotauth-row td{background:#0d1520;border-left:2px solid var(--accent)}
+.verify-link{color:var(--accent);font-size:11px;margin-left:6px;font-family:var(--mono)}
+.upsell-card{width:100%;max-width:600px;margin-top:22px;border:1px solid var(--line2);border-radius:14px;padding:20px 24px;background:#0d1118}
+.upsell-head{font-size:14px;font-weight:700;margin:0 0 6px}
+.upsell-body{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.55}
+.upsell-btn{background:var(--accent);color:#0b0f14;border:0;border-radius:10px;padding:11px 22px;font-weight:700;font-size:13px;font-family:'IBM Plex Mono',monospace}
+.upsell-btn:hover{filter:brightness(1.1)}
+.hero-footer{width:100%;max-width:660px;margin-top:28px;text-align:center;font-size:11px;color:var(--muted)}
+.hero-footer a{color:inherit}
+.df-wrap{width:100%;max-width:660px;margin-top:18px;display:flex;flex-direction:column;gap:14px}
+.df-score{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.df-grade{font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:700;line-height:1}
+.df-scorenum{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700}
+.df-scorelabel{font-size:12px;color:var(--muted)}
+.df-summary{font-size:13px;color:var(--muted);margin:0;line-height:1.6}
+.df-cat{background:#0d1118;border:1px solid var(--line2);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.df-cat-head{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px}
+.df-finding{font-size:12px;padding:6px 0;border-top:1px solid var(--line)}
+.df-sev{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;margin-right:4px}
+.df-detail{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.df-fix{margin:4px 0 0;color:#4ade80;font-size:12px;line-height:1.5}
+/* bilingual hero — html[lang] is set by setLang(); default html lang="th" */
+.hero-wrap [lang="en"],.upsell-card [lang="en"]{display:none}
+html[lang="en"] .hero-wrap [lang="th"],html[lang="en"] .upsell-card [lang="th"]{display:none}
+html[lang="en"] .hero-wrap [lang="en"],html[lang="en"] .upsell-card [lang="en"]{display:block}
 </style>
 </head>
 <body>
+<div id="drawerOverlay" class="drawer-overlay" onclick="closeDrawer()" aria-hidden="true"></div>
 <div class="shell">
-  <aside class="sidebar" aria-label="AI Mark navigation">
+  <aside class="sidebar" id="sidebar" aria-label="AIBotAuth navigation">
     <div class="side-top">
       <div class="mark">
         <div class="mark-glyph">AI</div>
-        <div class="brand-name">AI Mark</div>
+        <div class="brand-name">AIBotAuth <span style="font-size:10px;font-weight:700;background:#e08a2e;color:#0b0f14;border-radius:4px;padding:2px 6px;vertical-align:middle;letter-spacing:.04em">BETA</span></div>
       </div>
       <button class="icon-btn" onclick="focusComposer()" aria-label="Search">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
@@ -260,10 +337,12 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10.5V20h14v-9.5"/></svg>
         <span>Dashboard</span>
       </button>
+      <!-- HIDDEN_FEATURES: Lead Scout nav — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <button class="nav-item" onclick="runLeadScout(LANG==='th'?'หา lead SME ไทยที่เว็บอ่อนและน่าจะยิงแอด':'Find weak Thai SME leads with weak websites and likely ad spend')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.2-4.2"/><path d="M8.5 11h5"/></svg>
         <span>Lead Scout</span>
       </button>
+      -->
       <button class="nav-item" onclick="focusComposer()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>
         <span>Website Scan</span>
@@ -276,11 +355,13 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 
     <div class="side-section">
       <div class="side-label">Automation</div>
+      <!-- HIDDEN_FEATURES: Agent Bridge nav — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <button class="nav-item" onclick="connectAgent()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6"/><path d="M12 9v6"/><rect x="4" y="4" width="16" height="16" rx="4"/></svg>
         <span>Agent Bridge</span>
         <span class="nav-badge" id="sideAgentBadge">off</span>
       </button>
+      -->
       <button class="nav-item" onclick="openCredits()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
         <span>Credits</span>
@@ -296,11 +377,13 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
       </button>
     </div>
 
+    <!-- HIDDEN_FEATURES: Connect Agent sidebar card — hidden for now, recoverable. Remove comment tags to restore. --><!--
     <div class="connect-card">
       <div class="connect-title">Connect Agent</div>
       <div class="connect-status" id="connectStatus">ยังไม่ได้เชื่อมต่อ local AI agent</div>
       <button class="connect-action" id="connectButton" onclick="connectAgent()">Connect</button>
     </div>
+    -->
 
     <div class="sidebar-foot">
       <div class="account">
@@ -318,50 +401,84 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 
   <main class="main">
     <header class="topbar">
+      <button class="hamburger-btn" id="hamburger" onclick="toggleDrawer()" aria-label="Open menu" aria-expanded="false">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="topbar-brand">
+        <div class="mark-glyph" style="width:26px;height:26px;font-size:14px;flex-shrink:0;margin-right:8px">AI</div>
+        <span style="font-weight:700;font-size:14px;letter-spacing:-.01em;white-space:nowrap">AIBotAuth <span style="font-size:9px;font-weight:700;background:#e08a2e;color:#0b0f14;border-radius:4px;padding:2px 5px;vertical-align:middle">BETA</span></span>
+      </div>
       <div class="top-title">
         <b>AI Visibility Workspace</b>
         <span>Lead scout, scan, fix, and hand off to the local AI agent</span>
       </div>
       <div class="grow"></div>
+      <!-- HIDDEN_FEATURES: Agent Disconnected pill — hidden for now, recoverable. --><!--
       <div class="pill hide-mobile"><span>Agent</span><strong id="topAgentState">Disconnected</strong></div>
+      -->
       <button class="pill" onclick="openCredits()"><span>Credits</span><strong id="creditBalance">0</strong></button>
       <div class="lang"><button id="lEn" onclick="setLang('en')">EN</button><button id="lTh" class="on" onclick="setLang('th')">ไทย</button></div>
+      <!-- HIDDEN_FEATURES: Cockpit link — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <a class="btn" href="/cockpit.html" title="Owner Cockpit — ภาพรวมบริษัท">Cockpit</a>
+      -->
       <button class="btn" id="loginBtn" onclick="openLogin()">Sign in</button>
+      <!-- HIDDEN_FEATURES: topbar Connect button — hidden for now, recoverable. --><!--
       <button class="btn solid" onclick="connectAgent()">Connect</button>
+      -->
     </header>
 
     <section class="workspace">
-      <!-- Decluttered (kept in DOM so existing JS refs never break, just hidden) -->
-      <style>#skillsPalette{display:none!important}</style>
-      <div class="status-strip" style="display:none">
-        <div class="status-card"><b>Agent Bridge</b><div id="agentDetail">กด Connect ครั้งเดียว แล้วผลสแกนจะส่งเข้าหลังบ้านอัตโนมัติ</div></div>
-        <div class="status-card"><b>Login</b><div id="loginDetail">ใช้ Google หรือ GitHub OAuth เพื่อผูกเครดิตกับบัญชี</div></div>
-        <div class="status-card"><b>Revenue Mode</b><div>Credit top-up แทน subscription รายเดือน</div></div>
+      <!-- Phase 2: hero scan UI -->
+      <div class="hero-wrap">
+        <div class="wrap" style="display:contents">
+          <h1 lang="th" class="hero-headline">ตรวจสอบว่า AI Bot มองเห็นเว็บคุณหรือไม่</h1>
+          <h1 lang="en" class="hero-headline">Can AI bots read your website?</h1>
+          <p lang="th" class="hero-sub">สแกนฟรี — ทดสอบด้วย AI crawler 8 ตัว รวมถึง AIBotAuth ที่ใช้ลายเซ็น Ed25519</p>
+          <p lang="en" class="hero-sub">Free scan — 8 real AI crawlers including AIBotAuth, signed with Ed25519</p>
+        </div>
+        <div class="scan-box">
+          <input id="heroUrl" type="text" value="https://www.successcasting.com" placeholder="example.com or https://example.com" autocomplete="off" spellcheck="false">
+          <button id="heroScanBtn" onclick="heroScan()">Scan</button>
+        </div>
+        <div id="heroStatus" class="hero-status"></div>
+        <div id="heroResults" class="hero-results" style="display:none"></div>
+        <div id="heroUpsell" class="upsell-card" style="display:none">
+          <div class="wrap" style="display:contents">
+            <p lang="th" class="upsell-head">ต้องการรายงานลึกขึ้น?</p>
+            <p lang="en" class="upsell-head">Want deeper analysis?</p>
+            <p lang="th" class="upsell-body">Full AI Scan วิเคราะห์เนื้อหาด้วย Claude — structured data, meta signals, content quality — ต้องใช้เครดิต</p>
+            <p lang="en" class="upsell-body">Full AI Scan — Claude-powered content analysis, structured data, meta signals — requires credits</p>
+          </div>
+          <button class="upsell-btn" onclick="openLogin()">Sign in to run full scan</button>
+        </div>
+        <div class="hero-footer">
+          <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy (PDPA)</a> · <a href="/verify">Verify our bot identity</a> · © 2026 AIBotAuth
+        </div>
       </div>
+
+      <!-- Legacy chat refs — dormant, keep JS alive. Remove when chat is rebuilt. -->
+      <div style="display:none" aria-hidden="true">
+        <div id="thread"><div class="wrap" id="threadInner"></div></div>
+        <div class="composer">
+          <div class="box">
+            <select id="mainRunnerMode"></select>
+            <input id="input">
+            <select id="mainRunnerModel"></select>
+            <button id="send"></button>
+          </div>
+          <div id="hint"></div>
+        </div>
+        <div id="skillsPalette"><div id="skillsPaletteLabel"></div><div id="skillChips"></div></div>
+        <div id="agentDetail"></div>
+        <div id="loginDetail"></div>
+      </div>
+
+      <!-- HIDDEN_FEATURES: AI Mark OS + เข้าหมู่บ้าน Agent buttons — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:2px auto 22px">
         <a class="btn solid" href="/os" target="_blank" rel="noopener" style="padding:13px 26px;font-size:15px;border-radius:12px">🖥️ เปิด AI Mark OS</a>
         <a class="btn" href="/os#society" target="_blank" rel="noopener" style="padding:13px 26px;font-size:15px;border-radius:12px">🌐 เข้าหมู่บ้าน Agent</a>
       </div>
-
-      <div id="thread"><div class="wrap" id="threadInner"></div></div>
-
-      <div class="composer">
-        <div class="box">
-          <select class="composer-tool" id="mainRunnerMode" onchange="onRunnerModeChange(this.value)" aria-label="Agent access mode"></select>
-          <input id="input" autocomplete="off" spellcheck="false" placeholder="วางลิงก์เว็บ, Facebook, YouTube, TikTok, LINE OA… หรือพิมพ์ถามได้เลย">
-          <select class="composer-tool model" id="mainRunnerModel" onchange="onMainRunnerModelChange(this.value)" aria-label="Local AI model"></select>
-          <button class="send" id="send" onclick="onSend()" aria-label="Send">↑</button>
-        </div>
-        <div class="hint" id="hint">ปลอดภัยด้วย SSL · อ่านเฉพาะหน้าเว็บสาธารณะ · เชื่อม local agent ได้ด้วยปุ่มเดียว</div>
-      </div>
-      <div class="skills-palette" id="skillsPalette" hidden style="max-width:760px;margin:12px auto 0;padding:0 6px">
-        <div id="skillsPaletteLabel" style="font-size:12px;opacity:.6;margin:0 0 6px 2px"></div>
-        <div class="chips" id="skillChips"></div>
-      </div>
-      <div style="text-align:center;font-size:11px;opacity:.5;margin:14px auto 0;max-width:760px">
-        <a href="/terms.html" style="color:inherit">Terms</a> · <a href="/privacy.html" style="color:inherit">Privacy (PDPA)</a> · © 2026 AI Mark · Blutenstein
-      </div>
+      -->
     </section>
   </main>
 </div>
@@ -381,6 +498,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         <div><b>Google</b><span id="googleLoginCopy">ใช้ Gmail / Google account</span></div>
         <button class="btn solid" id="googleLoginBtn" onclick="loginWith('google')">Continue</button>
       </div>
+      <!-- HIDDEN_FEATURES: GitHub login row + sub-panels — no GITHUB_CLIENT_ID/SECRET in prod → 501. Hidden for now, recoverable. Remove comment tags to restore. --><!--
       <div class="login-row">
         <div><b>GitHub Repo</b><span id="githubConnectCopy">เชื่อม repo เพื่อเปิด PR / deploy งานแก้เว็บ</span></div>
         <button class="btn" id="githubConnectBtn" onclick="connectGithubSecure()">Approve</button>
@@ -414,6 +532,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         </div>
         <div class="repo-status" id="githubRepoStatus">Sign in with GitHub to load repositories.</div>
       </div>
+      -->
       <div class="login-row" id="logoutRow" style="display:none">
         <div><b>Signed in</b><span id="logoutUser">Account active</span></div>
         <button class="btn" onclick="logout()">Sign out</button>
@@ -1012,38 +1131,40 @@ function updateAccountUI(){
   const signed=!!authUser;
   const name=signed?(authUser.name||authUser.email||"Signed in"):"Guest";
   const email=signed?(authUser.email||authUser.provider||"Signed in"):"Not signed in";
-  $("accountName").textContent=name;
-  $("accountEmail").textContent=email;
-  $("teamTitle").textContent=signed?(name.split(" ")[0]+"'s team"):"Personal team";
-  $("teamInitial").textContent=(name||"P").slice(0,1).toUpperCase();
-  $("loginBtn").textContent=signed?(LANG==="th"?"บัญชี":"Account"):(LANG==="th"?"เข้าสู่ระบบ":"Sign in");
-  $("loginDetail").textContent=signed
-    ? (githubState.connected
-      ? `${email} · GitHub ${githubState.selected_repo||"connected"}`
-      : email)
-    : (LANG==="th"?"ยังไม่ได้เข้าสู่ระบบ เครดิตจะผูกกับบัญชีหลัง login":"Not signed in. Credits attach after login.");
-  $("logoutRow").style.display=signed?"grid":"none";
-  $("logoutUser").textContent=email;
-  $("googleLoginBtn").disabled=!loginReady.google;
-  $("googleLoginBtn").textContent=loginReady.google?"Continue":(LANG==="th"?"ยังไม่พร้อม":"Not ready");
-  $("googleLoginCopy").textContent=loginReady.google
-    ? (LANG==="th"?"ใช้ Gmail / Google account":"Use Gmail / Google account")
-    : (LANG==="th"?"รอเจ้าของระบบตั้ง Google OAuth ใน Cloudflare":"Waiting for Google OAuth setup in Cloudflare");
-  $("googleLoginBtn").closest(".login-row").classList.toggle("disabled",!loginReady.google);
-  $("githubConnectBtn").textContent=githubState.connected?(LANG==="th"?"Reconnect":"Reconnect"):(LANG==="th"?"Approve":"Approve");
-  $("githubConnectCopy").textContent=githubState.connected
-    ? (githubState.selected_repo
-      ? `Connected: ${githubState.selected_repo}`
-      : (LANG==="th"?"เลือก repo ที่จะให้ AI Mark เปิด PR":"Choose the repo AI Mark should open PRs against"))
-    : (LANG==="th"?"เชื่อม repo เพื่อเปิด PR / deploy งานแก้เว็บ":"Connect a repo to open PRs and deploy fixes");
-  $("githubSecurePanel").style.display=githubState.connected?"none":"block";
-  $("advancedGithubLink").style.display=(!githubState.connected&&new URLSearchParams(location.search).get("dev")==="1")?"inline-block":"none";
-  $("githubTokenPanel").classList.toggle("on",!!githubAdvancedVisible&&!githubState.connected);
-  $("githubRepoPanel").classList.toggle("on",!!githubState.connected);
-  const avatar=$("userAvatar");
-  avatar.style.backgroundImage="";
-  avatar.textContent=signed?(name||"?").slice(0,1).toUpperCase():"?";
-  if(signed&&authUser.avatar){avatar.style.backgroundImage=`url("${authUser.avatar}")`;avatar.textContent="";}
+  const _e=id=>document.getElementById(id); // null-safe alias
+  const an=_e("accountName"); if(an) an.textContent=name;
+  const ae=_e("accountEmail"); if(ae) ae.textContent=email;
+  const tt=_e("teamTitle"); if(tt) tt.textContent=signed?(name.split(" ")[0]+"'s team"):"Personal team";
+  const ti=_e("teamInitial"); if(ti) ti.textContent=(name||"P").slice(0,1).toUpperCase();
+  const lb=_e("loginBtn"); if(lb) lb.textContent=signed?(LANG==="th"?"บัญชี":"Account"):(LANG==="th"?"เข้าสู่ระบบ":"Sign in");
+  const ld=_e("loginDetail"); if(ld) ld.textContent=signed
+    ?(githubState.connected?`${email} · GitHub ${githubState.selected_repo||"connected"}`:email)
+    :(LANG==="th"?"ยังไม่ได้เข้าสู่ระบบ เครดิตจะผูกกับบัญชีหลัง login":"Not signed in. Credits attach after login.");
+  const lr=_e("logoutRow"); if(lr) lr.style.display=signed?"grid":"none";
+  const lu=_e("logoutUser"); if(lu) lu.textContent=email;
+  const gb=_e("googleLoginBtn");
+  if(gb){
+    gb.disabled=!loginReady.google;
+    gb.textContent=loginReady.google?"Continue":(LANG==="th"?"ยังไม่พร้อม":"Not ready");
+    gb.closest(".login-row")?.classList.toggle("disabled",!loginReady.google);
+  }
+  const gc=_e("googleLoginCopy"); if(gc) gc.textContent=loginReady.google
+    ?(LANG==="th"?"ใช้ Gmail / Google account":"Use Gmail / Google account")
+    :(LANG==="th"?"รอเจ้าของระบบตั้ง Google OAuth ใน Cloudflare":"Waiting for Google OAuth setup in Cloudflare");
+  const ghb=_e("githubConnectBtn"); if(ghb) ghb.textContent=githubState.connected?(LANG==="th"?"Reconnect":"Reconnect"):(LANG==="th"?"Approve":"Approve");
+  const ghc=_e("githubConnectCopy"); if(ghc) ghc.textContent=githubState.connected
+    ?(githubState.selected_repo?`Connected: ${githubState.selected_repo}`:(LANG==="th"?"เลือก repo ที่จะให้ AI Mark เปิด PR":"Choose the repo AI Mark should open PRs against"))
+    :(LANG==="th"?"เชื่อม repo เพื่อเปิด PR / deploy งานแก้เว็บ":"Connect a repo to open PRs and deploy fixes");
+  const ghs=_e("githubSecurePanel"); if(ghs) ghs.style.display=githubState.connected?"none":"block";
+  const gha=_e("advancedGithubLink"); if(gha) gha.style.display=(!githubState.connected&&new URLSearchParams(location.search).get("dev")==="1")?"inline-block":"none";
+  const ght=_e("githubTokenPanel"); if(ght) ght.classList.toggle("on",!!githubAdvancedVisible&&!githubState.connected);
+  const ghr=_e("githubRepoPanel"); if(ghr) ghr.classList.toggle("on",!!githubState.connected);
+  const avatar=_e("userAvatar");
+  if(avatar){
+    avatar.style.backgroundImage="";
+    avatar.textContent=signed?(name||"?").slice(0,1).toUpperCase():"?";
+    if(signed&&authUser.avatar){avatar.style.backgroundImage=`url("${authUser.avatar}")`;avatar.textContent="";}
+  }
   updateCreditsUI();
 }
 
@@ -1140,6 +1261,27 @@ function updateCreditsUI(){
   $("creditNote").textContent=LANG==="th"
     ? `ยอดเครดิตปัจจุบัน ${label} credits${spent?` · ใช้ไปแล้ว ${spent.toLocaleString()}`:""} · ใช้สำหรับ lead scout, scan, improve และ handoff`
     : `Current balance ${label} credits${spent?` · ${spent.toLocaleString()} spent`:""} · Used for lead scout, scan, improve, and handoff`;
+  updateUpsellBtn();
+}
+
+function updateUpsellBtn(){
+  const card=document.getElementById("heroUpsell");
+  if(!card) return;
+  const btn=card.querySelector(".upsell-btn");
+  if(!btn) return;
+  const signed=!!authUser;
+  const hasCredits=signed&&Number(creditState&&creditState.balance||0)>0;
+  if(!signed){
+    btn.textContent=LANG==="th"?"เข้าสู่ระบบเพื่อสแกนเต็มรูปแบบ":"Sign in to run full scan";
+    btn.onclick=openLogin;
+  }else if(hasCredits){
+    btn.textContent=LANG==="th"?"สแกนเต็มรูปแบบ (1 เครดิต)":"Run full scan (1 credit)";
+    btn.onclick=heroDeepScan;
+  }else{
+    btn.textContent=LANG==="th"?"ซื้อเครดิต":"Buy credits";
+    btn.onclick=openCredits;
+  }
+  btn.disabled=false;
 }
 
 /* ---------- local agent bridge ---------- */
@@ -1150,27 +1292,30 @@ function updateAgentUI(){
   const runnerUnavailable=!!(connected&&agentInfo&&agentInfo.runner_available===false);
   const runnerPref={provider:selectedRunnerProvider,model:selectedRunnerModel};
   const runnerLabel=runnerLabelFromPreference(runnerPref);
-  $("topAgentState").textContent=connected?runnerShortLabel(runnerPref):"Disconnected";
-  $("sideAgentBadge").textContent=connected?"on":"off";
-  $("connectButton").textContent=connected?(LANG==="th"?"Connected":"Connected"):"Connect";
-  $("connectStatus").textContent=connected
-    ? (mode==="cloud"
-      ? (LANG==="th"?`เชื่อมต่อผ่าน secure cloud pairing แล้ว · ${runnerLabel}`:`Connected through secure cloud pairing · ${runnerLabel}`)
-      : (autoRun
-        ? (runnerUnavailable
-          ? (LANG==="th"?`bridge ต่อแล้ว แต่ยังไม่พบ runner command · ${runnerLabel}`:`Bridge connected, but runner command is not available · ${runnerLabel}`)
-          : (LANG==="th"?`เชื่อมต่อ Hermes auto runner แล้ว · ${runnerLabel}`:`Hermes auto runner connected · ${runnerLabel}`))
-        : (LANG==="th"?`เชื่อมต่อ local bridge แล้ว · ${runnerLabel}`:`Local bridge connected · ${runnerLabel}`)))
-    : (LANG==="th"?"ยังไม่ได้เชื่อมต่อ AI agent":"AI agent is not connected.");
-  $("agentDetail").textContent=connected
-    ? (runnerUnavailable
-      ? (LANG==="th"
-        ? `${runnerLabel} · ไม่พบ command "${agentInfo.runner_command||"runner"}" ในเครื่องนี้ ติดตั้ง/เปิด CLI หรือเลือก runner อื่น แล้ว start bridge ใหม่`
-        : `${runnerLabel} · command "${agentInfo.runner_command||"runner"}" was not found on this machine. Install/open the CLI or choose another runner, then restart the bridge.`)
-      : (agentInfo&&agentInfo.inbox
-      ? `${runnerLabel} · ${autoRun?"Auto-run on · ":""}${agentInfo.browser_live_session_available?"Live browser on · ":""}${agentInfo.inbox}`
-      : (mode==="cloud"?`${runnerLabel} · ${agentInfo.device_name||"Cloud paired bridge"}`:(LANG==="th"?`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser พร้อม · ":""}พร้อมรับงานเข้า inbox`:`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser ready · ":""}Ready to receive inbox tasks`))))
-    : (LANG==="th"?"กด Connect เพื่อสร้างลิงก์ approve แบบปุ่มเดียวให้ลูกค้า":"Press Connect to create a one-click approval link for the customer.");
+  const _e=id=>document.getElementById(id); // null-safe alias
+  const tas=_e("topAgentState"); if(tas) tas.textContent=connected?runnerShortLabel(runnerPref):"Disconnected";
+  const sab=_e("sideAgentBadge"); if(sab) sab.textContent=connected?"on":"off";
+  const cb=_e("connectButton"); if(cb) cb.textContent=connected?(LANG==="th"?"Connected":"Connected"):"Connect";
+  const cs=_e("connectStatus"); if(cs) cs.textContent=connected
+    ?(mode==="cloud"
+      ?(LANG==="th"?`เชื่อมต่อผ่าน secure cloud pairing แล้ว · ${runnerLabel}`:`Connected through secure cloud pairing · ${runnerLabel}`)
+      :(autoRun
+        ?(runnerUnavailable
+          ?(LANG==="th"?`bridge ต่อแล้ว แต่ยังไม่พบ runner command · ${runnerLabel}`:`Bridge connected, but runner command is not available · ${runnerLabel}`)
+          :(LANG==="th"?`เชื่อมต่อ Hermes auto runner แล้ว · ${runnerLabel}`:`Hermes auto runner connected · ${runnerLabel}`))
+        :(LANG==="th"?`เชื่อมต่อ local bridge แล้ว · ${runnerLabel}`:`Local bridge connected · ${runnerLabel}`)))
+    :(LANG==="th"?"ยังไม่ได้เชื่อมต่อ AI agent":"AI agent is not connected.");
+  const ad=_e("agentDetail"); if(ad) ad.textContent=connected
+    ?(runnerUnavailable
+      ?(LANG==="th"
+        ?`${runnerLabel} · ไม่พบ command "${agentInfo.runner_command||"runner"}" ในเครื่องนี้ ติดตั้ง/เปิด CLI หรือเลือก runner อื่น แล้ว start bridge ใหม่`
+        :`${runnerLabel} · command "${agentInfo.runner_command||"runner"}" was not found on this machine. Install/open the CLI or choose another runner, then restart the bridge.`)
+      :(agentInfo&&agentInfo.inbox
+        ?`${runnerLabel} · ${autoRun?"Auto-run on · ":""}${agentInfo.browser_live_session_available?"Live browser on · ":""}${agentInfo.inbox}`
+        :(mode==="cloud"?`${runnerLabel} · ${agentInfo.device_name||"Cloud paired bridge"}`
+          :(LANG==="th"?`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser พร้อม · ":""}พร้อมรับงานเข้า inbox`
+            :`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser ready · ":""}Ready to receive inbox tasks`))))
+    :(LANG==="th"?"กด Connect เพื่อสร้างลิงก์ approve แบบปุ่มเดียวให้ลูกค้า":"Press Connect to create a one-click approval link for the customer.");
 }
 
 async function checkAgent(){
@@ -3027,6 +3172,180 @@ async function runLeadScout(query){
   }
   if(params.get("github")==="installed") setTimeout(()=>showToast(LANG==="th"?"GitHub App เชื่อมแล้ว เลือก repo แล้วกด Save":"GitHub App connected. Select a repo and press Save."),500);
 })();
+
+/* --- Mobile drawer -------------------------------------------------------- */
+function toggleDrawer(){
+  const sb=document.getElementById("sidebar");
+  const ov=document.getElementById("drawerOverlay");
+  const hb=document.getElementById("hamburger");
+  if(!sb||!ov) return;
+  const open=sb.classList.toggle("drawer-open");
+  ov.classList.toggle("drawer-open",open);
+  if(hb) hb.setAttribute("aria-expanded",open?"true":"false");
+}
+function closeDrawer(){
+  const sb=document.getElementById("sidebar");
+  const ov=document.getElementById("drawerOverlay");
+  const hb=document.getElementById("hamburger");
+  if(sb) sb.classList.remove("drawer-open");
+  if(ov) ov.classList.remove("drawer-open");
+  if(hb) hb.setAttribute("aria-expanded","false");
+}
+// Close drawer when any sidebar nav-item is tapped
+(function(){
+  function wireDrawerClose(){
+    const sb=document.getElementById("sidebar");
+    if(!sb) return;
+    sb.addEventListener("click",function(e){
+      if(e.target.closest(".nav-item")||e.target.closest(".sidebar-foot")){
+        closeDrawer();
+      }
+    });
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",wireDrawerClose);
+  else wireDrawerClose();
+})();
+
+/* --- Phase 2: hero scan ------------------------------------------------- */
+async function heroScan(){
+  const urlEl=$("heroUrl"), btn=$("heroScanBtn"), status=$("heroStatus");
+  const results=$("heroResults"), upsell=$("heroUpsell");
+  const raw=(urlEl.value||"").trim();
+  if(!raw){
+    status.textContent=LANG==="th"?"กรุณาใส่ URL หรือชื่อเว็บ เช่น example.com":"Enter a domain or URL, e.g. example.com";
+    return;
+  }
+  // Normalize: prepend https:// if user entered a bare domain or www.example.com
+  let url=raw;
+  // Strip accidental leading // (e.g. "//example.com" → "example.com")
+  if(/^\/\//.test(url)) url=url.slice(2);
+  if(!/^https?:\/\//i.test(url)){
+    // Reject non-http schemes (javascript:, data:, ftp:, etc.)
+    if(/^[a-z][a-z0-9+.-]*:/i.test(url)){
+      status.textContent=LANG==="th"?"URL ไม่ถูกต้อง กรุณาใช้ https://":"Invalid URL — use https://";
+      return;
+    }
+    url="https://"+url;
+  }
+  // Validate via URL constructor — catches spaces, bare strings, malformed hosts
+  try{
+    const p=new URL(url);
+    // Must have a hostname with at least one dot (rules out bare words like "example")
+    if(!p.hostname||!p.hostname.includes(".")){
+      throw new Error("no hostname");
+    }
+  }catch{
+    status.textContent=LANG==="th"?"URL ไม่ถูกต้อง เช่น example.com หรือ https://example.com":"Invalid URL — try example.com or https://example.com";
+    return;
+  }
+  // Reflect the normalized URL back into the input so user sees what was scanned
+  urlEl.value=url;
+  btn.disabled=true;
+  results.style.display="none";
+  upsell.style.display="none";
+  status.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
+  try{
+    const r=await fetch("/api/bot-access",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})});
+    if(r.status===429){status.textContent=LANG==="th"?"คำขอมากเกินไป ลองใหม่ในอีกสักครู่":"Rate limited — try again shortly";return;}
+    const d=await r.json();
+    if(!r.ok||d.error){status.textContent=d.error||(LANG==="th"?"สแกนไม่สำเร็จ":"Scan failed");return;}
+    status.textContent="";
+    results.innerHTML=renderHeroBots(d);
+    results.style.display="";
+    upsell.style.display="";
+    updateUpsellBtn();
+  }catch(e){
+    status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
+  }finally{
+    btn.disabled=false;
+  }
+}
+function renderHeroBots(d){
+  // d.bots = array [{bot, engine, verdict, fetch, http_status, ...}]
+  // d.aimark_bot = {signed, fetch, http_status, ua} — separate top-level key
+  const bots=d.bots||[];
+  const rows=bots.map(b=>{
+    const ok=b.verdict==="can_read";
+    const blocked=b.verdict==="blocked"||b.fetch==="blocked";
+    const badge=ok?'<span class="rbadge green">✓ can read</span>':blocked?'<span class="rbadge red">✗ blocked</span>':`<span class="rbadge amber">⚠ ${esc(b.fetch||b.verdict)}</span>`;
+    return `<tr><td>${esc(b.bot)}</td><td>${badge}</td><td style="color:var(--muted);font-family:var(--mono);font-size:12px">${b.http_status||""}</td></tr>`;
+  });
+  const aib=d.aimark_bot;
+  if(aib){
+    const ok=aib.http_status>=200&&aib.http_status<300;
+    const badge=ok?'<span class="rbadge green">✓ can read</span>':`<span class="rbadge amber">⚠ ${esc(aib.fetch||"")}</span>`;
+    const signed=aib.signed?` <a class="verify-link" href="/verify" title="Verify this signature">signed · Ed25519</a>`:"";
+    rows.push(`<tr class="aibotauth-row"><td>AIBotAuth</td><td>${badge}${signed}</td><td style="color:var(--muted);font-family:var(--mono);font-size:12px">${aib.http_status||""}</td></tr>`);
+  }
+  const ts=d.checked_at?new Date(d.checked_at).toLocaleTimeString():"";
+  return `<div class="results-meta">${esc(d.url||"")}${ts?" · "+ts:""}</div>`+
+    `<table class="results-table"><thead><tr><th>Bot</th><th>Result</th><th>HTTP</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+async function heroDeepScan(){
+  const urlEl=$("heroUrl"), status=$("heroStatus");
+  const results=$("heroResults"), upsell=$("heroUpsell");
+  const url=(urlEl&&urlEl.value||"").trim();
+  if(!url) return;
+  const btn=upsell?upsell.querySelector(".upsell-btn"):null;
+  if(btn) btn.disabled=true;
+  if(status) status.textContent=LANG==="th"?"กำลังวิเคราะห์ด้วย AI…":"Running AI analysis…";
+  try{
+    const r=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url,lang:LANG})});
+    if(r.status===401){
+      if(status) status.textContent=LANG==="th"?"กรุณาเข้าสู่ระบบก่อน":"Please sign in first";
+      openLogin();
+      return;
+    }
+    if(r.status===402){
+      if(status) status.textContent=LANG==="th"?"เครดิตไม่เพียงพอ — กรุณาซื้อเพิ่ม":"Insufficient credits";
+      updateUpsellBtn();
+      return;
+    }
+    if(r.status===429){
+      if(status) status.textContent=LANG==="th"?"คำขอมากเกินไป ลองใหม่ในอีกสักครู่":"Rate limited — try again shortly";
+      return;
+    }
+    const d=await r.json();
+    if(!r.ok||d.error){
+      if(status) status.textContent=d.error||(LANG==="th"?"สแกนไม่สำเร็จ":"Scan failed");
+      return;
+    }
+    if(status) status.textContent="";
+    if(results){results.innerHTML=renderDeepScan(d);results.style.display="";}
+    // Refresh credits from server — authoritative after deduction
+    await loadSession();
+    updateUpsellBtn();
+  }catch(e){
+    if(status) status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
+function renderDeepScan(d){
+  const grade=esc(d.grade||"?");
+  const score=d.overall!=null?Math.round(d.overall):"?";
+  const gradeColor=score>=80?"#4ade80":score>=60?"#fbbf24":"#f87171";
+  const summary=esc(d.summary||"");
+  const cats=(d.categories||[]).map(c=>{
+    const cs=c.score!=null?Math.round(c.score):"?";
+    const cg=esc(c.grade||"");
+    const findings=(c.findings||[]).map(f=>{
+      const sev=String(f.severity||"").toLowerCase();
+      const sevColor=sev==="critical"?"#f87171":sev==="high"?"#fb923c":sev==="medium"?"#fbbf24":"#94a3b8";
+      return `<div class="df-finding"><span class="df-sev" style="color:${sevColor}">${esc(sev)}</span> <strong>${esc(f.title||f.check||"")}</strong>`+
+        (f.detail?`<p class="df-detail">${esc(f.detail)}</p>`:"")+
+        (f.fix?`<p class="df-fix">Fix: ${esc(f.fix)}</p>`:"")+`</div>`;
+    }).join("");
+    return `<div class="df-cat"><div class="df-cat-head"><span>${esc(c.name||"")}</span><span style="color:${gradeColor}">${cs} ${cg}</span></div>${findings}</div>`;
+  }).join("");
+  const ts=d.scanned_at?`<span style="color:var(--muted);font-size:11px">${esc(d.scanned_at)}</span>`:"";
+  return `<div class="df-wrap">`+
+    `<div class="df-score"><span class="df-grade" style="color:${gradeColor}">${grade}</span><span class="df-scorenum">${score}</span><span class="df-scorelabel">${LANG==="th"?"คะแนน AI Visibility":"AI Visibility Score"}</span></div>`+
+    (summary?`<p class="df-summary">${summary}</p>`:"")+
+    cats+ts+`</div>`;
+}
 </script>
 <script>
 /* Skills palette — renders action chips from the Hermes skill registry
@@ -3081,5 +3400,21 @@ async function runLeadScout(query){
   else document.addEventListener("DOMContentLoaded",load);
 })();
 </script>
+<!-- HIDDEN_FEATURES: DOM stubs — keep JS error-free while feature elements are in HTML comments above. Remove alongside the comment blocks above. -->
+<div style="display:none" aria-hidden="true">
+  <span id="topAgentState"></span>
+  <span id="sideAgentBadge"></span>
+  <button id="connectButton"></button>
+  <div id="connectStatus"></div>
+  <button id="githubConnectBtn"></button>
+  <span id="githubConnectCopy"></span>
+  <div id="githubSecurePanel"></div>
+  <button id="advancedGithubLink"></button>
+  <input id="githubTokenInput" type="password">
+  <div id="githubTokenPanel"></div>
+  <div id="githubRepoPanel"></div>
+  <select id="githubRepoSelect"></select>
+  <div id="githubRepoStatus"></div>
+</div>
 </body>
 </html>
