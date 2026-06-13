@@ -27,10 +27,10 @@
   :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:2px}
   code,pre{font-family:var(--mono)}
 
-  /* language switching: both languages live in the DOM */
-  [lang="en"]{display:none}
-  body.en [lang="en"]{display:revert}
-  body.en [lang="th"]{display:none}
+  /* language switching: scoped to .wrap so <html>/<body> are never targeted */
+  .wrap [lang="en"]{display:none}
+  body.en .wrap [lang="en"]{display:revert}
+  body.en .wrap [lang="th"]{display:none}
 
   /* top bar */
   .bar{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
