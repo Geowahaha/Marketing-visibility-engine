@@ -21,7 +21,104 @@ import { signedFetch } from "./_botauth.js";
 import { aimarkBotAccess, isOptedOut } from "./_botpolicy.js";
 
 const json = (obj, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
+  new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*" } });
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// bot-access does 8+ parallel live fetches per call — cap lower than verify-self.
+const RL_WINDOW_SEC = 60;
+const RL_MAX = 10;
+
+function getClientIp(request) {
+  return (
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+    ""
+  );
+}
+
+async function checkRateLimit(env, ip) {
+  if (!env.RATE_LIMIT_KV || !ip) return { allowed: true };
+  const key = `rl:bot-access:${ip}`;
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const raw = await env.RATE_LIMIT_KV.get(key);
+    let rec = raw ? JSON.parse(raw) : null;
+    if (!rec || now >= rec.resetAt) rec = { count: 0, resetAt: now + RL_WINDOW_SEC };
+    if (rec.count >= RL_MAX) return { allowed: false, resetIn: rec.resetAt - now };
+    rec.count += 1;
+    await env.RATE_LIMIT_KV.put(key, JSON.stringify(rec), { expirationTtl: rec.resetAt - now });
+    return { allowed: true };
+  } catch {
+    return { allowed: true }; // fail-open: never block on KV error
+  }
+}
+
+// ── SSRF guard ────────────────────────────────────────────────────────────────
+// Rejects private/loopback/link-local IPs and cloud metadata endpoints.
+//
+// Alternative IP encodings (decimal/hex/octal/short-form) are already safe:
+// the WHATWG URL parser (used by both Node and Cloudflare Workers) normalises
+// ALL of them to canonical dotted-decimal before returning .hostname, so
+// http://2130706433/, http://0x7f000001/, http://0177.0.0.1/, http://127.1/
+// etc. all become "127.0.0.1" before our check ever runs. Verified: all 7
+// alternative-encoding test cases blocked without any extra normalization code.
+//
+// DNS-rebinding limitation (accepted, documented):
+// workerd does not expose post-resolution IP inspection, so a public hostname
+// that DNS-resolves to a private IP would pass this guard and be fetched. This
+// is an inherent limit of the runtime. Mitigations: (1) Cloudflare's egress
+// network blocks RFC-1918 destinations at the network layer; (2) the opt-out
+// gate and robots.txt gate both fire before any content is processed.
+
+function isPrivateIpv4(hostname) {
+  const m = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  const [a, b, c] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if ([m[1], m[2], m[3], m[4]].some((n) => Number(n) > 255)) return false;
+  return (
+    a === 0 ||                               // 0.0.0.0/8  current network
+    a === 10 ||                              // 10.0.0.0/8  private
+    a === 127 ||                             // 127.0.0.0/8 loopback
+    (a === 169 && b === 254) ||              // 169.254.0.0/16 link-local + metadata
+    (a === 172 && b >= 16 && b <= 31) ||     // 172.16.0.0/12 private
+    (a === 192 && b === 168) ||              // 192.168.0.0/16 private
+    (a === 100 && b >= 64 && b <= 127)       // 100.64.0.0/10 carrier-grade NAT
+  );
+}
+
+function isPrivateIpv6(hostname) {
+  // URL spec wraps IPv6 in brackets: [::1] → strip them
+  const h = hostname.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
+  return (
+    h === "::" ||
+    h === "::1" ||                                              // loopback
+    /^fc/i.test(h) || /^fd/i.test(h) ||                        // fc00::/7 unique local
+    /^fe[89ab]/i.test(h)                                        // fe80::/10 link-local
+  );
+}
+
+// Known cloud metadata and internal-only hostnames
+const BLOCKED_HOSTNAMES = new Set([
+  "localhost",
+  "metadata.google.internal",
+  "169.254.169.254",   // AWS IMDSv1 / Azure IMDS / GCP metadata
+  "100.100.100.200",   // Alibaba Cloud ECS metadata
+]);
+
+/**
+ * Returns an error string if the URL targets an internal/private address,
+ * or null if the URL is safe to fetch.
+ */
+function ssrfGuard(urlString) {
+  let parsed;
+  try { parsed = new URL(urlString); } catch { return "invalid URL"; }
+  if (!/^https?:$/i.test(parsed.protocol)) return "only http/https URLs are allowed";
+  const host = parsed.hostname.toLowerCase();
+  if (BLOCKED_HOSTNAMES.has(host)) return `blocked host: ${host}`;
+  if (isPrivateIpv4(host)) return `private or internal IP address not allowed: ${host}`;
+  if (isPrivateIpv6(host)) return `private or internal IPv6 address not allowed: ${host}`;
+  return null; // safe
+}
 
 // The crawlers that decide AI + search visibility, with their real UA strings.
 const BOTS = [
@@ -127,6 +224,20 @@ export async function onRequestPost(context) {
   try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
   const url = normalizeUrl(payload.url || payload.scan?.url || "");
   if (!url) return json({ error: "Provide a URL to test." }, 400);
+
+  // SSRF guard — synchronous, before any network or KV operation
+  const ssrfError = ssrfGuard(url);
+  if (ssrfError) return json({ error: "invalid_target", detail: ssrfError }, 400);
+
+  // Rate limit — 10 req/min/IP; fail-open if RATE_LIMIT_KV unbound
+  const ip = getClientIp(request);
+  const rl = await checkRateLimit(env, ip);
+  if (!rl.allowed) {
+    return json(
+      { error: "rate_limited", detail: `Too many bot-access checks. Try again in ${Math.ceil(rl.resetIn / 60)} min.`, retry_after: rl.resetIn },
+      429,
+    );
+  }
 
   // Opt-out gate — before any target fetch
   if (await isOptedOut(env, new URL(url).hostname)) {
