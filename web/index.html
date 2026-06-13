@@ -135,7 +135,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 .composer-tool.model{border-right:0;max-width:190px}
 .send{width:42px;height:42px;border-radius:12px;border:0;background:#f2f2f2;color:#070707;font-size:19px;line-height:1}
 .send:disabled{opacity:.5;cursor:default}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
 .modal.on{display:flex}
 .modal-card{background:#191919;border:1px solid #343434;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.5);width:min(92vw,520px);padding:22px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
@@ -210,32 +210,58 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 .promo-row input{flex:1;min-width:0;background:#121212;border:1px solid #303030;border-radius:10px;color:#f1f1f1;padding:10px 12px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#f2f2f2;color:#050505;border-radius:999px;padding:10px 14px;font-size:13px;font-weight:650;opacity:0;pointer-events:none;transition:.2s;z-index:70;max-width:min(90vw,640px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
-@media(max-width:920px){
+/* Hamburger + topbar-brand: hidden on desktop, shown on mobile */
+.hamburger-btn{display:none;align-items:center;justify-content:center;width:38px;height:38px;border:0;background:transparent;color:#c0c8d0;border-radius:9px;flex-shrink:0;-webkit-tap-highlight-color:transparent}
+.hamburger-btn:hover{background:#151b22}
+.topbar-brand{display:none;align-items:center;gap:8px;min-width:0}
+.drawer-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:39;-webkit-tap-highlight-color:transparent}
+@media(max-width:767px){
+  /* Base */
   body{overflow:auto}
   .shell{height:auto;min-height:100vh;display:block}
-  .sidebar{height:auto;margin:0;border-radius:0;border-left:0;border-right:0;border-top:0}
-  .side-top{padding:12px 14px}
-  .team-row,.connect-card,.sidebar-foot{display:none}
-  .side-section{display:flex;gap:6px;overflow:auto;padding:0 10px 10px}
-  .side-label{display:none}
-  .nav-item{width:auto;grid-template-columns:20px auto;white-space:nowrap;min-height:36px}
-  .nav-badge{display:none}
-  .main{height:auto;min-height:calc(100vh - 118px)}
-  .topbar{padding:0 14px;gap:8px;flex-wrap:wrap;height:auto;min-height:62px;padding-top:10px;padding-bottom:10px}
-  .top-title span{display:none}
-  .status-strip{grid-template-columns:1fr;padding:12px 14px 0}
-  .runner-controls{grid-template-columns:1fr}
-  #thread{padding:14px 14px 20px;min-height:56vh}
-  .composer{position:sticky;bottom:0;padding:0 14px 14px}
-  .composer .box{flex-wrap:wrap}
-  .composer-tool{flex:1;max-width:none;border-right:0;border:1px solid #2c2c2c}
-  .composer input{flex-basis:calc(100% - 52px);padding-left:8px}
-  .msg{display:block}
-  .msg .who{min-width:0;margin-bottom:6px}
-  .bar{grid-template-columns:120px 1fr 38px}
+  /* Off-canvas sidebar drawer */
+  .sidebar{
+    position:fixed;top:0;left:0;
+    width:280px;height:100%;
+    margin:0;border-radius:0;
+    border:none;border-right:1px solid var(--line);
+    -webkit-transform:translateX(-100%);transform:translateX(-100%);
+    -webkit-transition:-webkit-transform .22s ease;transition:transform .22s ease;
+    z-index:40;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sidebar.drawer-open{-webkit-transform:translateX(0);transform:translateX(0)}
+  .drawer-overlay.drawer-open{display:block}
+  /* Mobile topbar */
+  .main{height:auto}
+  .topbar{height:56px;padding:0 12px;gap:8px;background:#050505}
+  .hamburger-btn{display:flex}
+  .topbar-brand{display:flex}
+  .top-title{display:none}
+  /* Hide non-essential topbar items on mobile — they're accessible in the drawer */
+  .topbar .pill{display:none}
+  .topbar .lang{display:none}
+  /* Workspace */
+  .workspace{overflow:visible}
+  .hero-wrap{flex:none;padding:36px 16px 56px;justify-content:flex-start;min-height:calc(100vh - 56px)}
+  .hero-headline{font-size:clamp(20px,7vw,28px);margin-bottom:10px}
+  .hero-sub{font-size:13px;margin-bottom:24px}
+  /* Scan box: stack on small screens */
+  .scan-box{-webkit-flex-direction:column;flex-direction:column;gap:8px}
+  /* 16px min prevents iOS Safari auto-zoom on input focus */
+  .scan-box input{font-size:16px;padding:14px 14px}
+  .scan-box button{width:100%;padding:16px;font-size:15px}
+  .hero-status{font-size:12px}
+  /* Results table: horizontal scroll on narrow viewports */
+  .hero-results{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .results-table{min-width:360px}
+  .upsell-card{padding:16px 14px}
+  /* Modals */
   .credit-grid{grid-template-columns:1fr}
-  .credit-card,.modal-card{border-radius:16px;padding:18px}
-  .pill.hide-mobile{display:none}
+  .credit-card,.modal-card{border-radius:16px;padding:18px;width:min(94vw,520px)}
+  .runner-controls{grid-template-columns:1fr}
+  .bar{grid-template-columns:110px 1fr 38px}
+  .payment-methods{grid-template-columns:1fr}
 }
 /* --- Phase 2: hero scan --- */
 .workspace{display:flex;flex-direction:column;overflow:hidden}
@@ -275,8 +301,9 @@ html[lang="en"] .hero-wrap [lang="en"],html[lang="en"] .upsell-card [lang="en"]{
 </style>
 </head>
 <body>
+<div id="drawerOverlay" class="drawer-overlay" onclick="closeDrawer()" aria-hidden="true"></div>
 <div class="shell">
-  <aside class="sidebar" aria-label="AI Mark navigation">
+  <aside class="sidebar" id="sidebar" aria-label="AIBotAuth navigation">
     <div class="side-top">
       <div class="mark">
         <div class="mark-glyph">AI</div>
@@ -362,6 +389,13 @@ html[lang="en"] .hero-wrap [lang="en"],html[lang="en"] .upsell-card [lang="en"]{
 
   <main class="main">
     <header class="topbar">
+      <button class="hamburger-btn" id="hamburger" onclick="toggleDrawer()" aria-label="Open menu" aria-expanded="false">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="topbar-brand">
+        <div class="mark-glyph" style="width:26px;height:26px;font-size:14px;flex-shrink:0">AI</div>
+        <span style="font-weight:700;font-size:14px;letter-spacing:-.01em;white-space:nowrap">AIBotAuth <span style="font-size:9px;font-weight:700;background:#e08a2e;color:#0b0f14;border-radius:4px;padding:2px 5px;vertical-align:middle">BETA</span></span>
+      </div>
       <div class="top-title">
         <b>AI Visibility Workspace</b>
         <span>Lead scout, scan, fix, and hand off to the local AI agent</span>
@@ -372,7 +406,9 @@ html[lang="en"] .hero-wrap [lang="en"],html[lang="en"] .upsell-card [lang="en"]{
       -->
       <button class="pill" onclick="openCredits()"><span>Credits</span><strong id="creditBalance">0</strong></button>
       <div class="lang"><button id="lEn" onclick="setLang('en')">EN</button><button id="lTh" class="on" onclick="setLang('th')">ไทย</button></div>
+      <!-- HIDDEN_FEATURES: Cockpit link — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <a class="btn" href="/cockpit.html" title="Owner Cockpit — ภาพรวมบริษัท">Cockpit</a>
+      -->
       <button class="btn" id="loginBtn" onclick="openLogin()">Sign in</button>
       <!-- HIDDEN_FEATURES: topbar Connect button — hidden for now, recoverable. --><!--
       <button class="btn solid" onclick="connectAgent()">Connect</button>
@@ -3102,6 +3138,39 @@ async function runLeadScout(query){
     }
   }
   if(params.get("github")==="installed") setTimeout(()=>showToast(LANG==="th"?"GitHub App เชื่อมแล้ว เลือก repo แล้วกด Save":"GitHub App connected. Select a repo and press Save."),500);
+})();
+
+/* --- Mobile drawer -------------------------------------------------------- */
+function toggleDrawer(){
+  const sb=document.getElementById("sidebar");
+  const ov=document.getElementById("drawerOverlay");
+  const hb=document.getElementById("hamburger");
+  if(!sb||!ov) return;
+  const open=sb.classList.toggle("drawer-open");
+  ov.classList.toggle("drawer-open",open);
+  if(hb) hb.setAttribute("aria-expanded",open?"true":"false");
+}
+function closeDrawer(){
+  const sb=document.getElementById("sidebar");
+  const ov=document.getElementById("drawerOverlay");
+  const hb=document.getElementById("hamburger");
+  if(sb) sb.classList.remove("drawer-open");
+  if(ov) ov.classList.remove("drawer-open");
+  if(hb) hb.setAttribute("aria-expanded","false");
+}
+// Close drawer when any sidebar nav-item is tapped
+(function(){
+  function wireDrawerClose(){
+    const sb=document.getElementById("sidebar");
+    if(!sb) return;
+    sb.addEventListener("click",function(e){
+      if(e.target.closest(".nav-item")||e.target.closest(".sidebar-foot")){
+        closeDrawer();
+      }
+    });
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",wireDrawerClose);
+  else wireDrawerClose();
 })();
 
 /* --- Phase 2: hero scan ------------------------------------------------- */
