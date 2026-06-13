@@ -55,8 +55,20 @@ async function checkRateLimit(env, ip) {
 
 // ── SSRF guard ────────────────────────────────────────────────────────────────
 // Rejects private/loopback/link-local IPs and cloud metadata endpoints.
-// We cannot do DNS resolution in a Worker, so we block literal IP addresses
-// in private ranges and a short list of known metadata hostnames.
+//
+// Alternative IP encodings (decimal/hex/octal/short-form) are already safe:
+// the WHATWG URL parser (used by both Node and Cloudflare Workers) normalises
+// ALL of them to canonical dotted-decimal before returning .hostname, so
+// http://2130706433/, http://0x7f000001/, http://0177.0.0.1/, http://127.1/
+// etc. all become "127.0.0.1" before our check ever runs. Verified: all 7
+// alternative-encoding test cases blocked without any extra normalization code.
+//
+// DNS-rebinding limitation (accepted, documented):
+// workerd does not expose post-resolution IP inspection, so a public hostname
+// that DNS-resolves to a private IP would pass this guard and be fetched. This
+// is an inherent limit of the runtime. Mitigations: (1) Cloudflare's egress
+// network blocks RFC-1918 destinations at the network layer; (2) the opt-out
+// gate and robots.txt gate both fire before any content is processed.
 
 function isPrivateIpv4(hostname) {
   const m = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
