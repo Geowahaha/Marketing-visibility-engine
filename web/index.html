@@ -1083,38 +1083,40 @@ function updateAccountUI(){
   const signed=!!authUser;
   const name=signed?(authUser.name||authUser.email||"Signed in"):"Guest";
   const email=signed?(authUser.email||authUser.provider||"Signed in"):"Not signed in";
-  $("accountName").textContent=name;
-  $("accountEmail").textContent=email;
-  $("teamTitle").textContent=signed?(name.split(" ")[0]+"'s team"):"Personal team";
-  $("teamInitial").textContent=(name||"P").slice(0,1).toUpperCase();
-  $("loginBtn").textContent=signed?(LANG==="th"?"บัญชี":"Account"):(LANG==="th"?"เข้าสู่ระบบ":"Sign in");
-  $("loginDetail").textContent=signed
-    ? (githubState.connected
-      ? `${email} · GitHub ${githubState.selected_repo||"connected"}`
-      : email)
-    : (LANG==="th"?"ยังไม่ได้เข้าสู่ระบบ เครดิตจะผูกกับบัญชีหลัง login":"Not signed in. Credits attach after login.");
-  $("logoutRow").style.display=signed?"grid":"none";
-  $("logoutUser").textContent=email;
-  $("googleLoginBtn").disabled=!loginReady.google;
-  $("googleLoginBtn").textContent=loginReady.google?"Continue":(LANG==="th"?"ยังไม่พร้อม":"Not ready");
-  $("googleLoginCopy").textContent=loginReady.google
-    ? (LANG==="th"?"ใช้ Gmail / Google account":"Use Gmail / Google account")
-    : (LANG==="th"?"รอเจ้าของระบบตั้ง Google OAuth ใน Cloudflare":"Waiting for Google OAuth setup in Cloudflare");
-  $("googleLoginBtn").closest(".login-row").classList.toggle("disabled",!loginReady.google);
-  $("githubConnectBtn").textContent=githubState.connected?(LANG==="th"?"Reconnect":"Reconnect"):(LANG==="th"?"Approve":"Approve");
-  $("githubConnectCopy").textContent=githubState.connected
-    ? (githubState.selected_repo
-      ? `Connected: ${githubState.selected_repo}`
-      : (LANG==="th"?"เลือก repo ที่จะให้ AI Mark เปิด PR":"Choose the repo AI Mark should open PRs against"))
-    : (LANG==="th"?"เชื่อม repo เพื่อเปิด PR / deploy งานแก้เว็บ":"Connect a repo to open PRs and deploy fixes");
-  $("githubSecurePanel").style.display=githubState.connected?"none":"block";
-  $("advancedGithubLink").style.display=(!githubState.connected&&new URLSearchParams(location.search).get("dev")==="1")?"inline-block":"none";
-  $("githubTokenPanel").classList.toggle("on",!!githubAdvancedVisible&&!githubState.connected);
-  $("githubRepoPanel").classList.toggle("on",!!githubState.connected);
-  const avatar=$("userAvatar");
-  avatar.style.backgroundImage="";
-  avatar.textContent=signed?(name||"?").slice(0,1).toUpperCase():"?";
-  if(signed&&authUser.avatar){avatar.style.backgroundImage=`url("${authUser.avatar}")`;avatar.textContent="";}
+  const _e=id=>document.getElementById(id); // null-safe alias
+  const an=_e("accountName"); if(an) an.textContent=name;
+  const ae=_e("accountEmail"); if(ae) ae.textContent=email;
+  const tt=_e("teamTitle"); if(tt) tt.textContent=signed?(name.split(" ")[0]+"'s team"):"Personal team";
+  const ti=_e("teamInitial"); if(ti) ti.textContent=(name||"P").slice(0,1).toUpperCase();
+  const lb=_e("loginBtn"); if(lb) lb.textContent=signed?(LANG==="th"?"บัญชี":"Account"):(LANG==="th"?"เข้าสู่ระบบ":"Sign in");
+  const ld=_e("loginDetail"); if(ld) ld.textContent=signed
+    ?(githubState.connected?`${email} · GitHub ${githubState.selected_repo||"connected"}`:email)
+    :(LANG==="th"?"ยังไม่ได้เข้าสู่ระบบ เครดิตจะผูกกับบัญชีหลัง login":"Not signed in. Credits attach after login.");
+  const lr=_e("logoutRow"); if(lr) lr.style.display=signed?"grid":"none";
+  const lu=_e("logoutUser"); if(lu) lu.textContent=email;
+  const gb=_e("googleLoginBtn");
+  if(gb){
+    gb.disabled=!loginReady.google;
+    gb.textContent=loginReady.google?"Continue":(LANG==="th"?"ยังไม่พร้อม":"Not ready");
+    gb.closest(".login-row")?.classList.toggle("disabled",!loginReady.google);
+  }
+  const gc=_e("googleLoginCopy"); if(gc) gc.textContent=loginReady.google
+    ?(LANG==="th"?"ใช้ Gmail / Google account":"Use Gmail / Google account")
+    :(LANG==="th"?"รอเจ้าของระบบตั้ง Google OAuth ใน Cloudflare":"Waiting for Google OAuth setup in Cloudflare");
+  const ghb=_e("githubConnectBtn"); if(ghb) ghb.textContent=githubState.connected?(LANG==="th"?"Reconnect":"Reconnect"):(LANG==="th"?"Approve":"Approve");
+  const ghc=_e("githubConnectCopy"); if(ghc) ghc.textContent=githubState.connected
+    ?(githubState.selected_repo?`Connected: ${githubState.selected_repo}`:(LANG==="th"?"เลือก repo ที่จะให้ AI Mark เปิด PR":"Choose the repo AI Mark should open PRs against"))
+    :(LANG==="th"?"เชื่อม repo เพื่อเปิด PR / deploy งานแก้เว็บ":"Connect a repo to open PRs and deploy fixes");
+  const ghs=_e("githubSecurePanel"); if(ghs) ghs.style.display=githubState.connected?"none":"block";
+  const gha=_e("advancedGithubLink"); if(gha) gha.style.display=(!githubState.connected&&new URLSearchParams(location.search).get("dev")==="1")?"inline-block":"none";
+  const ght=_e("githubTokenPanel"); if(ght) ght.classList.toggle("on",!!githubAdvancedVisible&&!githubState.connected);
+  const ghr=_e("githubRepoPanel"); if(ghr) ghr.classList.toggle("on",!!githubState.connected);
+  const avatar=_e("userAvatar");
+  if(avatar){
+    avatar.style.backgroundImage="";
+    avatar.textContent=signed?(name||"?").slice(0,1).toUpperCase():"?";
+    if(signed&&authUser.avatar){avatar.style.backgroundImage=`url("${authUser.avatar}")`;avatar.textContent="";}
+  }
   updateCreditsUI();
 }
 
@@ -1221,27 +1223,30 @@ function updateAgentUI(){
   const runnerUnavailable=!!(connected&&agentInfo&&agentInfo.runner_available===false);
   const runnerPref={provider:selectedRunnerProvider,model:selectedRunnerModel};
   const runnerLabel=runnerLabelFromPreference(runnerPref);
-  $("topAgentState").textContent=connected?runnerShortLabel(runnerPref):"Disconnected";
-  $("sideAgentBadge").textContent=connected?"on":"off";
-  $("connectButton").textContent=connected?(LANG==="th"?"Connected":"Connected"):"Connect";
-  $("connectStatus").textContent=connected
-    ? (mode==="cloud"
-      ? (LANG==="th"?`เชื่อมต่อผ่าน secure cloud pairing แล้ว · ${runnerLabel}`:`Connected through secure cloud pairing · ${runnerLabel}`)
-      : (autoRun
-        ? (runnerUnavailable
-          ? (LANG==="th"?`bridge ต่อแล้ว แต่ยังไม่พบ runner command · ${runnerLabel}`:`Bridge connected, but runner command is not available · ${runnerLabel}`)
-          : (LANG==="th"?`เชื่อมต่อ Hermes auto runner แล้ว · ${runnerLabel}`:`Hermes auto runner connected · ${runnerLabel}`))
-        : (LANG==="th"?`เชื่อมต่อ local bridge แล้ว · ${runnerLabel}`:`Local bridge connected · ${runnerLabel}`)))
-    : (LANG==="th"?"ยังไม่ได้เชื่อมต่อ AI agent":"AI agent is not connected.");
-  $("agentDetail").textContent=connected
-    ? (runnerUnavailable
-      ? (LANG==="th"
-        ? `${runnerLabel} · ไม่พบ command "${agentInfo.runner_command||"runner"}" ในเครื่องนี้ ติดตั้ง/เปิด CLI หรือเลือก runner อื่น แล้ว start bridge ใหม่`
-        : `${runnerLabel} · command "${agentInfo.runner_command||"runner"}" was not found on this machine. Install/open the CLI or choose another runner, then restart the bridge.`)
-      : (agentInfo&&agentInfo.inbox
-      ? `${runnerLabel} · ${autoRun?"Auto-run on · ":""}${agentInfo.browser_live_session_available?"Live browser on · ":""}${agentInfo.inbox}`
-      : (mode==="cloud"?`${runnerLabel} · ${agentInfo.device_name||"Cloud paired bridge"}`:(LANG==="th"?`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser พร้อม · ":""}พร้อมรับงานเข้า inbox`:`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser ready · ":""}Ready to receive inbox tasks`))))
-    : (LANG==="th"?"กด Connect เพื่อสร้างลิงก์ approve แบบปุ่มเดียวให้ลูกค้า":"Press Connect to create a one-click approval link for the customer.");
+  const _e=id=>document.getElementById(id); // null-safe alias
+  const tas=_e("topAgentState"); if(tas) tas.textContent=connected?runnerShortLabel(runnerPref):"Disconnected";
+  const sab=_e("sideAgentBadge"); if(sab) sab.textContent=connected?"on":"off";
+  const cb=_e("connectButton"); if(cb) cb.textContent=connected?(LANG==="th"?"Connected":"Connected"):"Connect";
+  const cs=_e("connectStatus"); if(cs) cs.textContent=connected
+    ?(mode==="cloud"
+      ?(LANG==="th"?`เชื่อมต่อผ่าน secure cloud pairing แล้ว · ${runnerLabel}`:`Connected through secure cloud pairing · ${runnerLabel}`)
+      :(autoRun
+        ?(runnerUnavailable
+          ?(LANG==="th"?`bridge ต่อแล้ว แต่ยังไม่พบ runner command · ${runnerLabel}`:`Bridge connected, but runner command is not available · ${runnerLabel}`)
+          :(LANG==="th"?`เชื่อมต่อ Hermes auto runner แล้ว · ${runnerLabel}`:`Hermes auto runner connected · ${runnerLabel}`))
+        :(LANG==="th"?`เชื่อมต่อ local bridge แล้ว · ${runnerLabel}`:`Local bridge connected · ${runnerLabel}`)))
+    :(LANG==="th"?"ยังไม่ได้เชื่อมต่อ AI agent":"AI agent is not connected.");
+  const ad=_e("agentDetail"); if(ad) ad.textContent=connected
+    ?(runnerUnavailable
+      ?(LANG==="th"
+        ?`${runnerLabel} · ไม่พบ command "${agentInfo.runner_command||"runner"}" ในเครื่องนี้ ติดตั้ง/เปิด CLI หรือเลือก runner อื่น แล้ว start bridge ใหม่`
+        :`${runnerLabel} · command "${agentInfo.runner_command||"runner"}" was not found on this machine. Install/open the CLI or choose another runner, then restart the bridge.`)
+      :(agentInfo&&agentInfo.inbox
+        ?`${runnerLabel} · ${autoRun?"Auto-run on · ":""}${agentInfo.browser_live_session_available?"Live browser on · ":""}${agentInfo.inbox}`
+        :(mode==="cloud"?`${runnerLabel} · ${agentInfo.device_name||"Cloud paired bridge"}`
+          :(LANG==="th"?`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser พร้อม · ":""}พร้อมรับงานเข้า inbox`
+            :`${runnerLabel} · ${agentInfo.browser_live_session_available?"live browser ready · ":""}Ready to receive inbox tasks`))))
+    :(LANG==="th"?"กด Connect เพื่อสร้างลิงก์ approve แบบปุ่มเดียวให้ลูกค้า":"Press Connect to create a one-click approval link for the customer.");
 }
 
 async function checkAgent(){
@@ -3211,6 +3216,8 @@ function renderHeroBots(d){
   <button id="githubConnectBtn"></button>
   <span id="githubConnectCopy"></span>
   <div id="githubSecurePanel"></div>
+  <button id="advancedGithubLink"></button>
+  <input id="githubTokenInput" type="password">
   <div id="githubTokenPanel"></div>
   <div id="githubRepoPanel"></div>
   <select id="githubRepoSelect"></select>
