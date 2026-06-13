@@ -238,9 +238,9 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
   .hamburger-btn{display:flex}
   .topbar-brand{display:flex}
   .top-title{display:none}
-  /* Hide non-essential topbar items on mobile — they're accessible in the drawer */
+  /* Hide non-essential topbar items on mobile */
   .topbar .pill{display:none}
-  .topbar .lang{display:none}
+  /* .lang stays visible on mobile so users can switch TH↔EN */
   /* Workspace */
   .workspace{overflow:visible}
   .hero-wrap{flex:none;padding:36px 16px 56px;justify-content:flex-start;min-height:calc(100vh - 56px)}
@@ -425,7 +425,7 @@ html[lang="en"] .hero-wrap [lang="en"],html[lang="en"] .upsell-card [lang="en"]{
           <p lang="en" class="hero-sub">Free scan — 8 real AI crawlers including AIBotAuth, signed with Ed25519</p>
         </div>
         <div class="scan-box">
-          <input id="heroUrl" type="url" value="https://www.successcasting.com" placeholder="https://yourwebsite.com" autocomplete="off" spellcheck="false">
+          <input id="heroUrl" type="text" value="https://www.successcasting.com" placeholder="example.com or https://example.com" autocomplete="off" spellcheck="false">
           <button id="heroScanBtn" onclick="heroScan()">Scan</button>
         </div>
         <div id="heroStatus" class="hero-status"></div>
@@ -3177,11 +3177,36 @@ function closeDrawer(){
 async function heroScan(){
   const urlEl=$("heroUrl"), btn=$("heroScanBtn"), status=$("heroStatus");
   const results=$("heroResults"), upsell=$("heroUpsell");
-  const url=(urlEl.value||"").trim();
-  if(!url||!/^https?:\/\/.+/.test(url)){
-    status.textContent=LANG==="th"?"กรุณาใส่ URL ที่ถูกต้อง เช่น https://example.com":"Enter a valid URL, e.g. https://example.com";
+  const raw=(urlEl.value||"").trim();
+  if(!raw){
+    status.textContent=LANG==="th"?"กรุณาใส่ URL หรือชื่อเว็บ เช่น example.com":"Enter a domain or URL, e.g. example.com";
     return;
   }
+  // Normalize: prepend https:// if user entered a bare domain or www.example.com
+  let url=raw;
+  // Strip accidental leading // (e.g. "//example.com" → "example.com")
+  if(/^\/\//.test(url)) url=url.slice(2);
+  if(!/^https?:\/\//i.test(url)){
+    // Reject non-http schemes (javascript:, data:, ftp:, etc.)
+    if(/^[a-z][a-z0-9+.-]*:/i.test(url)){
+      status.textContent=LANG==="th"?"URL ไม่ถูกต้อง กรุณาใช้ https://":"Invalid URL — use https://";
+      return;
+    }
+    url="https://"+url;
+  }
+  // Validate via URL constructor — catches spaces, bare strings, malformed hosts
+  try{
+    const p=new URL(url);
+    // Must have a hostname with at least one dot (rules out bare words like "example")
+    if(!p.hostname||!p.hostname.includes(".")){
+      throw new Error("no hostname");
+    }
+  }catch{
+    status.textContent=LANG==="th"?"URL ไม่ถูกต้อง เช่น example.com หรือ https://example.com":"Invalid URL — try example.com or https://example.com";
+    return;
+  }
+  // Reflect the normalized URL back into the input so user sees what was scanned
+  urlEl.value=url;
   btn.disabled=true;
   results.style.display="none";
   upsell.style.display="none";
