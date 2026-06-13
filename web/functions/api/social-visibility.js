@@ -13,6 +13,8 @@
 
 import { callLLM } from "./_llm.js";
 import { signedFetch } from "./_botauth.js";
+import { paid } from "./_auth.js";
+import { checkRateLimit, rl429 } from "./_ratelimit.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -147,6 +149,17 @@ export async function onRequestPost({ request, env }) {
   if (!env.ANTHROPIC_API_KEY && !env.GROQ_API_KEY && !env.KIMI_API_KEY) {
     return json({ error: "Server has no LLM key (set ANTHROPIC_API_KEY, GROQ_API_KEY, or KIMI_API_KEY)." }, 500);
   }
+
+  // Layer 1: rate limit — 5/min/IP, fail-CLOSED
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const rl = await checkRateLimit(env, ip, { max: 5, endpoint: "social-visibility" });
+  if (!rl.allowed) return rl429(rl.resetIn);
+
+  // Layer 2: paid gate — social analysis calls Claude; free users get 402
+  if (!(await paid(request, env))) {
+    return json({ error: "social_visibility_requires_paid_access", upgrade_required: true, checkout_url: "/?modal=credits" }, 402);
+  }
+
   let body;
   try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
   const brandName = String(body.brand_name || "").trim();

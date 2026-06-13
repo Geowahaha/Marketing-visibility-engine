@@ -146,7 +146,8 @@ async function checkRateLimit(env, ip) {
   if (isRateLimitBypassed(env, ip)) {
     return { allowed: true, remaining: max, resetIn: 0, enforced: false, bypassed: true };
   }
-  if (!env.RATE_LIMIT_KV || !ip) return { allowed: true, remaining: max, resetIn: 0, enforced: false };
+  // Fail-CLOSED: no KV binding = deny, not allow (never spend LLM tokens ungated)
+  if (!env.RATE_LIMIT_KV || !ip) return { allowed: false, remaining: 0, resetIn: 60, enforced: false, reason: "kv_unbound" };
   const key = `rl:${ip}`;
   const now = Math.floor(Date.now() / 1000);
   try {

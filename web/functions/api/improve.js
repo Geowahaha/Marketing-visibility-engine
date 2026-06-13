@@ -29,6 +29,7 @@
 
 import { callLLM } from "./_llm.js";
 import { paidStatus } from "./_auth.js";
+import { checkRateLimit, rl429 } from "./_ratelimit.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const UA =
@@ -496,6 +497,11 @@ export async function onRequestPost(context) {
     return json({ error: "Server has no LLM key (set ANTHROPIC_API_KEY, GROQ_API_KEY, or KIMI_API_KEY)." }, 500);
   }
 
+  // Layer 1: rate limit — 3/min/IP, fail-CLOSED (expensive: up to 20k tokens with retry)
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const rl = await checkRateLimit(env, ip, { max: 3, endpoint: "improve" });
+  if (!rl.allowed) return rl429(rl.resetIn);
+
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
 
@@ -503,7 +509,11 @@ export async function onRequestPost(context) {
   const url = normalizeUrl(payload.url || scan.url || "");
   if (!url) return json({ error: "Provide a scanned URL to improve." }, 400);
 
+  // Layer 2: paid gate BEFORE any fetch or LLM call — never spend tokens on anon requests
   const status = await paidStatus(request, env);
+  if (!status.paid) {
+    return json({ error: "improve_requires_paid_access", upgrade_required: true, checkout_url: "/?modal=credits", reason: status.reason }, 402);
+  }
 
   // Pull the live homepage so artifacts are tailored to the real content.
   const home = await tryFetchText(url, 12000);

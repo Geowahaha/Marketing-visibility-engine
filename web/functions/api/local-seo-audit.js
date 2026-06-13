@@ -22,6 +22,7 @@
 import { paidStatus } from "./_auth.js";
 import { checkCreditBalance, consumeCredits, creditCost } from "./_credits.js";
 import { callLLM } from "./_llm.js";
+import { checkRateLimit, rl429 } from "./_ratelimit.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -185,6 +186,12 @@ const HONEST_NOTE =
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+
+  // Rate limit — 5/min/IP, fail-CLOSED (LLM is behind paid gate but paid users can still spam)
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const rl = await checkRateLimit(env, ip, { max: 5, endpoint: "local-seo-audit" });
+  if (!rl.allowed) return rl429(rl.resetIn);
+
   let payload;
   try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
 
