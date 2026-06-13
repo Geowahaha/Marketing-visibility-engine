@@ -294,6 +294,18 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 .upsell-btn:hover{filter:brightness(1.1)}
 .hero-footer{width:100%;max-width:660px;margin-top:28px;text-align:center;font-size:11px;color:var(--muted)}
 .hero-footer a{color:inherit}
+.df-wrap{width:100%;max-width:660px;margin-top:18px;display:flex;flex-direction:column;gap:14px}
+.df-score{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.df-grade{font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:700;line-height:1}
+.df-scorenum{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700}
+.df-scorelabel{font-size:12px;color:var(--muted)}
+.df-summary{font-size:13px;color:var(--muted);margin:0;line-height:1.6}
+.df-cat{background:#0d1118;border:1px solid var(--line2);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.df-cat-head{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px}
+.df-finding{font-size:12px;padding:6px 0;border-top:1px solid var(--line)}
+.df-sev{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;margin-right:4px}
+.df-detail{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.df-fix{margin:4px 0 0;color:#4ade80;font-size:12px;line-height:1.5}
 /* bilingual hero — html[lang] is set by setLang(); default html lang="th" */
 .hero-wrap [lang="en"],.upsell-card [lang="en"]{display:none}
 html[lang="en"] .hero-wrap [lang="th"],html[lang="en"] .upsell-card [lang="th"]{display:none}
@@ -1249,6 +1261,27 @@ function updateCreditsUI(){
   $("creditNote").textContent=LANG==="th"
     ? `ยอดเครดิตปัจจุบัน ${label} credits${spent?` · ใช้ไปแล้ว ${spent.toLocaleString()}`:""} · ใช้สำหรับ lead scout, scan, improve และ handoff`
     : `Current balance ${label} credits${spent?` · ${spent.toLocaleString()} spent`:""} · Used for lead scout, scan, improve, and handoff`;
+  updateUpsellBtn();
+}
+
+function updateUpsellBtn(){
+  const card=document.getElementById("heroUpsell");
+  if(!card) return;
+  const btn=card.querySelector(".upsell-btn");
+  if(!btn) return;
+  const signed=!!authUser;
+  const hasCredits=signed&&Number(creditState&&creditState.balance||0)>0;
+  if(!signed){
+    btn.textContent=LANG==="th"?"เข้าสู่ระบบเพื่อสแกนเต็มรูปแบบ":"Sign in to run full scan";
+    btn.onclick=openLogin;
+  }else if(hasCredits){
+    btn.textContent=LANG==="th"?"สแกนเต็มรูปแบบ (1 เครดิต)":"Run full scan (1 credit)";
+    btn.onclick=heroDeepScan;
+  }else{
+    btn.textContent=LANG==="th"?"ซื้อเครดิต":"Buy credits";
+    btn.onclick=openCredits;
+  }
+  btn.disabled=false;
 }
 
 /* ---------- local agent bridge ---------- */
@@ -3220,6 +3253,7 @@ async function heroScan(){
     results.innerHTML=renderHeroBots(d);
     results.style.display="";
     upsell.style.display="";
+    updateUpsellBtn();
   }catch(e){
     status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
   }finally{
@@ -3246,6 +3280,71 @@ function renderHeroBots(d){
   const ts=d.checked_at?new Date(d.checked_at).toLocaleTimeString():"";
   return `<div class="results-meta">${esc(d.url||"")}${ts?" · "+ts:""}</div>`+
     `<table class="results-table"><thead><tr><th>Bot</th><th>Result</th><th>HTTP</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+async function heroDeepScan(){
+  const urlEl=$("heroUrl"), status=$("heroStatus");
+  const results=$("heroResults"), upsell=$("heroUpsell");
+  const url=(urlEl&&urlEl.value||"").trim();
+  if(!url) return;
+  const btn=upsell?upsell.querySelector(".upsell-btn"):null;
+  if(btn) btn.disabled=true;
+  if(status) status.textContent=LANG==="th"?"กำลังวิเคราะห์ด้วย AI…":"Running AI analysis…";
+  try{
+    const r=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url,lang:LANG})});
+    if(r.status===401){
+      if(status) status.textContent=LANG==="th"?"กรุณาเข้าสู่ระบบก่อน":"Please sign in first";
+      openLogin();
+      return;
+    }
+    if(r.status===402){
+      if(status) status.textContent=LANG==="th"?"เครดิตไม่เพียงพอ — กรุณาซื้อเพิ่ม":"Insufficient credits";
+      updateUpsellBtn();
+      return;
+    }
+    if(r.status===429){
+      if(status) status.textContent=LANG==="th"?"คำขอมากเกินไป ลองใหม่ในอีกสักครู่":"Rate limited — try again shortly";
+      return;
+    }
+    const d=await r.json();
+    if(!r.ok||d.error){
+      if(status) status.textContent=d.error||(LANG==="th"?"สแกนไม่สำเร็จ":"Scan failed");
+      return;
+    }
+    if(status) status.textContent="";
+    if(results){results.innerHTML=renderDeepScan(d);results.style.display="";}
+    // Refresh credits from server — authoritative after deduction
+    await loadSession();
+    updateUpsellBtn();
+  }catch(e){
+    if(status) status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
+function renderDeepScan(d){
+  const grade=esc(d.grade||"?");
+  const score=d.overall!=null?Math.round(d.overall):"?";
+  const gradeColor=score>=80?"#4ade80":score>=60?"#fbbf24":"#f87171";
+  const summary=esc(d.summary||"");
+  const cats=(d.categories||[]).map(c=>{
+    const cs=c.score!=null?Math.round(c.score):"?";
+    const cg=esc(c.grade||"");
+    const findings=(c.findings||[]).map(f=>{
+      const sev=String(f.severity||"").toLowerCase();
+      const sevColor=sev==="critical"?"#f87171":sev==="high"?"#fb923c":sev==="medium"?"#fbbf24":"#94a3b8";
+      return `<div class="df-finding"><span class="df-sev" style="color:${sevColor}">${esc(sev)}</span> <strong>${esc(f.title||f.check||"")}</strong>`+
+        (f.detail?`<p class="df-detail">${esc(f.detail)}</p>`:"")+
+        (f.fix?`<p class="df-fix">Fix: ${esc(f.fix)}</p>`:"")+`</div>`;
+    }).join("");
+    return `<div class="df-cat"><div class="df-cat-head"><span>${esc(c.name||"")}</span><span style="color:${gradeColor}">${cs} ${cg}</span></div>${findings}</div>`;
+  }).join("");
+  const ts=d.scanned_at?`<span style="color:var(--muted);font-size:11px">${esc(d.scanned_at)}</span>`:"";
+  return `<div class="df-wrap">`+
+    `<div class="df-score"><span class="df-grade" style="color:${gradeColor}">${grade}</span><span class="df-scorenum">${score}</span><span class="df-scorelabel">${LANG==="th"?"คะแนน AI Visibility":"AI Visibility Score"}</span></div>`+
+    (summary?`<p class="df-summary">${summary}</p>`:"")+
+    cats+ts+`</div>`;
 }
 </script>
 <script>
