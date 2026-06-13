@@ -3,30 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Mark — AI Visibility Agent</title>
-<meta name="description" content="AI Mark scans weak websites, finds Thai SME leads, prepares outreach, and hands work to a local AI agent.">
+<title>AIBotAuth — AI Visibility Check</title>
+<meta name="description" content="Check if AI bots can read your website. Free scan with 8 real AI crawlers including AIBotAuth, signed with Ed25519.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#050505;
-  --rail:#090909;
-  --panel:#151515;
-  --panel2:#1d1d1d;
-  --panel3:#242424;
-  --line:#2e2e2e;
-  --line2:#3a3a3a;
-  --text:#f2f2f2;
-  --muted:#9b9b9b;
-  --soft:#c7c7c7;
-  --accent:#f08b32;
+  --bg:#0b0f14;
+  --rail:#0e1218;
+  --panel:#151b22;
+  --panel2:#1c242d;
+  --panel3:#232c36;
+  --line:#2a333e;
+  --line2:#36424f;
+  --text:#eef0f3;
+  --muted:#8a95a3;
+  --soft:#c0c8d0;
+  --accent:#e08a2e;
   --accent2:#23c6a6;
   --good:#45c46b;
   --warn:#e3ad35;
   --bad:#ef5f72;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Thai','IBM Plex Mono',ui-sans-serif,system-ui,-apple-system,sans-serif;letter-spacing:0;overflow:hidden}
 button,input,select{font:inherit}
 button{cursor:pointer}
 a{color:var(--text)}
@@ -234,6 +237,41 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
   .credit-card,.modal-card{border-radius:16px;padding:18px}
   .pill.hide-mobile{display:none}
 }
+/* --- Phase 2: hero scan --- */
+.workspace{display:flex;flex-direction:column;overflow:hidden}
+.hero-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px 72px;overflow-y:auto;gap:0}
+.hero-headline{font-size:clamp(22px,3vw,36px);font-weight:700;text-align:center;line-height:1.25;margin:0 0 12px;letter-spacing:-.02em;font-family:'IBM Plex Mono',monospace}
+.hero-sub{font-size:14px;color:var(--muted);text-align:center;margin:0 0 36px;line-height:1.65;max-width:560px}
+.scan-box{display:flex;gap:10px;width:100%;max-width:600px}
+.scan-box input{flex:1;background:#111820;border:1px solid var(--line2);border-radius:12px;padding:14px 18px;font-size:14px;color:var(--text);outline:none;font-family:var(--mono)}
+.scan-box input:focus{border-color:var(--accent)}
+.scan-box button{background:var(--accent);color:#0b0f14;border:0;border-radius:12px;padding:14px 26px;font-weight:700;font-size:14px;white-space:nowrap;font-family:'IBM Plex Mono',monospace}
+.scan-box button:hover{filter:brightness(1.1)}
+.scan-box button:disabled{opacity:.45;cursor:not-allowed}
+.hero-status{width:100%;max-width:600px;margin-top:14px;font-size:13px;color:var(--muted);text-align:center;min-height:18px}
+.hero-results{width:100%;max-width:660px;margin-top:22px}
+.results-meta{font-size:12px;color:var(--muted);margin-bottom:8px;font-family:var(--mono)}
+.results-table{width:100%;border-collapse:collapse;font-size:13px}
+.results-table th{text-align:left;color:var(--muted);font-weight:500;padding:6px 10px;border-bottom:1px solid var(--line)}
+.results-table td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.results-table tr:last-child td{border-bottom:none}
+.rbadge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.04em;font-family:var(--mono)}
+.rbadge.green{background:#0d2a1a;color:#4dce7a}
+.rbadge.amber{background:#2a1a05;color:#e08a2e}
+.rbadge.red{background:#2a0d0d;color:#ef5f72}
+.aibotauth-row td{background:#0d1520;border-left:2px solid var(--accent)}
+.verify-link{color:var(--accent);font-size:11px;margin-left:6px;font-family:var(--mono)}
+.upsell-card{width:100%;max-width:600px;margin-top:22px;border:1px solid var(--line2);border-radius:14px;padding:20px 24px;background:#0d1118}
+.upsell-head{font-size:14px;font-weight:700;margin:0 0 6px}
+.upsell-body{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.55}
+.upsell-btn{background:var(--accent);color:#0b0f14;border:0;border-radius:10px;padding:11px 22px;font-weight:700;font-size:13px;font-family:'IBM Plex Mono',monospace}
+.upsell-btn:hover{filter:brightness(1.1)}
+.hero-footer{width:100%;max-width:660px;margin-top:28px;text-align:center;font-size:11px;color:var(--muted)}
+.hero-footer a{color:inherit}
+/* bilingual hero — html[lang] is set by setLang(); default html lang="th" */
+.hero-wrap [lang="en"],.upsell-card [lang="en"]{display:none}
+html[lang="en"] .hero-wrap [lang="th"],html[lang="en"] .upsell-card [lang="th"]{display:none}
+html[lang="en"] .hero-wrap [lang="en"],html[lang="en"] .upsell-card [lang="en"]{display:block}
 </style>
 </head>
 <body>
@@ -342,38 +380,57 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
     </header>
 
     <section class="workspace">
-      <!-- Decluttered (kept in DOM so existing JS refs never break, just hidden) -->
-      <style>#skillsPalette{display:none!important}</style>
-      <div class="status-strip" style="display:none">
-        <div class="status-card"><b>Agent Bridge</b><div id="agentDetail">กด Connect ครั้งเดียว แล้วผลสแกนจะส่งเข้าหลังบ้านอัตโนมัติ</div></div>
-        <div class="status-card"><b>Login</b><div id="loginDetail">ใช้ Google หรือ GitHub OAuth เพื่อผูกเครดิตกับบัญชี</div></div>
-        <div class="status-card"><b>Revenue Mode</b><div>Credit top-up แทน subscription รายเดือน</div></div>
+      <!-- Phase 2: hero scan UI -->
+      <div class="hero-wrap">
+        <div class="wrap" style="display:contents">
+          <h1 lang="th" class="hero-headline">ตรวจสอบว่า AI Bot มองเห็นเว็บคุณหรือไม่</h1>
+          <h1 lang="en" class="hero-headline">Can AI bots read your website?</h1>
+          <p lang="th" class="hero-sub">สแกนฟรี — ทดสอบด้วย AI crawler 8 ตัว รวมถึง AIBotAuth ที่ใช้ลายเซ็น Ed25519</p>
+          <p lang="en" class="hero-sub">Free scan — 8 real AI crawlers including AIBotAuth, signed with Ed25519</p>
+        </div>
+        <div class="scan-box">
+          <input id="heroUrl" type="url" value="https://www.successcasting.com" placeholder="https://yourwebsite.com" autocomplete="off" spellcheck="false">
+          <button id="heroScanBtn" onclick="heroScan()">Scan</button>
+        </div>
+        <div id="heroStatus" class="hero-status"></div>
+        <div id="heroResults" class="hero-results" style="display:none"></div>
+        <div id="heroUpsell" class="upsell-card" style="display:none">
+          <div class="wrap" style="display:contents">
+            <p lang="th" class="upsell-head">ต้องการรายงานลึกขึ้น?</p>
+            <p lang="en" class="upsell-head">Want deeper analysis?</p>
+            <p lang="th" class="upsell-body">Full AI Scan วิเคราะห์เนื้อหาด้วย Claude — structured data, meta signals, content quality — ต้องใช้เครดิต</p>
+            <p lang="en" class="upsell-body">Full AI Scan — Claude-powered content analysis, structured data, meta signals — requires credits</p>
+          </div>
+          <button class="upsell-btn" onclick="openLogin()">Sign in to run full scan</button>
+        </div>
+        <div class="hero-footer">
+          <a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy (PDPA)</a> · <a href="/verify">Verify our bot identity</a> · © 2026 AIBotAuth
+        </div>
       </div>
+
+      <!-- Legacy chat refs — dormant, keep JS alive. Remove when chat is rebuilt. -->
+      <div style="display:none" aria-hidden="true">
+        <div id="thread"><div class="wrap" id="threadInner"></div></div>
+        <div class="composer">
+          <div class="box">
+            <select id="mainRunnerMode"></select>
+            <input id="input">
+            <select id="mainRunnerModel"></select>
+            <button id="send"></button>
+          </div>
+          <div id="hint"></div>
+        </div>
+        <div id="skillsPalette"><div id="skillsPaletteLabel"></div><div id="skillChips"></div></div>
+        <div id="agentDetail"></div>
+        <div id="loginDetail"></div>
+      </div>
+
       <!-- HIDDEN_FEATURES: AI Mark OS + เข้าหมู่บ้าน Agent buttons — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:2px auto 22px">
         <a class="btn solid" href="/os" target="_blank" rel="noopener" style="padding:13px 26px;font-size:15px;border-radius:12px">🖥️ เปิด AI Mark OS</a>
         <a class="btn" href="/os#society" target="_blank" rel="noopener" style="padding:13px 26px;font-size:15px;border-radius:12px">🌐 เข้าหมู่บ้าน Agent</a>
       </div>
       -->
-
-      <div id="thread"><div class="wrap" id="threadInner"></div></div>
-
-      <div class="composer">
-        <div class="box">
-          <select class="composer-tool" id="mainRunnerMode" onchange="onRunnerModeChange(this.value)" aria-label="Agent access mode"></select>
-          <input id="input" autocomplete="off" spellcheck="false" placeholder="วางลิงก์เว็บ, Facebook, YouTube, TikTok, LINE OA… หรือพิมพ์ถามได้เลย">
-          <select class="composer-tool model" id="mainRunnerModel" onchange="onMainRunnerModelChange(this.value)" aria-label="Local AI model"></select>
-          <button class="send" id="send" onclick="onSend()" aria-label="Send">↑</button>
-        </div>
-        <div class="hint" id="hint">ปลอดภัยด้วย SSL · อ่านเฉพาะหน้าเว็บสาธารณะ · เชื่อม local agent ได้ด้วยปุ่มเดียว</div>
-      </div>
-      <div class="skills-palette" id="skillsPalette" hidden style="max-width:760px;margin:12px auto 0;padding:0 6px">
-        <div id="skillsPaletteLabel" style="font-size:12px;opacity:.6;margin:0 0 6px 2px"></div>
-        <div class="chips" id="skillChips"></div>
-      </div>
-      <div style="text-align:center;font-size:11px;opacity:.5;margin:14px auto 0;max-width:760px">
-        <a href="/terms.html" style="color:inherit">Terms</a> · <a href="/privacy.html" style="color:inherit">Privacy (PDPA)</a> · © 2026 AI Mark · Blutenstein
-      </div>
     </section>
   </main>
 </div>
@@ -3041,6 +3098,50 @@ async function runLeadScout(query){
   }
   if(params.get("github")==="installed") setTimeout(()=>showToast(LANG==="th"?"GitHub App เชื่อมแล้ว เลือก repo แล้วกด Save":"GitHub App connected. Select a repo and press Save."),500);
 })();
+
+/* --- Phase 2: hero scan ------------------------------------------------- */
+async function heroScan(){
+  const urlEl=$("heroUrl"), btn=$("heroScanBtn"), status=$("heroStatus");
+  const results=$("heroResults"), upsell=$("heroUpsell");
+  const url=(urlEl.value||"").trim();
+  if(!url||!/^https?:\/\/.+/.test(url)){
+    status.textContent=LANG==="th"?"กรุณาใส่ URL ที่ถูกต้อง เช่น https://example.com":"Enter a valid URL, e.g. https://example.com";
+    return;
+  }
+  btn.disabled=true;
+  results.style.display="none";
+  upsell.style.display="none";
+  status.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
+  try{
+    const r=await fetch("/api/bot-access?url="+encodeURIComponent(url));
+    if(r.status===429){status.textContent=LANG==="th"?"คำขอมากเกินไป ลองใหม่ในอีกสักครู่":"Rate limited — try again shortly";return;}
+    const d=await r.json();
+    if(!r.ok||d.error){status.textContent=d.error||(LANG==="th"?"สแกนไม่สำเร็จ":"Scan failed");return;}
+    status.textContent="";
+    results.innerHTML=renderHeroBots(d);
+    results.style.display="";
+    upsell.style.display="";
+  }catch(e){
+    status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
+  }finally{
+    btn.disabled=false;
+  }
+}
+function renderHeroBots(d){
+  const bots=d.bots||{};
+  const rows=Object.entries(bots).map(([name,b])=>{
+    const isAIB=name==="aimark_bot";
+    const ok=b.http_status>=200&&b.http_status<300;
+    const blocked=b.http_status===403||b.http_status===401;
+    const badge=ok?'<span class="rbadge green">✓ can read</span>':blocked?'<span class="rbadge red">✗ blocked</span>':`<span class="rbadge amber">⚠ ${b.http_status||"err"}</span>`;
+    const signed=b.signed?` <a class="verify-link" href="/verify" title="Verify this signature">signed ·Ed25519</a>`:"";
+    const rc=isAIB?' class="aibotauth-row"':"";
+    return `<tr${rc}><td>${esc(b.bot_name||name)}</td><td>${badge}${signed}</td><td style="color:var(--muted);font-family:var(--mono);font-size:12px">${b.http_status||""}</td></tr>`;
+  });
+  const ts=d.scan_timestamp?new Date(d.scan_timestamp).toLocaleTimeString():"";
+  return `<div class="results-meta">${esc(d.target_url||"")}${ts?" · "+ts:""}</div>`+
+    `<table class="results-table"><thead><tr><th>Bot</th><th>Result</th><th>HTTP</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
 </script>
 <script>
 /* Skills palette — renders action chips from the Hermes skill registry
@@ -3101,7 +3202,6 @@ async function runLeadScout(query){
   <span id="sideAgentBadge"></span>
   <button id="connectButton"></button>
   <div id="connectStatus"></div>
-  <div id="agentDetail"></div>
   <button id="githubConnectBtn"></button>
   <span id="githubConnectCopy"></span>
   <div id="githubSecurePanel"></div>
