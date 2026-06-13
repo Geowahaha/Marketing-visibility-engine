@@ -3113,7 +3113,7 @@ async function heroScan(){
   upsell.style.display="none";
   status.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
   try{
-    const r=await fetch("/api/bot-access?url="+encodeURIComponent(url));
+    const r=await fetch("/api/bot-access",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})});
     if(r.status===429){status.textContent=LANG==="th"?"คำขอมากเกินไป ลองใหม่ในอีกสักครู่":"Rate limited — try again shortly";return;}
     const d=await r.json();
     if(!r.ok||d.error){status.textContent=d.error||(LANG==="th"?"สแกนไม่สำเร็จ":"Scan failed");return;}
@@ -3128,18 +3128,24 @@ async function heroScan(){
   }
 }
 function renderHeroBots(d){
-  const bots=d.bots||{};
-  const rows=Object.entries(bots).map(([name,b])=>{
-    const isAIB=name==="aimark_bot";
-    const ok=b.http_status>=200&&b.http_status<300;
-    const blocked=b.http_status===403||b.http_status===401;
-    const badge=ok?'<span class="rbadge green">✓ can read</span>':blocked?'<span class="rbadge red">✗ blocked</span>':`<span class="rbadge amber">⚠ ${b.http_status||"err"}</span>`;
-    const signed=b.signed?` <a class="verify-link" href="/verify" title="Verify this signature">signed ·Ed25519</a>`:"";
-    const rc=isAIB?' class="aibotauth-row"':"";
-    return `<tr${rc}><td>${esc(b.bot_name||name)}</td><td>${badge}${signed}</td><td style="color:var(--muted);font-family:var(--mono);font-size:12px">${b.http_status||""}</td></tr>`;
+  // d.bots = array [{bot, engine, verdict, fetch, http_status, ...}]
+  // d.aimark_bot = {signed, fetch, http_status, ua} — separate top-level key
+  const bots=d.bots||[];
+  const rows=bots.map(b=>{
+    const ok=b.verdict==="can_read";
+    const blocked=b.verdict==="blocked"||b.fetch==="blocked";
+    const badge=ok?'<span class="rbadge green">✓ can read</span>':blocked?'<span class="rbadge red">✗ blocked</span>':`<span class="rbadge amber">⚠ ${esc(b.fetch||b.verdict)}</span>`;
+    return `<tr><td>${esc(b.bot)}</td><td>${badge}</td><td style="color:var(--muted);font-family:var(--mono);font-size:12px">${b.http_status||""}</td></tr>`;
   });
-  const ts=d.scan_timestamp?new Date(d.scan_timestamp).toLocaleTimeString():"";
-  return `<div class="results-meta">${esc(d.target_url||"")}${ts?" · "+ts:""}</div>`+
+  const aib=d.aimark_bot;
+  if(aib){
+    const ok=aib.http_status>=200&&aib.http_status<300;
+    const badge=ok?'<span class="rbadge green">✓ can read</span>':`<span class="rbadge amber">⚠ ${esc(aib.fetch||"")}</span>`;
+    const signed=aib.signed?` <a class="verify-link" href="/verify" title="Verify this signature">signed · Ed25519</a>`:"";
+    rows.push(`<tr class="aibotauth-row"><td>AIBotAuth</td><td>${badge}${signed}</td><td style="color:var(--muted);font-family:var(--mono);font-size:12px">${aib.http_status||""}</td></tr>`);
+  }
+  const ts=d.checked_at?new Date(d.checked_at).toLocaleTimeString():"";
+  return `<div class="results-meta">${esc(d.url||"")}${ts?" · "+ts:""}</div>`+
     `<table class="results-table"><thead><tr><th>Bot</th><th>Result</th><th>HTTP</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 </script>
