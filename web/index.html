@@ -242,7 +242,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
     <div class="side-top">
       <div class="mark">
         <div class="mark-glyph">AI</div>
-        <div class="brand-name">AI Mark</div>
+        <div class="brand-name">AIBotAuth <span style="font-size:10px;font-weight:700;background:#e08a2e;color:#0b0f14;border-radius:4px;padding:2px 6px;vertical-align:middle;letter-spacing:.04em">BETA</span></div>
       </div>
       <button class="icon-btn" onclick="focusComposer()" aria-label="Search">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
@@ -260,10 +260,12 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10.5V20h14v-9.5"/></svg>
         <span>Dashboard</span>
       </button>
+      <!-- HIDDEN_FEATURES: Lead Scout nav — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <button class="nav-item" onclick="runLeadScout(LANG==='th'?'หา lead SME ไทยที่เว็บอ่อนและน่าจะยิงแอด':'Find weak Thai SME leads with weak websites and likely ad spend')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.2-4.2"/><path d="M8.5 11h5"/></svg>
         <span>Lead Scout</span>
       </button>
+      -->
       <button class="nav-item" onclick="focusComposer()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>
         <span>Website Scan</span>
@@ -276,11 +278,13 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 
     <div class="side-section">
       <div class="side-label">Automation</div>
+      <!-- HIDDEN_FEATURES: Agent Bridge nav — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <button class="nav-item" onclick="connectAgent()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6"/><path d="M12 9v6"/><rect x="4" y="4" width="16" height="16" rx="4"/></svg>
         <span>Agent Bridge</span>
         <span class="nav-badge" id="sideAgentBadge">off</span>
       </button>
+      -->
       <button class="nav-item" onclick="openCredits()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
         <span>Credits</span>
@@ -296,11 +300,13 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
       </button>
     </div>
 
+    <!-- HIDDEN_FEATURES: Connect Agent sidebar card — hidden for now, recoverable. Remove comment tags to restore. --><!--
     <div class="connect-card">
       <div class="connect-title">Connect Agent</div>
       <div class="connect-status" id="connectStatus">ยังไม่ได้เชื่อมต่อ local AI agent</div>
       <button class="connect-action" id="connectButton" onclick="connectAgent()">Connect</button>
     </div>
+    -->
 
     <div class="sidebar-foot">
       <div class="account">
@@ -323,12 +329,16 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         <span>Lead scout, scan, fix, and hand off to the local AI agent</span>
       </div>
       <div class="grow"></div>
+      <!-- HIDDEN_FEATURES: Agent Disconnected pill — hidden for now, recoverable. --><!--
       <div class="pill hide-mobile"><span>Agent</span><strong id="topAgentState">Disconnected</strong></div>
+      -->
       <button class="pill" onclick="openCredits()"><span>Credits</span><strong id="creditBalance">0</strong></button>
       <div class="lang"><button id="lEn" onclick="setLang('en')">EN</button><button id="lTh" class="on" onclick="setLang('th')">ไทย</button></div>
       <a class="btn" href="/cockpit.html" title="Owner Cockpit — ภาพรวมบริษัท">Cockpit</a>
       <button class="btn" id="loginBtn" onclick="openLogin()">Sign in</button>
+      <!-- HIDDEN_FEATURES: topbar Connect button — hidden for now, recoverable. --><!--
       <button class="btn solid" onclick="connectAgent()">Connect</button>
+      -->
     </header>
 
     <section class="workspace">
@@ -339,10 +349,12 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         <div class="status-card"><b>Login</b><div id="loginDetail">ใช้ Google หรือ GitHub OAuth เพื่อผูกเครดิตกับบัญชี</div></div>
         <div class="status-card"><b>Revenue Mode</b><div>Credit top-up แทน subscription รายเดือน</div></div>
       </div>
+      <!-- HIDDEN_FEATURES: AI Mark OS + เข้าหมู่บ้าน Agent buttons — hidden for now, recoverable. Remove comment tags to restore. --><!--
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:2px auto 22px">
         <a class="btn solid" href="/os" target="_blank" rel="noopener" style="padding:13px 26px;font-size:15px;border-radius:12px">🖥️ เปิด AI Mark OS</a>
         <a class="btn" href="/os#society" target="_blank" rel="noopener" style="padding:13px 26px;font-size:15px;border-radius:12px">🌐 เข้าหมู่บ้าน Agent</a>
       </div>
+      -->
 
       <div id="thread"><div class="wrap" id="threadInner"></div></div>
 
@@ -381,6 +393,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         <div><b>Google</b><span id="googleLoginCopy">ใช้ Gmail / Google account</span></div>
         <button class="btn solid" id="googleLoginBtn" onclick="loginWith('google')">Continue</button>
       </div>
+      <!-- HIDDEN_FEATURES: GitHub login row + sub-panels — no GITHUB_CLIENT_ID/SECRET in prod → 501. Hidden for now, recoverable. Remove comment tags to restore. --><!--
       <div class="login-row">
         <div><b>GitHub Repo</b><span id="githubConnectCopy">เชื่อม repo เพื่อเปิด PR / deploy งานแก้เว็บ</span></div>
         <button class="btn" id="githubConnectBtn" onclick="connectGithubSecure()">Approve</button>
@@ -414,6 +427,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
         </div>
         <div class="repo-status" id="githubRepoStatus">Sign in with GitHub to load repositories.</div>
       </div>
+      -->
       <div class="login-row" id="logoutRow" style="display:none">
         <div><b>Signed in</b><span id="logoutUser">Account active</span></div>
         <button class="btn" onclick="logout()">Sign out</button>
@@ -3081,5 +3095,20 @@ async function runLeadScout(query){
   else document.addEventListener("DOMContentLoaded",load);
 })();
 </script>
+<!-- HIDDEN_FEATURES: DOM stubs — keep JS error-free while feature elements are in HTML comments above. Remove alongside the comment blocks above. -->
+<div style="display:none" aria-hidden="true">
+  <span id="topAgentState"></span>
+  <span id="sideAgentBadge"></span>
+  <button id="connectButton"></button>
+  <div id="connectStatus"></div>
+  <div id="agentDetail"></div>
+  <button id="githubConnectBtn"></button>
+  <span id="githubConnectCopy"></span>
+  <div id="githubSecurePanel"></div>
+  <div id="githubTokenPanel"></div>
+  <div id="githubRepoPanel"></div>
+  <select id="githubRepoSelect"></select>
+  <div id="githubRepoStatus"></div>
+</div>
 </body>
 </html>
