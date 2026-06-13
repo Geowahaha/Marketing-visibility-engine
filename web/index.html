@@ -266,6 +266,7 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 /* --- Phase 2: hero scan --- */
 .workspace{display:flex;flex-direction:column;overflow:hidden}
 .hero-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px 72px;overflow-y:auto;gap:0}
+.hero-wrap.has-results{justify-content:flex-start;padding-top:36px}
 .hero-headline{font-size:clamp(22px,3vw,36px);font-weight:700;text-align:center;line-height:1.25;margin:0 0 12px;letter-spacing:-.02em;font-family:'IBM Plex Mono',monospace}
 .hero-sub{font-size:14px;color:var(--muted);text-align:center;margin:0 0 36px;line-height:1.65;max-width:560px}
 .scan-box{display:flex;gap:10px;width:100%;max-width:600px}
@@ -3243,6 +3244,8 @@ async function heroScan(){
   btn.disabled=true;
   results.style.display="none";
   upsell.style.display="none";
+  // Reset scroll position for new scan
+  document.querySelector(".hero-wrap")?.classList.remove("has-results");
   status.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";
   try{
     const r=await fetch("/api/bot-access",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url})});
@@ -3288,8 +3291,10 @@ async function heroDeepScan(){
   const url=(urlEl&&urlEl.value||"").trim();
   if(!url) return;
   const btn=upsell?upsell.querySelector(".upsell-btn"):null;
-  if(btn) btn.disabled=true;
-  if(status) status.textContent=LANG==="th"?"กำลังวิเคราะห์ด้วย AI…":"Running AI analysis…";
+  const heroWrap=document.querySelector(".hero-wrap");
+  // Immediate loading feedback — button text + status + disable
+  if(btn){btn.disabled=true;btn.textContent=LANG==="th"?"กำลังสแกน…":"Scanning…";}
+  if(status) status.textContent=LANG==="th"?"กำลังวิเคราะห์ด้วย Claude…":"Analyzing with Claude…";
   try{
     const r=await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({url,lang:LANG})});
     if(r.status===401){
@@ -3299,7 +3304,6 @@ async function heroDeepScan(){
     }
     if(r.status===402){
       if(status) status.textContent=LANG==="th"?"เครดิตไม่เพียงพอ — กรุณาซื้อเพิ่ม":"Insufficient credits";
-      updateUpsellBtn();
       return;
     }
     if(r.status===429){
@@ -3313,13 +3317,16 @@ async function heroDeepScan(){
     }
     if(status) status.textContent="";
     if(results){results.innerHTML=renderDeepScan(d);results.style.display="";}
+    // Unlock vertical scrolling from top now that results are long
+    if(heroWrap) heroWrap.classList.add("has-results");
     // Refresh credits from server — authoritative after deduction
     await loadSession();
-    updateUpsellBtn();
   }catch(e){
     if(status) status.textContent=LANG==="th"?"เกิดข้อผิดพลาด กรุณาลองใหม่":"Network error — please try again";
   }finally{
+    // Always restore button to correct state (covers success, 401, 402, 429, error)
     if(btn) btn.disabled=false;
+    updateUpsellBtn();
   }
 }
 
