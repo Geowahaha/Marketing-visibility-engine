@@ -25,6 +25,7 @@
 
 import { callLLM } from "./_llm.js";
 import { paid } from "./_auth.js";
+import { checkRateLimit, rl429 } from "./_ratelimit.js";
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -163,11 +164,20 @@ function renderFaqHtml(faq, lang) {
 export async function onRequestPost(context) {
   const { request, env } = context;
   if (!env.ANTHROPIC_API_KEY && !env.GROQ_API_KEY && !env.KIMI_API_KEY) return json({ error: "Server has no LLM key." }, 500);
+
+  // Layer 1: rate limit — 3/min/IP, fail-CLOSED (up to 16k tokens per call)
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const rl = await checkRateLimit(env, ip, { max: 3, endpoint: "content-engine" });
+  if (!rl.allowed) return rl429(rl.resetIn);
+
   let payload; try { payload = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
   const url = normalizeUrl(payload.url || payload.scan?.url || "");
   if (!url) return json({ error: "Provide the client's website URL." }, 400);
   const lang = payload.lang === "th" ? "th" : "en";
+
+  // Layer 2: paid gate BEFORE any fetch or LLM call
   const isPaid = await paid(request, env);
+  if (!isPaid) return json({ error: "content_engine_requires_paid_access", upgrade_required: true, checkout_url: "/api/checkout?product=growth" }, 402);
 
   const home = await tryFetch(url);
   const ctx = home.ok ? pageContext(home.body) : { title: url };
