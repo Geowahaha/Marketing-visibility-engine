@@ -28,7 +28,7 @@ async function callAnthropic(env, { system, messages, maxTokens, temperature }) 
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: env.CLAUDE_MODEL || "claude-sonnet-4-6",
+      model: env.CLAUDE_MODEL || "claude-opus-4-5",
       max_tokens: maxTokens,
       temperature,
       system,
@@ -96,19 +96,27 @@ export async function callLLM(env, { system, messages, maxTokens = 4000, tempera
   ).filter((name) => PROVIDERS[name] && PROVIDERS[name].key(env));
 
   if (!order.length) {
+    console.error("[llm] No providers in order array. LLM_PROVIDER_ORDER value produced empty list after filtering.");
     return { ok: false, status: 500, error: "No LLM provider configured (set ANTHROPIC_API_KEY, GROQ_API_KEY, or KIMI_API_KEY).", tried: [] };
   }
 
+  console.error(`[llm] Trying providers in order: ${order.join(", ")}`);
   const tried = [];
   for (const name of order) {
     try {
       const r = await PROVIDERS[name].run(env, { system, messages, maxTokens, temperature });
-      if (r.ok) return { ok: true, text: r.text, provider: name };
+      if (r.ok) {
+        console.error(`[llm] SUCCESS via ${name}`);
+        return { ok: true, text: r.text, provider: name };
+      }
+      console.error(`[llm] FAIL ${name}: HTTP ${r.status} — ${String(r.detail || "").slice(0, 300)}`);
       tried.push({ provider: name, status: r.status, detail: r.detail });
     } catch (e) {
+      console.error(`[llm] THROW ${name}: ${String(e).slice(0, 200)}`);
       tried.push({ provider: name, error: String(e).slice(0, 160) });
     }
   }
   const last = tried[tried.length - 1] || {};
+  console.error(`[llm] All providers failed. tried=${JSON.stringify(tried)}`);
   return { ok: false, status: last.status || 502, error: "All LLM providers failed.", detail: last.detail || last.error, tried };
 }

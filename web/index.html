@@ -3321,7 +3321,7 @@ async function heroDeepScan(){
     if(heroWrap) heroWrap.classList.add("has-results");
     if(d._llm_fallback){
       // All LLM providers failed — deterministic baseline only, no credit charged
-      const llmErrDetail=(d._llm_tried&&d._llm_tried[0])?` [${d._llm_tried[0].provider||"?"}:${d._llm_tried[0].status||d._llm_tried[0].error||"err"}]`:(d._llm_error?` [${String(d._llm_error).slice(0,80)}]`:"");
+      const llmErrDetail=(d._llm_tried&&d._llm_tried.length)?` [${d._llm_tried.map(t=>`${t.provider||"?"}:${t.status||t.error||"err"}`).join(" → ")}]`:(d._llm_error?` [${String(d._llm_error).slice(0,80)}]`:"");
       if(status) status.textContent=(LANG==="th"
         ?"⚠ Claude ไม่พร้อมใช้งาน — แสดงผลสแกนพื้นฐาน (ไม่ตัดเครดิต)":"⚠ Claude unavailable — showing baseline scan (no credit charged)")+llmErrDetail;
       // Leave upsell showing so user can retry
