@@ -180,7 +180,7 @@ function normalizeUrl(u) {
   }
 }
 
-async function tryFetchText(env, url, timeoutMs = 12000) {
+async function tryFetchText(env, url, timeoutMs = 8000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   const started = Date.now();
@@ -444,7 +444,7 @@ function extractJson(text) {
 async function callClaude(env, messages, maxTokens = 8000) {
   // Delegates to the shared multi-provider caller (Anthropic → Groq → Kimi).
   const r = await callLLM(env, { system: SYSTEM_PROMPT, messages, maxTokens, temperature: 0 });
-  if (!r.ok) return { ok: false, error: r.error, detail: r.detail, status: r.status || 502 };
+  if (!r.ok) return { ok: false, error: r.error, detail: r.detail, status: r.status || 502, tried: r.tried };
   return { ok: true, text: r.text, provider: r.provider };
 }
 
@@ -510,7 +510,7 @@ async function writeCachedPSI(targetUrl, env, result) {
  * (CrUX real users); falls back to lab. Optional GOOGLE_PSI_KEY raises quota.
  * Returns null on any failure/timeout so the scan still completes.
  */
-async function fetchPSI(targetUrl, env, timeoutMs = 22000) {
+async function fetchPSI(targetUrl, env, timeoutMs = 8000) {
   const cached = await readCachedPSI(targetUrl, env);
   if (cached) return cached;
   const cacheAvailable = !!pageSpeedCacheKv(env);
@@ -868,7 +868,9 @@ export async function onRequestPost(context) {
 
   const first = await callClaude(env, [{ role: "user", content: userBlock }], 8000);
   if (!first.ok) {
-    return json(buildDeterministicScan(url, facts, det, lang, first.detail || first.error), 200);
+    const det0 = buildDeterministicScan(url, facts, det, lang, first.detail || first.error);
+    det0._llm_tried = first.tried || [];
+    return json(det0, 200);
   }
 
   let scan;
