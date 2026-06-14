@@ -472,6 +472,27 @@ function extractJson(text) {
   return JSON.parse(t);
 }
 
+// Non-LLM JSON salvage: try to rescue a truncated LLM response by closing
+// open braces. Covers the most common truncation pattern (LLM hit max_tokens
+// mid-object). No second LLM call — avoids the 30s wall-clock budget.
+function salvageJson(text) {
+  let t = String(text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+  const s = t.indexOf("{");
+  if (s < 0) return null;
+  t = t.slice(s);
+  // Try appending 0-6 closing braces to close truncated nesting
+  for (let extra = 0; extra <= 6; extra++) {
+    try { return JSON.parse(t + "}".repeat(extra)); } catch {}
+  }
+  // Truncation was deeper — walk backward to last `}` boundary
+  for (let i = t.length - 1; i > 0; i--) {
+    if (t[i] === "}") {
+      try { return JSON.parse(t.slice(0, i + 1)); } catch {}
+    }
+  }
+  return null;
+}
+
 async function callClaude(env, messages, maxTokens = 3000) {
   // Delegates to the shared multi-provider caller (Anthropic → Groq → Kimi).
   const r = await callLLM(env, { system: SYSTEM_PROMPT, messages, maxTokens, temperature: 0 });
@@ -916,8 +937,8 @@ export async function onRequestPost(context) {
       imgMissingAlt: facts.page.imgMissingAlt,
       approxWordCount: facts.page.approxWordCount,
       textSample: (facts.page.textSample || "").slice(0, 4000),
-      socialLinks: facts.page.socialLinks || [],
-      jsonLdSameAs: facts.page.jsonLdSameAs || [],
+      socialLinks: (facts.page.socialLinks || []).slice(0, 10),
+      jsonLdSameAs: (facts.page.jsonLdSameAs || []).slice(0, 10),
       jsonLdContact: facts.page.jsonLdContact || [],
     } : null,
     robotsTxt: (facts.robotsTxt || "").slice(0, 1500),
@@ -965,23 +986,16 @@ export async function onRequestPost(context) {
   try {
     scan = extractJson(first.text);
   } catch {
-    // Claude can occasionally run out of tokens or emit prose around JSON. Retry once
-    // with a compact repair/audit instruction so the UI does not fail on valid scans.
-    const repairPrompt =
-      `Return ONLY one complete valid JSON object for this scan. No markdown, no prose. ` +
-      `Keep it compact: exactly four categories, 2-3 findings per category max. ` +
-      `Use the required schema from the system prompt.\n\n` +
-      `Signals JSON:\n${JSON.stringify(compactSignals, null, 2)}\n\n` +
-      `User focus: ${userPrompt || "General visibility audit"}\n\n` +
-      `Previous invalid/truncated model output to repair if useful:\n${first.text.slice(0, 3000)}`;
-    const second = await callClaude(env, [{ role: "user", content: repairPrompt }], 3000);
-    if (!second.ok) {
-      return json(second.detail ? { error: second.error, detail: second.detail } : { error: second.error }, second.status || 502);
-    }
-    try {
-      scan = extractJson(second.text);
-    } catch {
-      return json({ error: "Model did not return valid JSON after retry.", raw: second.text.slice(0, 800) }, 502);
+    // First try a non-LLM salvage (brace-closing) — rescues truncated responses
+    // without spending another 10-15s on a second LLM call (which would push us
+    // past the 30s Worker wall-clock and cause a 502).
+    scan = salvageJson(first.text);
+    if (!scan) {
+      // Salvage failed — fall back to deterministic. Do NOT charge a credit:
+      // the consumeCredits call below is never reached via this return path.
+      const det0 = buildDeterministicScan(url, facts, det, lang, "llm_truncated_json");
+      det0._llm_tried = [{ provider: first.provider || "unknown", error: "truncated_json" }];
+      return json(det0, 200);
     }
   }
 
