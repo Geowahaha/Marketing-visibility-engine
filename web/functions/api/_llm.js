@@ -28,7 +28,7 @@ async function callAnthropic(env, { system, messages, maxTokens, temperature }) 
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: env.CLAUDE_MODEL || "claude-opus-4-5",
+      model: env.CLAUDE_MODEL || "claude-sonnet-4-6",
       max_tokens: maxTokens,
       temperature,
       system,
@@ -92,7 +92,7 @@ const PROVIDERS = {
 export async function callLLM(env, { system, messages, maxTokens = 4000, temperature = 0 }) {
   const order = (env.LLM_PROVIDER_ORDER
     ? String(env.LLM_PROVIDER_ORDER).split(",").map((s) => s.trim().toLowerCase())
-    : ["anthropic", "groq", "kimi"]
+    : ["groq", "anthropic"]
   ).filter((name) => PROVIDERS[name] && PROVIDERS[name].key(env));
 
   if (!order.length) {

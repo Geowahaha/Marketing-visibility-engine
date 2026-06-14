@@ -441,7 +441,7 @@ function extractJson(text) {
   return JSON.parse(t);
 }
 
-async function callClaude(env, messages, maxTokens = 8000) {
+async function callClaude(env, messages, maxTokens = 3000) {
   // Delegates to the shared multi-provider caller (Anthropic → Groq → Kimi).
   const r = await callLLM(env, { system: SYSTEM_PROMPT, messages, maxTokens, temperature: 0 });
   if (!r.ok) return { ok: false, error: r.error, detail: r.detail, status: r.status || 502, tried: r.tried };
@@ -858,15 +858,69 @@ export async function onRequestPost(context) {
       _rateRemaining: rl.remaining,
     }, 200);
   }
+  // Compact payload — never send raw HTML to the LLM.
+  // Groq 413s on large bodies; Anthropic charges per token. Cap visible text at 4000
+  // chars and include only the structured signals the model actually needs.
+  const compactSignals = {
+    url: facts.requestedUrl,
+    finalUrl: facts.fetch?.home?.finalUrl || facts.requestedUrl,
+    fetch: {
+      home: facts.fetch?.home,
+      robots: facts.fetch?.robots,
+      sitemap: facts.fetch?.sitemap,
+      llms: facts.fetch?.llms,
+    },
+    page: facts.page ? {
+      title: facts.page.title,
+      h1: facts.page.h1,
+      metaDescription: facts.page.metaDescription,
+      canonical: facts.page.canonical,
+      lang: facts.page.lang,
+      viewport: facts.page.viewport,
+      og: facts.page.og,
+      twitterCard: facts.page.twitterCard,
+      schemaTypes: facts.page.schemaTypes,
+      hasJsonLd: facts.page.hasJsonLd,
+      imgCount: facts.page.imgCount,
+      imgMissingAlt: facts.page.imgMissingAlt,
+      approxWordCount: facts.page.approxWordCount,
+      textSample: (facts.page.textSample || "").slice(0, 4000),
+    } : null,
+    robotsTxt: (facts.robotsTxt || "").slice(0, 1500),
+    botPolicy: facts.botPolicy,
+    coreWebVitals: facts.coreWebVitals,
+    performanceLite: facts.performanceLite ? {
+      fetchMs: facts.performanceLite.fetchMs,
+      htmlKb: facts.performanceLite.htmlKb,
+      compression: facts.performanceLite.compression,
+      scriptCount: facts.performanceLite.scriptCount,
+      stylesheetCount: facts.performanceLite.stylesheetCount,
+      imageCount: facts.performanceLite.imageCount,
+      score: facts.performanceLite.score,
+    } : null,
+    migration: facts.migration ? {
+      finalHost: facts.migration.finalHost,
+      canonicalHost: facts.migration.canonicalHost,
+      canonicalHostMismatch: facts.migration.canonicalHostMismatch,
+      ogHostMismatch: facts.migration.ogHostMismatch,
+      sitemapHostMismatch: facts.migration.sitemapHostMismatch,
+      sitemapUrlCount: facts.migration.sitemapUrlCount,
+      sitemapSampleUrls: facts.migration.sitemapSampleUrls,
+      alternateHostServes200WithoutRedirectToFinalHost: facts.migration.alternateHostServes200WithoutRedirectToFinalHost,
+      duplicateHostRisk: facts.migration.duplicateHostRisk,
+      indexCoverageWarning: facts.migration.indexCoverageWarning,
+    } : null,
+  };
+
   const userBlock =
     `Audit this website. Signals follow as JSON.\n\n` +
     `IMPORTANT: the numeric overall + category scores are computed by the system from the deterministic CHECK RESULTS below — do NOT invent different numbers (any scores you output will be overridden). Your job is the qualitative report: write a sharp "summary" and, for every check with status "fail", a specific, detailed finding with a concrete fix. Add any extra issues you genuinely observe in the signals. Cover the failed checks first, especially "critical"/"high".\n\n` +
     `Write the "summary" and every finding "detail" and "fix" in ${lang === "th" ? "Thai (ภาษาไทย)" : "English"}. Keep the four category "name" values and all JSON keys exactly as the system prompt specifies.\n\n` +
     (userPrompt ? `User focus / instructions: ${userPrompt}\n\n` : "") +
     `DETERMINISTIC CHECK RESULTS (authoritative — explain the fails):\n${JSON.stringify(det.checks, null, 2)}\n\n` +
-    `RAW SIGNALS:\n${JSON.stringify(facts, null, 2)}`;
+    `SIGNALS:\n${JSON.stringify(compactSignals, null, 2)}`;
 
-  const first = await callClaude(env, [{ role: "user", content: userBlock }], 8000);
+  const first = await callClaude(env, [{ role: "user", content: userBlock }], 3000);
   if (!first.ok) {
     const det0 = buildDeterministicScan(url, facts, det, lang, first.detail || first.error);
     det0._llm_tried = first.tried || [];
@@ -883,10 +937,10 @@ export async function onRequestPost(context) {
       `Return ONLY one complete valid JSON object for this scan. No markdown, no prose. ` +
       `Keep it compact: exactly four categories, 2-3 findings per category max. ` +
       `Use the required schema from the system prompt.\n\n` +
-      `Signals JSON:\n${JSON.stringify(facts, null, 2)}\n\n` +
+      `Signals JSON:\n${JSON.stringify(compactSignals, null, 2)}\n\n` +
       `User focus: ${userPrompt || "General visibility audit"}\n\n` +
-      `Previous invalid/truncated model output to repair if useful:\n${first.text.slice(0, 5000)}`;
-    const second = await callClaude(env, [{ role: "user", content: repairPrompt }], 8000);
+      `Previous invalid/truncated model output to repair if useful:\n${first.text.slice(0, 3000)}`;
+    const second = await callClaude(env, [{ role: "user", content: repairPrompt }], 3000);
     if (!second.ok) {
       return json(second.detail ? { error: second.error, detail: second.detail } : { error: second.error }, second.status || 502);
     }
