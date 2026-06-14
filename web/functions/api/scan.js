@@ -229,6 +229,28 @@ function extractFacts(html) {
   )];
   const imgCount = (html.match(/<img\b/gi) || []).length;
   const imgNoAlt = (html.match(/<img\b(?:(?!alt=)[^>])*>/gi) || []).length;
+
+  // Extract BEFORE stripping tags — href targets are invisible after strip.
+  const SOCIAL_RE = /facebook\.com|tiktok\.com|line\.me|youtube\.com|instagram\.com|twitter\.com|x\.com|linkedin\.com/i;
+  const socialLinks = [...new Set(
+    [...html.matchAll(/href=["']([^"'#\s]{4,300})["']/gi)]
+      .map((m) => m[1])
+      .filter((u) => SOCIAL_RE.test(u) || /^(mailto:|tel:)/.test(u))
+  )];
+
+  // Pull sameAs / contact from JSON-LD blocks (ground truth from site owner).
+  const jsonLdSameAs = [...new Set(
+    jsonLdBlocks.flatMap((b) => {
+      try { const d = JSON.parse(b); return [].concat(d.sameAs || []); } catch { return []; }
+    })
+  )];
+  const jsonLdContact = jsonLdBlocks.flatMap((b) => {
+    try {
+      const d = JSON.parse(b);
+      return [d.telephone, d.email, d.address?.streetAddress].filter(Boolean);
+    } catch { return []; }
+  });
+
   const textOnly = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -259,6 +281,9 @@ function extractFacts(html) {
     imgMissingAlt: imgNoAlt,
     approxWordCount: textOnly ? textOnly.split(" ").length : 0,
     textSample: textOnly.slice(0, 2500),
+    socialLinks,
+    jsonLdSameAs,
+    jsonLdContact,
   };
 }
 
@@ -430,7 +455,13 @@ Migration/index rigor rules:
 - Treat "migration" signals as first-class Google visibility evidence, not minor metadata. If alternate www/non-www hosts both return 200 without redirecting to the selected final host, or canonical/OG/sitemap hosts disagree with the served final host, mark this as HIGH or CRITICAL because Google may split signals, keep older indexed snippets, or index only the wrong host.
 - If sitemapUrlCount is very low (<=3), warn that index coverage is thin and the scan cannot prove Google has indexed all key pages. Recommend Google Search Console URL Inspection + sitemap resubmission + internal links/backlinks.
 - Never claim "Google index is healthy" unless authorized Search Console/index evidence is present. Public signals can only say "indexability looks OK" or "public search evidence suggests only limited/old coverage".
-- If the user prompt mentions index, old site, migration, or Google, include an explicit finding named "Google index / migration coverage" in Technical SEO.`;
+- If the user prompt mentions index, old site, migration, or Google, include an explicit finding named "Google index / migration coverage" in Technical SEO.
+
+Ground-truth evidence rules (CRITICAL — prevents false negatives):
+- page.socialLinks and page.jsonLdSameAs are extracted directly from <a href> targets and JSON-LD sameAs[] in the live HTML. They are FACTS, not inferences. If socialLinks or jsonLdSameAs contain facebook.com, tiktok.com, line.me, youtube.com, instagram.com, twitter.com, x.com, or linkedin.com URLs, those channels EXIST on the site. Do NOT report them as missing or absent.
+- page.jsonLdContact contains telephone, email, and address extracted from JSON-LD. If present, contact info EXISTS on the site.
+- Social icon links (<a href> with SVG/icon, no visible text) are captured in socialLinks — they are invisible to text extraction but real. Always check socialLinks before concluding a site has no social presence.
+- The score you write will be overridden by the deterministic rubric — focus on qualitative findings. If the rubric gave a category 100 but you find a HIGH or CRITICAL issue, mark that finding with the correct severity; the UI will surface a caveat marker.`;
 
 function extractJson(text) {
   // strip code fences if any, then grab the outermost {...}
@@ -885,6 +916,9 @@ export async function onRequestPost(context) {
       imgMissingAlt: facts.page.imgMissingAlt,
       approxWordCount: facts.page.approxWordCount,
       textSample: (facts.page.textSample || "").slice(0, 4000),
+      socialLinks: facts.page.socialLinks || [],
+      jsonLdSameAs: facts.page.jsonLdSameAs || [],
+      jsonLdContact: facts.page.jsonLdContact || [],
     } : null,
     robotsTxt: (facts.robotsTxt || "").slice(0, 1500),
     botPolicy: facts.botPolicy,

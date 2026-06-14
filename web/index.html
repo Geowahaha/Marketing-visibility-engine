@@ -307,6 +307,8 @@ table.r th{color:#8c8c8c;font:700 11px/1 var(--mono);text-transform:uppercase}
 .df-sev{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;margin-right:4px}
 .df-detail{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
 .df-fix{margin:4px 0 0;color:#4ade80;font-size:12px;line-height:1.5}
+.df-baseline-note{display:block;font-size:10px;color:var(--muted);opacity:.65;margin-bottom:4px;font-style:italic}
+.df-caveat{color:#fb923c;font-size:12px;cursor:help}
 /* bilingual hero — html[lang] is set by setLang(); default html lang="th" */
 .hero-wrap [lang="en"],.upsell-card [lang="en"]{display:none}
 html[lang="en"] .hero-wrap [lang="th"],html[lang="en"] .upsell-card [lang="th"]{display:none}
@@ -3361,17 +3363,38 @@ function renderDeepScan(d){
   const score=d.overall!=null?Math.round(d.overall):"?";
   const gradeColor=score>=80?"#4ade80":score>=60?"#fbbf24":"#f87171";
   const summary=esc(d.summary||"");
+  // Determine which categories have high/critical LLM findings on rubric-passing checks.
+  // These get a caveat marker so a perfect score never silently hides a serious issue.
+  const passingChecks=new Set((d._checks||[]).filter(c=>c.status==="pass").map(c=>String(c.check||"").toLowerCase()));
+  const caveatedCats=new Set();
+  (d.categories||[]).forEach(c=>{
+    const hasSerious=(c.findings||[]).some(f=>{
+      const sev=String(f.severity||"").toLowerCase();
+      if(sev!=="high"&&sev!=="critical") return false;
+      const checkKey=String(f.title||f.check||"").toLowerCase();
+      // Only caveat if the rubric marked this area as passing (LLM found something rubric missed)
+      return Array.from(passingChecks).some(p=>p.includes(checkKey.slice(0,12))||checkKey.includes(p.slice(0,12)));
+    });
+    if(hasSerious) caveatedCats.add(String(c.name||""));
+  });
+  const baselineNote=LANG==="th"
+    ?"<span class=\"df-baseline-note\">คะแนนนี้วัดจากสัญญาณเทคนิค — คำแนะนำของ Claude คือจุดพัฒนาเพิ่มเติม</span>"
+    :"<span class=\"df-baseline-note\">Score reflects technical signal presence. Claude's findings identify quality improvements beyond the baseline.</span>";
   const cats=(d.categories||[]).map(c=>{
     const cs=c.score!=null?Math.round(c.score):"?";
     const cg=esc(c.grade||"");
+    const hasCaveat=caveatedCats.has(String(c.name||""));
+    const caveatBadge=hasCaveat?`<span class="df-caveat" title="${LANG==="th"?"Claude พบปัญหาสำคัญในหมวดนี้ แม้คะแนนเทคนิคจะผ่าน":"Claude flagged a serious issue in this category despite the technical score passing"}"> ⚠</span>`:"";
+    const scoreColor=c.score>=80?"#4ade80":c.score>=60?"#fbbf24":"#f87171";
     const findings=(c.findings||[]).map(f=>{
       const sev=String(f.severity||"").toLowerCase();
       const sevColor=sev==="critical"?"#f87171":sev==="high"?"#fb923c":sev==="medium"?"#fbbf24":"#94a3b8";
-      return `<div class="df-finding"><span class="df-sev" style="color:${sevColor}">${esc(sev)}</span> <strong>${esc(f.title||f.check||"")}</strong>`+
+      const statusIcon=f.status==="pass"?"✓ ":f.status==="warn"?"⚡ ":"";
+      return `<div class="df-finding"><span class="df-sev" style="color:${sevColor}">${esc(sev)}</span> <strong>${statusIcon}${esc(f.title||f.check||"")}</strong>`+
         (f.detail?`<p class="df-detail">${esc(f.detail)}</p>`:"")+
-        (f.fix?`<p class="df-fix">Fix: ${esc(f.fix)}</p>`:"")+`</div>`;
+        (f.fix?`<p class="df-fix">${LANG==="th"?"แนวทางแก้ไข":"Fix"}: ${esc(f.fix)}</p>`:"")+`</div>`;
     }).join("");
-    return `<div class="df-cat"><div class="df-cat-head"><span>${esc(c.name||"")}</span><span style="color:${gradeColor}">${cs} ${cg}</span></div>${findings}</div>`;
+    return `<div class="df-cat"><div class="df-cat-head"><span>${esc(c.name||"")}</span><span style="color:${scoreColor}">${cs} ${cg}${caveatBadge}</span></div>${baselineNote}${findings}</div>`;
   }).join("");
   const ts=d.scanned_at?`<span style="color:var(--muted);font-size:11px">${esc(d.scanned_at)}</span>`:"";
   return `<div class="df-wrap">`+
